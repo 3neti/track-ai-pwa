@@ -16,10 +16,15 @@ class Project extends Model
 {
     use HasFactory;
 
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_CLOSED = 'closed';
+
     protected $fillable = [
         'external_id',
         'name',
         'description',
+        'status',
         'cached_at',
     ];
 
@@ -36,5 +41,21 @@ class Project extends Model
         return [
             'cached_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Check if the project is closed.
+     */
+    public function isClosed(): bool
+    {
+        return $this->status === self::STATUS_CLOSED;
+    }
+
+    /**
+     * Check if the project is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
     }
 }

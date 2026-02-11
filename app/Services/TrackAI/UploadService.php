@@ -3,6 +3,8 @@
 namespace App\Services\TrackAI;
 
 use App\Models\AuditLog;
+use App\Models\Project;
+use App\Models\Upload;
 use App\Services\Saras\DTO\EntryResponse;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\SarasClient;
@@ -14,6 +16,112 @@ class UploadService
     public function __construct(
         protected SarasClient $sarasClient,
     ) {}
+
+    /**
+     * Create an upload record (enqueue for later sync).
+     */
+    public function createUploadRecord(
+        int $userId,
+        string $contractId,
+        string $title,
+        string $documentType,
+        string $clientRequestId,
+        ?array $tags = null,
+        ?string $remarks = null,
+        ?string $mime = null,
+        ?int $size = null,
+    ): Upload {
+        // Find project by external_id (contract_id)
+        $project = Project::where('external_id', $contractId)->first();
+
+        $upload = Upload::create([
+            'project_id' => $project?->id,
+            'user_id' => $userId,
+            'contract_id' => $contractId,
+            'title' => $title,
+            'document_type' => $documentType,
+            'tags' => $tags ?? [],
+            'remarks' => $remarks,
+            'mime' => $mime,
+            'size' => $size,
+            'status' => Upload::STATUS_PENDING,
+            'client_request_id' => $clientRequestId,
+        ]);
+
+        AuditLog::log($userId, 'upload_enqueued', $contractId, [
+            'upload_id' => $upload->id,
+            'client_request_id' => $clientRequestId,
+            'title' => $title,
+            'document_type' => $documentType,
+        ]);
+
+        return $upload;
+    }
+
+    /**
+     * Update upload metadata.
+     */
+    public function updateMetadata(
+        Upload $upload,
+        int $userId,
+        array $data,
+    ): Upload {
+        $oldData = $upload->only(['title', 'remarks', 'tags', 'document_type']);
+
+        $upload->update($data);
+
+        AuditLog::log($userId, 'upload_metadata_updated', $upload->contract_id, [
+            'upload_id' => $upload->id,
+            'old' => $oldData,
+            'new' => $data,
+        ]);
+
+        return $upload->fresh();
+    }
+
+    /**
+     * Delete an upload (soft-delete if uploaded, hard-delete if pending).
+     */
+    public function deleteUpload(
+        Upload $upload,
+        int $userId,
+        ?string $reason = null,
+    ): bool {
+        $wasPending = $upload->isPending();
+
+        AuditLog::log($userId, 'upload_deleted', $upload->contract_id, [
+            'upload_id' => $upload->id,
+            'was_pending' => $wasPending,
+            'reason' => $reason,
+        ]);
+
+        if ($wasPending) {
+            // Hard delete - never synced to Saras
+            return $upload->forceDelete();
+        }
+
+        // Soft delete - mark as deleted
+        $upload->update(['status' => Upload::STATUS_DELETED]);
+
+        return $upload->delete();
+    }
+
+    /**
+     * Retry a failed upload.
+     */
+    public function retryUpload(Upload $upload, int $userId): Upload
+    {
+        $upload->update([
+            'status' => Upload::STATUS_PENDING,
+            'last_error' => null,
+        ]);
+
+        AuditLog::log($userId, 'upload_retry', $upload->contract_id, [
+            'upload_id' => $upload->id,
+        ]);
+
+        return $upload->fresh();
+    }
 
     /**
      * Initialize an upload entry.
@@ -62,7 +170,7 @@ class UploadService
     }
 
     /**
-     * Upload a file.
+     * Upload a file and update the Upload record.
      */
     public function uploadFile(
         int $userId,
@@ -70,8 +178,14 @@ class UploadService
         string $entryId,
         UploadedFile $file,
         array $metadata = [],
+        ?Upload $upload = null,
     ): FileUploadResponse {
-        $idempotencyKey = $this->generateIdempotencyKey($userId, $contractId, 'file_upload');
+        $idempotencyKey = $upload?->client_request_id ?? $this->generateIdempotencyKey($userId, $contractId, 'file_upload');
+
+        // Mark as uploading if we have an upload record
+        if ($upload) {
+            $upload->update(['status' => Upload::STATUS_UPLOADING]);
+        }
 
         $response = $this->sarasClient->uploadFile($file, [
             'entry_id' => $entryId,
@@ -80,12 +194,37 @@ class UploadService
         ], $idempotencyKey);
 
         if ($response->success) {
-            AuditLog::log($userId, 'file_upload', $contractId, [
+            // Update the upload record with Saras response
+            if ($upload) {
+                $upload->update([
+                    'remote_file_id' => $response->fileId,
+                    'status' => Upload::STATUS_UPLOADED,
+                    'mime' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                ]);
+            }
+
+            AuditLog::log($userId, 'upload_synced', $contractId, [
+                'upload_id' => $upload?->id,
                 'entry_id' => $entryId,
                 'file_id' => $response->fileId,
                 'idempotency_key' => $idempotencyKey,
                 'file_name' => $file->getClientOriginalName(),
                 'file_size' => $file->getSize(),
+            ]);
+        } else {
+            // Mark as failed if we have an upload record
+            if ($upload) {
+                $upload->update([
+                    'status' => Upload::STATUS_FAILED,
+                    'last_error' => $response->message,
+                ]);
+            }
+
+            AuditLog::log($userId, 'upload_failed', $contractId, [
+                'upload_id' => $upload?->id,
+                'entry_id' => $entryId,
+                'error' => $response->message,
             ]);
         }
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\App\AttendanceController;
 use App\Http\Controllers\App\ProgressController;
 use App\Http\Controllers\App\ProjectController;
+use App\Http\Controllers\App\ProjectUploadController;
 use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
 use Illuminate\Support\Facades\Route;
@@ -38,4 +39,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Offline Sync
     Route::post('/sync/batch', [SyncController::class, 'batch'])->name('api.sync.batch');
+
+    // Project Uploads (CRUD)
+    Route::prefix('/projects/{project}/uploads')->group(function () {
+        Route::get('/', [ProjectUploadController::class, 'index'])->name('api.projects.uploads.index');
+        Route::post('/', [ProjectUploadController::class, 'store'])->name('api.projects.uploads.store');
+        Route::get('/{upload}', [ProjectUploadController::class, 'show'])->name('api.projects.uploads.show');
+        Route::patch('/{upload}', [ProjectUploadController::class, 'update'])->name('api.projects.uploads.update');
+        Route::delete('/{upload}', [ProjectUploadController::class, 'destroy'])->name('api.projects.uploads.destroy');
+        Route::post('/{upload}/retry', [ProjectUploadController::class, 'retry'])->name('api.projects.uploads.retry');
+    });
 });

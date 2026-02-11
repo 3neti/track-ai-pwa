@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\AuditLog;
 use App\Models\Project;
+use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class TrackAIDemoSeeder extends Seeder
 
         User::query()->delete();
         Project::query()->delete();
+        Upload::query()->forceDelete();
         AuditLog::query()->delete();
 
         if ($driver === 'mysql') {
@@ -36,6 +38,7 @@ class TrackAIDemoSeeder extends Seeder
 
         $this->seedUsers();
         $this->seedProjects();
+        $this->seedUploads();
         $this->seedAuditLogs();
 
         $this->command->info('✅ Demo data seeded successfully!');
@@ -129,6 +132,122 @@ class TrackAIDemoSeeder extends Seeder
         }
 
         $this->command->info('   Created 15 projects across different regions');
+    }
+
+    /**
+     * Seed demo uploads across various statuses.
+     */
+    protected function seedUploads(): void
+    {
+        $this->command->info('📤 Creating demo uploads...');
+
+        $users = User::whereIn('role', ['engineer', 'inspector'])->get();
+        $projects = Project::all();
+
+        $documentTypes = ['equipment_pictures', 'delivery_receipts', 'purchase_order', 'documents', 'meals'];
+        $totalUploads = 0;
+
+        foreach ($projects->take(5) as $project) {
+            $user = $users->random();
+
+            // Uploaded items (5-8 per project)
+            foreach (range(1, fake()->numberBetween(5, 8)) as $i) {
+                Upload::create([
+                    'user_id' => $user->id,
+                    'project_id' => $project->id,
+                    'contract_id' => $project->external_id,
+                    'entry_id' => 'ENT-'.Str::ulid(),
+                    'remote_file_id' => 'FILE-'.Str::ulid(),
+                    'title' => fake()->sentence(3),
+                    'remarks' => fake()->optional(0.5)->sentence(),
+                    'document_type' => fake()->randomElement($documentTypes),
+                    'tags' => fake()->randomElements(['daily', 'inspection', 'progress', 'equipment'], 2),
+                    'mime' => 'image/jpeg',
+                    'size' => fake()->numberBetween(500000, 5000000),
+                    'status' => Upload::STATUS_UPLOADED,
+                    'client_request_id' => Str::uuid()->toString(),
+                    'created_at' => now()->subDays(fake()->numberBetween(1, 30)),
+                ]);
+                $totalUploads++;
+            }
+
+            // Pending items (2-3 per project)
+            foreach (range(1, fake()->numberBetween(2, 3)) as $i) {
+                Upload::create([
+                    'user_id' => $user->id,
+                    'project_id' => $project->id,
+                    'contract_id' => $project->external_id,
+                    'title' => 'Pending: '.fake()->sentence(2),
+                    'document_type' => fake()->randomElement($documentTypes),
+                    'tags' => ['pending_sync'],
+                    'status' => Upload::STATUS_PENDING,
+                    'client_request_id' => Str::uuid()->toString(),
+                    'created_at' => now()->subHours(fake()->numberBetween(1, 12)),
+                ]);
+                $totalUploads++;
+            }
+
+            // Failed items (1-2 per project)
+            foreach (range(1, fake()->numberBetween(1, 2)) as $i) {
+                Upload::create([
+                    'user_id' => $user->id,
+                    'project_id' => $project->id,
+                    'contract_id' => $project->external_id,
+                    'title' => 'Failed: '.fake()->sentence(2),
+                    'document_type' => fake()->randomElement($documentTypes),
+                    'status' => Upload::STATUS_FAILED,
+                    'last_error' => fake()->randomElement([
+                        'Network timeout',
+                        'File too large',
+                        'Server error (500)',
+                        'Invalid file format',
+                    ]),
+                    'client_request_id' => Str::uuid()->toString(),
+                    'created_at' => now()->subDays(fake()->numberBetween(1, 5)),
+                ]);
+                $totalUploads++;
+            }
+        }
+
+        // Add one locked upload
+        $lockedProject = $projects->first();
+        $lockedUser = $users->first();
+        Upload::create([
+            'user_id' => $lockedUser->id,
+            'project_id' => $lockedProject->id,
+            'contract_id' => $lockedProject->external_id,
+            'entry_id' => 'ENT-'.Str::ulid(),
+            'remote_file_id' => 'FILE-'.Str::ulid(),
+            'title' => 'Locked: Progress Evidence Photo',
+            'document_type' => 'equipment_pictures',
+            'tags' => ['progress', 'evidence'],
+            'mime' => 'image/jpeg',
+            'size' => 2500000,
+            'status' => Upload::STATUS_UPLOADED,
+            'client_request_id' => Str::uuid()->toString(),
+            'locked_at' => now()->subDays(3),
+            'locked_reason' => 'Referenced in progress submission',
+            'created_at' => now()->subDays(10),
+        ]);
+        $totalUploads++;
+
+        // Add one soft-deleted upload
+        $deleted = Upload::create([
+            'user_id' => $lockedUser->id,
+            'project_id' => $lockedProject->id,
+            'contract_id' => $lockedProject->external_id,
+            'entry_id' => 'ENT-'.Str::ulid(),
+            'remote_file_id' => 'FILE-'.Str::ulid(),
+            'title' => 'Deleted: Duplicate Photo',
+            'document_type' => 'equipment_pictures',
+            'status' => Upload::STATUS_DELETED,
+            'client_request_id' => Str::uuid()->toString(),
+            'created_at' => now()->subDays(15),
+        ]);
+        $deleted->delete(); // Soft delete
+        $totalUploads++;
+
+        $this->command->info("   Created ~$totalUploads uploads across 5 projects");
     }
 
     /**
