@@ -21,7 +21,11 @@ class UploadController extends Controller
      */
     public function index(): Response
     {
-        return Inertia::render('app/Uploads');
+        $projects = \App\Models\Project::orderBy('name')->get();
+
+        return Inertia::render('app/Uploads', [
+            'projects' => $projects,
+        ]);
     }
 
     /**

@@ -16,6 +16,17 @@ import axios from 'axios';
 
 const page = usePage();
 
+interface Project {
+    id: number;
+    external_id: string;
+    name: string;
+    description: string | null;
+}
+
+defineProps<{
+    projects: Project[];
+}>();
+
 const { pendingCount, syncStatus, isOnline, triggerSync, queueRequest } = useOfflineQueue();
 const { state: geoState, getCurrentPosition } = useGeolocation();
 
@@ -23,12 +34,6 @@ const selectedProject = ref('');
 const remarks = ref('');
 const isSubmitting = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
-
-// Mock projects for now - in real app, fetch from store or props
-const projects = ref([
-    { id: 1, external_id: 'PROJ-2024-001', name: 'Road Rehabilitation - Bulacan', description: null },
-    { id: 2, external_id: 'PROJ-2024-002', name: 'Bridge Construction - Pampanga', description: null },
-]);
 
 const canSubmit = computed(() => {
     return selectedProject.value && geoState.value.latitude && !isSubmitting.value;

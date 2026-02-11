@@ -21,7 +21,11 @@ class AttendanceController extends Controller
      */
     public function index(): Response
     {
-        return Inertia::render('app/Attendance');
+        $projects = \App\Models\Project::orderBy('name')->get();
+
+        return Inertia::render('app/Attendance', [
+            'projects' => $projects,
+        ]);
     }
 
     /**

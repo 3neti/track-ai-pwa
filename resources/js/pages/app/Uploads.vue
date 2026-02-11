@@ -21,6 +21,17 @@ import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import axios from 'axios';
 
+interface Project {
+    id: number;
+    external_id: string;
+    name: string;
+    description: string | null;
+}
+
+defineProps<{
+    projects: Project[];
+}>();
+
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 
 const selectedProject = ref('');
@@ -30,11 +41,6 @@ const remarks = ref('');
 const selectedFile = ref<File | null>(null);
 const isSubmitting = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
-
-const projects = ref([
-    { id: 1, external_id: 'PROJ-2024-001', name: 'Road Rehabilitation - Bulacan', description: null },
-    { id: 2, external_id: 'PROJ-2024-002', name: 'Bridge Construction - Pampanga', description: null },
-]);
 
 const documentTypes = [
     { value: 'purchase_order', label: 'Purchase Order' },

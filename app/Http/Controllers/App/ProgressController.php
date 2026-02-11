@@ -21,7 +21,11 @@ class ProgressController extends Controller
      */
     public function index(): Response
     {
-        return Inertia::render('app/Progress');
+        $projects = \App\Models\Project::orderBy('name')->get();
+
+        return Inertia::render('app/Progress', [
+            'projects' => $projects,
+        ]);
     }
 
     /**

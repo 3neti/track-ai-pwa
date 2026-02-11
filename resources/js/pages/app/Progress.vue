@@ -15,6 +15,17 @@ import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useGeolocation } from '@/composables/useGeolocation';
 import axios from 'axios';
 
+interface Project {
+    id: number;
+    external_id: string;
+    name: string;
+    description: string | null;
+}
+
+defineProps<{
+    projects: Project[];
+}>();
+
 const { pendingCount, syncStatus, isOnline, triggerSync, queueRequest } = useOfflineQueue();
 const { state: geoState, getCurrentPosition } = useGeolocation();
 
@@ -23,11 +34,6 @@ const remarks = ref('');
 const isSubmitting = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
 const aiStatus = ref<string | null>(null);
-
-const projects = ref([
-    { id: 1, external_id: 'PROJ-2024-001', name: 'Road Rehabilitation - Bulacan', description: null },
-    { id: 2, external_id: 'PROJ-2024-002', name: 'Bridge Construction - Pampanga', description: null },
-]);
 
 const checklistItems = ref([
     { type: 'top_view', label: 'Top View', completed: false, photo: null as File | null },
