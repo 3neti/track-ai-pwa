@@ -12,6 +12,7 @@ import SyncBadge from '@/components/app/SyncBadge.vue';
 import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useGeolocation } from '@/composables/useGeolocation';
+import { useActiveProject } from '@/composables/useActiveProject';
 import axios from 'axios';
 
 const page = usePage();
@@ -23,14 +24,15 @@ interface Project {
     description: string | null;
 }
 
-defineProps<{
+const props = defineProps<{
     projects: Project[];
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync, queueRequest } = useOfflineQueue();
 const { state: geoState, getCurrentPosition } = useGeolocation();
+const { getActiveProjectId } = useActiveProject();
 
-const selectedProject = ref('');
+const selectedProject = ref(getActiveProjectId(props.projects));
 const remarks = ref('');
 const isSubmitting = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { FolderKanban, RefreshCw, MapPin, Calendar } from 'lucide-vue-next';
+import { FolderKanban, RefreshCw, Calendar, Check } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
+import { useActiveProject } from '@/composables/useActiveProject';
 import axios from 'axios';
 
 interface Project {
@@ -22,6 +24,7 @@ defineProps<{
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
+const { activeProjectId, setActiveProject, isActiveProject } = useActiveProject();
 const isSyncing = ref(false);
 
 const syncProjects = async () => {
@@ -83,22 +86,42 @@ const syncProjects = async () => {
             </div>
 
             <div v-else class="grid gap-4">
-                <Card v-for="project in projects" :key="project.external_id">
+                <Card
+                    v-for="project in projects"
+                    :key="project.external_id"
+                    :class="{ 'border-primary border-2': isActiveProject(project.external_id) }"
+                >
                     <CardHeader class="pb-2">
-                        <CardTitle class="text-base">{{ project.name }}</CardTitle>
-                        <CardDescription class="text-xs">
-                            {{ project.external_id }}
-                        </CardDescription>
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex-1">
+                                <CardTitle class="text-base">{{ project.name }}</CardTitle>
+                                <CardDescription class="text-xs">
+                                    {{ project.external_id }}
+                                </CardDescription>
+                            </div>
+                            <Badge v-if="isActiveProject(project.external_id)" variant="default" class="shrink-0">
+                                <Check class="mr-1 h-3 w-3" />
+                                Active
+                            </Badge>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <p v-if="project.description" class="mb-3 text-sm text-muted-foreground">
                             {{ project.description }}
                         </p>
-                        <div class="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span v-if="project.cached_at" class="flex items-center gap-1">
+                        <div class="flex items-center justify-between gap-4">
+                            <span v-if="project.cached_at" class="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Calendar class="h-3 w-3" />
                                 Last synced: {{ new Date(project.cached_at).toLocaleDateString() }}
                             </span>
+                            <Button
+                                v-if="!isActiveProject(project.external_id)"
+                                variant="outline"
+                                size="sm"
+                                @click="setActiveProject(project.external_id)"
+                            >
+                                Set as Active
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>

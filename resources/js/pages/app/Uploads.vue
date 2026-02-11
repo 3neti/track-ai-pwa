@@ -19,6 +19,7 @@ import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
 import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
+import { useActiveProject } from '@/composables/useActiveProject';
 import axios from 'axios';
 
 interface Project {
@@ -28,13 +29,14 @@ interface Project {
     description: string | null;
 }
 
-defineProps<{
+const props = defineProps<{
     projects: Project[];
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
+const { getActiveProjectId } = useActiveProject();
 
-const selectedProject = ref('');
+const selectedProject = ref(getActiveProjectId(props.projects));
 const documentType = ref('');
 const fileName = ref('');
 const remarks = ref('');
