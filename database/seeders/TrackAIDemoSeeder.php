@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class TrackAIDemoSeeder extends Seeder
 {
@@ -180,7 +181,7 @@ class TrackAIDemoSeeder extends Seeder
                     'action' => 'attendance_check_in',
                     'project_external_id' => $project->external_id,
                     'metadata_json' => [
-                        'entry_id' => 'ENT-'.fake()->unique()->numberBetween(10000, 99999),
+                        'entry_id' => 'ENT-'.Str::ulid(),
                         'contract_id' => $project->external_id,
                         'latitude' => fake()->latitude(14.0, 15.0),
                         'longitude' => fake()->longitude(120.5, 121.5),
@@ -196,7 +197,7 @@ class TrackAIDemoSeeder extends Seeder
 
                     // Upload
                     if (fake()->boolean(60)) {
-                        $entryId = 'ENT-'.fake()->unique()->numberBetween(10000, 99999);
+                        $entryId = 'ENT-'.Str::ulid();
 
                         AuditLog::create([
                             'user_id' => $user->id,
@@ -218,7 +219,7 @@ class TrackAIDemoSeeder extends Seeder
                             'project_external_id' => $project->external_id,
                             'metadata_json' => [
                                 'entry_id' => $entryId,
-                                'file_id' => 'FILE-'.fake()->unique()->numberBetween(10000, 99999),
+                                'file_id' => 'FILE-'.Str::ulid(),
                                 'file_mime' => 'image/jpeg',
                                 'file_size' => fake()->numberBetween(500000, 3000000),
                             ],
@@ -230,7 +231,7 @@ class TrackAIDemoSeeder extends Seeder
                     // Progress report
                     if (fake()->boolean(50)) {
                         $progressTime = $midDayTime->copy()->addHours(1);
-                        $entryId = 'ENT-'.fake()->unique()->numberBetween(10000, 99999);
+                        $entryId = 'ENT-'.Str::ulid();
 
                         AuditLog::create([
                             'user_id' => $user->id,
@@ -249,7 +250,7 @@ class TrackAIDemoSeeder extends Seeder
 
                         // AI workflow
                         if (fake()->boolean(80)) {
-                            $workflowId = 'WF-'.fake()->unique()->numberBetween(10000, 99999);
+                            $workflowId = 'WF-'.Str::ulid();
 
                             AuditLog::create([
                                 'user_id' => $user->id,
@@ -290,7 +291,7 @@ class TrackAIDemoSeeder extends Seeder
                     'action' => 'attendance_check_out',
                     'project_external_id' => $project->external_id,
                     'metadata_json' => [
-                        'entry_id' => 'ENT-'.fake()->unique()->numberBetween(10000, 99999),
+                        'entry_id' => 'ENT-'.Str::ulid(),
                         'contract_id' => $project->external_id,
                         'latitude' => fake()->latitude(14.0, 15.0),
                         'longitude' => fake()->longitude(120.5, 121.5),
@@ -312,7 +313,7 @@ class TrackAIDemoSeeder extends Seeder
             'action' => 'upload_failed',
             'project_external_id' => $project->external_id,
             'metadata_json' => [
-                'entry_id' => 'ENT-'.fake()->unique()->numberBetween(10000, 99999),
+                'entry_id' => 'ENT-'.Str::ulid(),
                 'error_code' => 'FILE_TOO_LARGE',
                 'error_message' => 'File size exceeds 10MB limit',
             ],
@@ -326,7 +327,7 @@ class TrackAIDemoSeeder extends Seeder
             'action' => 'ai_workflow_failed',
             'project_external_id' => $project->external_id,
             'metadata_json' => [
-                'workflow_id' => 'WF-'.fake()->unique()->numberBetween(10000, 99999),
+                'workflow_id' => 'WF-'.Str::ulid(),
                 'error_code' => 'INSUFFICIENT_PHOTOS',
                 'error_message' => 'At least 3 photos required for analysis',
             ],

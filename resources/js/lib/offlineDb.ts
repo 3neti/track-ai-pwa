@@ -5,6 +5,9 @@ export interface PendingJob {
     endpoint: string;
     method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     payload: Record<string, unknown>;
+    /** Stable idempotency key - generated once when job is created, used for offline replay safety */
+    clientRequestId: string;
+    /** @deprecated Use clientRequestId instead. Kept for backwards compatibility. */
     idempotencyKey: string;
     createdAt: Date;
     retryCount: number;
@@ -66,11 +69,19 @@ export async function getDb(): Promise<IDBPDatabase<TrackAIDB>> {
 }
 
 // Job operations
-export async function addJob(job: Omit<PendingJob, 'id' | 'createdAt' | 'retryCount' | 'lastError' | 'status'>): Promise<PendingJob> {
+export async function addJob(job: Omit<PendingJob, 'id' | 'clientRequestId' | 'createdAt' | 'retryCount' | 'lastError' | 'status'>): Promise<PendingJob> {
     const db = await getDb();
+    // Generate a stable client_request_id that will be used for idempotency on replay
+    const clientRequestId = crypto.randomUUID();
     const newJob: PendingJob = {
         ...job,
         id: crypto.randomUUID(),
+        clientRequestId,
+        // Include client_request_id in payload for backend idempotency
+        payload: {
+            ...job.payload,
+            client_request_id: clientRequestId,
+        },
         createdAt: new Date(),
         retryCount: 0,
         lastError: null,

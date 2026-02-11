@@ -46,6 +46,7 @@ class UploadController extends Controller
             latitude: $validated['latitude'] ?? 0,
             longitude: $validated['longitude'] ?? 0,
             ipAddress: $request->ip(),
+            clientRequestId: $validated['client_request_id'] ?? null,
         );
 
         return response()->json([

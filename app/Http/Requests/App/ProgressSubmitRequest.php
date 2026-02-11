@@ -25,6 +25,7 @@ class ProgressSubmitRequest extends FormRequest
             'remarks' => ['nullable', 'string', 'max:1000'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'client_request_id' => ['nullable', 'string', 'uuid', 'max:100'],
         ];
     }
 
