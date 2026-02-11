@@ -82,15 +82,15 @@ function handleClose() {
 
 <template>
     <Sheet :open="open" @update:open="emit('update:open', $event)">
-        <SheetContent side="bottom" class="h-[85vh] overflow-y-auto">
-            <SheetHeader>
+        <SheetContent side="bottom" class="max-h-[85vh] overflow-y-auto rounded-t-xl">
+            <SheetHeader class="pb-4">
                 <SheetTitle>Edit Upload</SheetTitle>
                 <SheetDescription>
                     Update the metadata for this upload.
                 </SheetDescription>
             </SheetHeader>
 
-            <div v-if="upload" class="mt-6 space-y-4">
+            <div v-if="upload" class="space-y-4 pb-6">
                 <!-- Lock warning -->
                 <Alert v-if="isLocked" variant="destructive">
                     <Lock class="h-4 w-4" />

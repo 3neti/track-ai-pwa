@@ -48,5 +48,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::patch('/{upload}', [ProjectUploadController::class, 'update'])->name('api.projects.uploads.update');
         Route::delete('/{upload}', [ProjectUploadController::class, 'destroy'])->name('api.projects.uploads.destroy');
         Route::post('/{upload}/retry', [ProjectUploadController::class, 'retry'])->name('api.projects.uploads.retry');
+        Route::post('/{upload}/file', [ProjectUploadController::class, 'file'])->name('api.projects.uploads.file');
     });
 });

@@ -322,3 +322,122 @@ test('uploads can be filtered by status', function () {
     expect($response->json('meta.total'))->toBe(1);
     expect($response->json('data.0.status'))->toBe('pending');
 });
+
+// ========================================
+// Unified Flow Tests (Legacy + New)
+// ========================================
+
+test('legacy init endpoint creates upload record and entry_id', function () {
+    $clientRequestId = fake()->uuid();
+
+    $response = $this->actingAs($this->user)
+        ->postJson('/api/uploads/init', [
+            'contract_id' => $this->project->external_id,
+            'document_type' => 'equipment_pictures',
+            'name' => 'Test Upload',
+            'remarks' => 'Test remarks',
+            'tags' => ['daily'],
+            'client_request_id' => $clientRequestId,
+        ]);
+
+    $response->assertStatus(200)
+        ->assertJsonStructure(['success', 'upload_id', 'entry_id'])
+        ->assertJson(['success' => true]);
+
+    // Verify Upload record was created
+    $this->assertDatabaseHas('uploads', [
+        'client_request_id' => $clientRequestId,
+        'title' => 'Test Upload',
+        'document_type' => 'equipment_pictures',
+    ]);
+
+    // Verify entry_id was saved
+    $upload = Upload::where('client_request_id', $clientRequestId)->first();
+    expect($upload->entry_id)->not->toBeNull();
+});
+
+test('legacy file endpoint updates upload status to uploaded', function () {
+    // First create via init
+    $initResponse = $this->actingAs($this->user)
+        ->postJson('/api/uploads/init', [
+            'contract_id' => $this->project->external_id,
+            'document_type' => 'equipment_pictures',
+            'name' => 'File Upload Test',
+            'client_request_id' => fake()->uuid(),
+        ]);
+
+    $uploadId = $initResponse->json('upload_id');
+    $entryId = $initResponse->json('entry_id');
+
+    // Upload file using legacy endpoint with upload_id
+    $file = \Illuminate\Http\UploadedFile::fake()->image('test.jpg', 100, 100);
+
+    $response = $this->actingAs($this->user)
+        ->postJson('/api/uploads/file', [
+            'contract_id' => $this->project->external_id,
+            'upload_id' => $uploadId,
+            'entry_id' => $entryId,
+            'file' => $file,
+        ]);
+
+    $response->assertStatus(200)
+        ->assertJson(['success' => true]);
+
+    // Verify Upload status is now 'uploaded'
+    $this->assertDatabaseHas('uploads', [
+        'id' => $uploadId,
+        'status' => 'uploaded',
+    ]);
+});
+
+test('new file endpoint uploads and updates status', function () {
+    // Create upload record
+    $upload = Upload::create([
+        'user_id' => $this->user->id,
+        'project_id' => $this->project->id,
+        'contract_id' => $this->project->external_id,
+        'title' => 'New Flow Upload',
+        'document_type' => 'equipment_pictures',
+        'status' => 'pending',
+        'client_request_id' => fake()->uuid(),
+    ]);
+
+    $file = \Illuminate\Http\UploadedFile::fake()->image('photo.jpg', 200, 200);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads/{$upload->id}/file", [
+            'file' => $file,
+        ]);
+
+    $response->assertStatus(200)
+        ->assertJson(['success' => true]);
+
+    // Verify status updated
+    $upload->refresh();
+    expect($upload->status)->toBe('uploaded');
+    expect($upload->entry_id)->not->toBeNull();
+    expect($upload->remote_file_id)->not->toBeNull();
+});
+
+test('uploads from legacy endpoint appear in project uploads list', function () {
+    // Create via legacy endpoint
+    $initResponse = $this->actingAs($this->user)
+        ->postJson('/api/uploads/init', [
+            'contract_id' => $this->project->external_id,
+            'document_type' => 'delivery_receipts',
+            'name' => 'Legacy Upload for Listing',
+            'client_request_id' => fake()->uuid(),
+        ]);
+
+    expect($initResponse->json('success'))->toBeTrue();
+
+    // Verify it appears in project uploads list
+    $listResponse = $this->actingAs($this->user)
+        ->getJson("/api/projects/{$this->project->id}/uploads");
+
+    $listResponse->assertStatus(200);
+    expect($listResponse->json('meta.total'))->toBeGreaterThanOrEqual(1);
+
+    $titles = collect($listResponse->json('data'))->pluck('title')->toArray();
+    expect($titles)->toContain('Legacy Upload for Listing');
+});

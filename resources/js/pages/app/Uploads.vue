@@ -74,29 +74,39 @@ const handleSubmit = async () => {
     isSubmitting.value = true;
     message.value = null;
 
+    // Find project by external_id to get numeric id
+    const project = props.projects.find(p => p.external_id === selectedProject.value);
+    if (!project) {
+        message.value = { type: 'error', text: 'Please select a valid project.' };
+        isSubmitting.value = false;
+        return;
+    }
+
     try {
-        // First, init the upload
-        const initResponse = await axios.post('/api/uploads/init', {
+        // Generate a client_request_id for idempotency
+        const clientRequestId = crypto.randomUUID();
+
+        // Step 1: Create Upload record
+        const createResponse = await axios.post(`/api/projects/${project.id}/uploads`, {
             contract_id: selectedProject.value,
+            client_request_id: clientRequestId,
+            title: fileName.value || selectedFile.value?.name || 'Untitled Upload',
             document_type: documentType.value,
-            name: fileName.value || selectedFile.value?.name,
-            remarks: remarks.value || null,
             tags: [documentType.value],
+            remarks: remarks.value || null,
         });
 
-        if (!initResponse.data.success) {
-            throw new Error(initResponse.data.message);
+        if (!createResponse.data.success) {
+            throw new Error(createResponse.data.message);
         }
 
-        const entryId = initResponse.data.entry_id;
+        const uploadId = createResponse.data.upload.id;
 
-        // Then upload the file
+        // Step 2: Upload the file
         const formData = new FormData();
-        formData.append('contract_id', selectedProject.value);
-        formData.append('entry_id', entryId);
         formData.append('file', selectedFile.value!);
 
-        const uploadResponse = await axios.post('/api/uploads/file', formData, {
+        const uploadResponse = await axios.post(`/api/projects/${project.id}/uploads/${uploadId}/file`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
