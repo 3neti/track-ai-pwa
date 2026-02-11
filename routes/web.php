@@ -3,6 +3,7 @@
 use App\Http\Controllers\App\AttendanceController;
 use App\Http\Controllers\App\ProgressController;
 use App\Http\Controllers\App\ProjectController;
+use App\Http\Controllers\App\ProjectUploadController;
 use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +30,7 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index'])->name('app.projects');
     Route::get('/attendance', [AttendanceController::class, 'index'])->name('app.attendance');
     Route::get('/uploads', [UploadController::class, 'index'])->name('app.uploads');
+    Route::get('/project-uploads', [ProjectUploadController::class, 'page'])->name('app.project-uploads');
     Route::get('/progress', [ProgressController::class, 'index'])->name('app.progress');
     Route::get('/sync', [SyncController::class, 'index'])->name('app.sync');
 });
