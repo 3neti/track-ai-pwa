@@ -22,6 +22,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/projects/sync', [ProjectController::class, 'sync'])->name('api.projects.sync');
 
     // Attendance
+    Route::get('/attendance/status', [AttendanceController::class, 'status'])->name('api.attendance.status');
     Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('api.attendance.check-in');
     Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('api.attendance.check-out');
 
