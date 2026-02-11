@@ -22,6 +22,10 @@ export interface Upload {
     created_at: string;
     updated_at: string;
     user?: { id: number; name: string };
+    // Preview computed fields
+    preview_type: 'image' | 'pdf' | 'unknown';
+    is_previewable: boolean;
+    preview_url: string | null;
 }
 
 export interface UploadFilters {

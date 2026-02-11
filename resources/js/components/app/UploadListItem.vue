@@ -63,17 +63,27 @@ const isRetryable = computed(() => {
     <Card class="overflow-hidden">
         <CardContent class="p-4">
             <div class="flex items-start gap-3">
-                <!-- File Icon -->
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <!-- File Icon (clickable for preview) -->
+                <button
+                    type="button"
+                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted transition-colors hover:bg-muted/80 active:bg-muted/70"
+                    @click="emit('view', upload)"
+                >
                     <component :is="fileIcon" class="h-6 w-6 text-muted-foreground" />
-                </div>
+                </button>
 
                 <!-- Content -->
                 <div class="min-w-0 flex-1">
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0 flex-1">
-                            <!-- Title -->
-                            <h3 class="truncate font-medium">{{ upload.title }}</h3>
+                            <!-- Title (clickable for preview) -->
+                            <button
+                                type="button"
+                                class="truncate font-medium text-left hover:underline"
+                                @click="emit('view', upload)"
+                            >
+                                {{ upload.title }}
+                            </button>
 
                             <!-- Meta info -->
                             <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -96,14 +106,14 @@ const isRetryable = computed(() => {
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem @click="emit('view', upload)">
                                         <Eye class="mr-2 h-4 w-4" />
-                                        View Details
+                                        Preview
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         v-if="isEditable"
                                         @click="emit('edit', upload)"
                                     >
                                         <Edit class="mr-2 h-4 w-4" />
-                                        Edit
+                                        Edit Metadata
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         v-if="isRetryable"

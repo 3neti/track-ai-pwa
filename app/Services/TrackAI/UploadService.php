@@ -9,6 +9,7 @@ use App\Services\Saras\DTO\EntryResponse;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\SarasClient;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class UploadService
@@ -230,6 +231,7 @@ class UploadService
     /**
      * Upload a file to remote storage for an Upload record.
      * Handles entry creation if not already done.
+     * Also saves the file locally for preview purposes.
      */
     public function uploadFileToRemote(
         Upload $upload,
@@ -238,6 +240,16 @@ class UploadService
         float $longitude = 0,
         ?string $ipAddress = null,
     ): Upload {
+        // Update mime/size immediately so we can save locally
+        $upload->update([
+            'mime' => $file->getMimeType(),
+            'size' => $file->getSize(),
+        ]);
+        $upload->refresh(); // Refresh to get updated mime for local path
+
+        // Save file locally for preview (before remote upload)
+        $this->saveFileLocally($upload, $file);
+
         // Create remote entry if not already done
         if (! $upload->entry_id) {
             $upload = $this->initRemoteEntry($upload, $latitude, $longitude, $ipAddress);
@@ -262,8 +274,6 @@ class UploadService
             $upload->update([
                 'remote_file_id' => $response->fileId,
                 'status' => Upload::STATUS_UPLOADED,
-                'mime' => $file->getMimeType(),
-                'size' => $file->getSize(),
             ]);
 
             AuditLog::log($upload->user_id, 'upload_synced', $upload->contract_id, [
@@ -288,6 +298,25 @@ class UploadService
         }
 
         return $upload->fresh();
+    }
+
+    /**
+     * Save an uploaded file locally for preview purposes.
+     */
+    protected function saveFileLocally(Upload $upload, UploadedFile $file): void
+    {
+        $directory = Upload::getStorageDirectory();
+        $path = $upload->getLocalFilePath();
+
+        if (! $path) {
+            return;
+        }
+
+        // Ensure directory exists
+        Storage::disk('local')->makeDirectory($directory);
+
+        // Save the file
+        $file->storeAs($directory, basename($path), 'local');
     }
 
     /**

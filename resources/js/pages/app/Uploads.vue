@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import { Upload, Camera, File, X, AlertCircle } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
@@ -111,11 +111,9 @@ const handleSubmit = async () => {
         });
 
         if (uploadResponse.data.success) {
-            message.value = { type: 'success', text: 'File uploaded successfully!' };
-            // Reset form
-            selectedFile.value = null;
-            fileName.value = '';
-            remarks.value = '';
+            // Navigate to uploads list with preview query param
+            const uploadId = uploadResponse.data.upload.id;
+            router.visit(`/app/project-uploads?preview=${uploadId}`);
         } else {
             throw new Error(uploadResponse.data.message);
         }

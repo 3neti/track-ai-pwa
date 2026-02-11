@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
+import { ref, computed, watch, onMounted } from 'vue';
 import { Upload, Search, Filter, Loader2, FolderOpen, Plus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import UploadListItem from '@/components/app/UploadListItem.vue';
 import UploadEditSheet from '@/components/app/UploadEditSheet.vue';
 import UploadDeleteDialog from '@/components/app/UploadDeleteDialog.vue';
+import UploadPreviewDrawer from '@/components/app/UploadPreviewDrawer.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveProject } from '@/composables/useActiveProject';
 import type { Upload as UploadType } from '@/composables/useProjectUploads';
@@ -180,15 +181,65 @@ async function handleRetry(upload: UploadType) {
             if (index !== -1) {
                 uploads.value[index] = response.data.upload;
             }
+            // Close preview drawer if open and this upload was being previewed
+            if (previewingUpload.value?.id === upload.id) {
+                previewingUpload.value = response.data.upload;
+            }
         }
     } catch (err) {
         console.error('Failed to retry upload', err);
     }
 }
 
-// View details (for now just edit)
+// Preview drawer
+const previewDrawerOpen = ref(false);
+const previewingUpload = ref<UploadType | null>(null);
+const pendingPreviewId = ref<number | null>(null);
+
 function handleView(upload: UploadType) {
+    previewingUpload.value = upload;
+    previewDrawerOpen.value = true;
+    // Clear preview param from URL without navigation
+    if (window.location.search.includes('preview=')) {
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+}
+
+// Check for preview query param on mount
+onMounted(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const previewId = urlParams.get('preview');
+    if (previewId) {
+        pendingPreviewId.value = parseInt(previewId, 10);
+    }
+});
+
+// Watch for uploads to load, then open preview if pending
+watch(uploads, (newUploads) => {
+    if (pendingPreviewId.value && newUploads.length > 0) {
+        const upload = newUploads.find(u => u.id === pendingPreviewId.value);
+        if (upload) {
+            handleView(upload);
+            pendingPreviewId.value = null;
+        }
+    }
+});
+
+// Handle edit from preview drawer
+function handlePreviewEdit(upload: UploadType) {
+    previewDrawerOpen.value = false;
     handleEdit(upload);
+}
+
+// Handle delete from preview drawer
+function handlePreviewDelete(upload: UploadType) {
+    previewDrawerOpen.value = false;
+    handleDelete(upload);
+}
+
+// Handle retry from preview drawer
+function handlePreviewRetry(upload: UploadType) {
+    handleRetry(upload);
 }
 
 // Status options
@@ -349,6 +400,15 @@ const statusOptions = [
             v-model:open="deleteDialogOpen"
             :upload="deletingUpload"
             @confirm="handleConfirmDelete"
+        />
+
+        <!-- Preview Drawer -->
+        <UploadPreviewDrawer
+            v-model:open="previewDrawerOpen"
+            :upload="previewingUpload"
+            @edit="handlePreviewEdit"
+            @delete="handlePreviewDelete"
+            @retry="handlePreviewRetry"
         />
     </div>
 </template>

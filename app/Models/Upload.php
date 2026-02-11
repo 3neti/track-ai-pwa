@@ -39,6 +39,15 @@ class Upload extends Model
         'locked_reason',
     ];
 
+    /**
+     * The accessors to append to the model's array form.
+     */
+    protected $appends = [
+        'preview_type',
+        'is_previewable',
+        'preview_url',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -197,5 +206,94 @@ class Upload extends Model
             $q->where('title', 'like', "%{$search}%")
                 ->orWhere('remarks', 'like', "%{$search}%");
         });
+    }
+
+    /**
+     * Get the local storage directory for uploads.
+     */
+    public static function getStorageDirectory(): string
+    {
+        return 'uploads';
+    }
+
+    /**
+     * Get the local file path for this upload.
+     */
+    public function getLocalFilePath(): ?string
+    {
+        if (! $this->mime) {
+            return null;
+        }
+
+        $extension = $this->getExtensionFromMime();
+
+        // Use Storage facade to get correct path (respects disk configuration)
+        return storage_path('app/private/'.self::getStorageDirectory()."/{$this->id}.{$extension}");
+    }
+
+    /**
+     * Check if a local file exists for this upload.
+     */
+    public function hasLocalFile(): bool
+    {
+        $path = $this->getLocalFilePath();
+
+        return $path && file_exists($path);
+    }
+
+    /**
+     * Get file extension from mime type.
+     */
+    protected function getExtensionFromMime(): string
+    {
+        $mimeToExt = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'application/pdf' => 'pdf',
+        ];
+
+        return $mimeToExt[$this->mime] ?? 'bin';
+    }
+
+    /**
+     * Get the preview type attribute.
+     */
+    public function getPreviewTypeAttribute(): string
+    {
+        if (! $this->mime) {
+            return 'unknown';
+        }
+
+        if (str_starts_with($this->mime, 'image/')) {
+            return 'image';
+        }
+
+        if ($this->mime === 'application/pdf') {
+            return 'pdf';
+        }
+
+        return 'unknown';
+    }
+
+    /**
+     * Get the is_previewable attribute.
+     */
+    public function getIsPreviewableAttribute(): bool
+    {
+        return in_array($this->preview_type, ['image', 'pdf']);
+    }
+
+    /**
+     * Get preview URL attribute (for API response).
+     */
+    public function getPreviewUrlAttribute(): ?string
+    {
+        if (! $this->is_previewable) {
+            return null;
+        }
+
+        return "/api/uploads/{$this->id}/preview";
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\App\ProjectController;
 use App\Http\Controllers\App\ProjectUploadController;
 use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
+use App\Http\Controllers\App\UploadPreviewController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -50,4 +51,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{upload}/retry', [ProjectUploadController::class, 'retry'])->name('api.projects.uploads.retry');
         Route::post('/{upload}/file', [ProjectUploadController::class, 'file'])->name('api.projects.uploads.file');
     });
+
+    // Upload Preview (direct upload access, not project-scoped)
+    Route::get('/uploads/{upload}/preview', [UploadPreviewController::class, 'preview'])->name('api.uploads.preview');
 });
