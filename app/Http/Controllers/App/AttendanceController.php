@@ -80,6 +80,7 @@ class AttendanceController extends Controller
             longitude: $validated['longitude'],
             remarks: $validated['remarks'] ?? null,
             ipAddress: $request->ip(),
+            clientRequestId: $validated['client_request_id'] ?? null,
         );
 
         $response = $result['response'];
@@ -111,6 +112,7 @@ class AttendanceController extends Controller
             longitude: $validated['longitude'],
             remarks: $validated['remarks'] ?? null,
             ipAddress: $request->ip(),
+            clientRequestId: $validated['client_request_id'] ?? null,
         );
 
         $response = $result['response'];

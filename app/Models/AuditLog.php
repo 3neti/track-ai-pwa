@@ -14,6 +14,7 @@ class AuditLog extends Model
         'action',
         'project_external_id',
         'metadata_json',
+        'created_at',
     ];
 
     protected function casts(): array

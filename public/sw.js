@@ -2,11 +2,17 @@ const CACHE_NAME = 'track-ai-v1';
 const OFFLINE_URL = '/offline.html';
 
 // Assets to cache immediately on install
+// Note: Do NOT include '/' as it may redirect or require auth, causing cache.addAll() to fail
 const PRECACHE_ASSETS = [
-    '/',
     '/offline.html',
     '/manifest.webmanifest',
+    '/icons/icon-72x72.png',
+    '/icons/icon-96x96.png',
+    '/icons/icon-128x128.png',
+    '/icons/icon-144x144.png',
+    '/icons/icon-152x152.png',
     '/icons/icon-192x192.png',
+    '/icons/icon-384x384.png',
     '/icons/icon-512x512.png',
 ];
 

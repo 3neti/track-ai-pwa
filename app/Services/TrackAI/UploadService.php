@@ -28,8 +28,10 @@ class UploadService
         float $latitude = 0,
         float $longitude = 0,
         ?string $ipAddress = null,
+        ?string $clientRequestId = null,
     ): EntryResponse {
-        $idempotencyKey = $this->generateIdempotencyKey($userId, $contractId, 'upload_init');
+        // Use client_request_id for deterministic idempotency (offline replay safe)
+        $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'upload_init');
 
         $response = $this->sarasClient->createAnEntry([
             'type' => 'upload',
@@ -92,6 +94,8 @@ class UploadService
 
     /**
      * Generate idempotency key for upload actions.
+     * Used as fallback when client_request_id is not provided.
+     * Note: This generates a random suffix, so it's NOT safe for offline replay.
      */
     protected function generateIdempotencyKey(int $userId, string $contractId, string $action): string
     {

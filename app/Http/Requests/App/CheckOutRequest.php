@@ -21,6 +21,7 @@ class CheckOutRequest extends FormRequest
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'remarks' => ['nullable', 'string', 'max:1000'],
+            'client_request_id' => ['nullable', 'string', 'uuid', 'max:100'],
         ];
     }
 

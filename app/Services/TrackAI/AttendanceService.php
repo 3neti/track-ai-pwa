@@ -27,6 +27,7 @@ class AttendanceService
         float $longitude,
         ?string $remarks = null,
         ?string $ipAddress = null,
+        ?string $clientRequestId = null,
     ): array {
         // Auto-close any orphaned sessions from previous days
         $this->sessionService->autoClosePreviousDaySessions($userId);
@@ -44,7 +45,8 @@ class AttendanceService
             ];
         }
 
-        $idempotencyKey = $this->generateIdempotencyKey($userId, $contractId, 'check_in');
+        // Use client_request_id for deterministic idempotency (offline replay safe)
+        $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'check_in');
 
         $response = $this->sarasClient->createAnEntry([
             'type' => 'attendance_check_in',
@@ -99,6 +101,7 @@ class AttendanceService
         float $longitude,
         ?string $remarks = null,
         ?string $ipAddress = null,
+        ?string $clientRequestId = null,
     ): array {
         // Get the open session
         $session = $this->sessionService->getOpenSession($userId, $contractId);
@@ -116,7 +119,8 @@ class AttendanceService
             ];
         }
 
-        $idempotencyKey = $this->generateIdempotencyKey($userId, $contractId, 'check_out');
+        // Use client_request_id for deterministic idempotency (offline replay safe)
+        $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'check_out');
 
         $response = $this->sarasClient->createAnEntry([
             'type' => 'attendance_check_out',
@@ -159,6 +163,9 @@ class AttendanceService
 
     /**
      * Generate idempotency key for attendance actions.
+     * Used as fallback when client_request_id is not provided.
+     * Note: This generates a random suffix, so it's NOT safe for offline replay.
+     * Always prefer using client_request_id from the frontend.
      */
     protected function generateIdempotencyKey(int $userId, string $contractId, string $action): string
     {
