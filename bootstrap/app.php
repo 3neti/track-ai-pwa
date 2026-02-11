@@ -22,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        // Enable Sanctum stateful authentication for SPA API requests
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
