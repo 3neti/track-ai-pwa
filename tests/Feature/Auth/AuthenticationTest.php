@@ -11,15 +11,17 @@ test('login screen can be rendered', function () {
 });
 
 test('users can authenticate using the login screen', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'username' => 'testuser',
+    ]);
 
     $response = $this->post(route('login.store'), [
-        'email' => $user->email,
+        'username' => 'testuser',
         'password' => 'password',
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect('/app/projects');
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {
@@ -32,7 +34,9 @@ test('users with two factor enabled are redirected to two factor challenge', fun
         'confirmPassword' => true,
     ]);
 
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'username' => 'twofactoruser',
+    ]);
 
     $user->forceFill([
         'two_factor_secret' => encrypt('test-secret'),
@@ -41,7 +45,7 @@ test('users with two factor enabled are redirected to two factor challenge', fun
     ])->save();
 
     $response = $this->post(route('login'), [
-        'email' => $user->email,
+        'username' => 'twofactoruser',
         'password' => 'password',
     ]);
 
@@ -51,10 +55,12 @@ test('users with two factor enabled are redirected to two factor challenge', fun
 });
 
 test('users can not authenticate with invalid password', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'username' => 'testinvalid',
+    ]);
 
     $this->post(route('login.store'), [
-        'email' => $user->email,
+        'username' => 'testinvalid',
         'password' => 'wrong-password',
     ]);
 
@@ -71,12 +77,14 @@ test('users can logout', function () {
 });
 
 test('users are rate limited', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'username' => 'ratelimited',
+    ]);
 
-    RateLimiter::increment(md5('login'.implode('|', [$user->email, '127.0.0.1'])), amount: 5);
+    RateLimiter::increment(md5('login'.implode('|', ['ratelimited', '127.0.0.1'])), amount: 5);
 
     $response = $this->post(route('login.store'), [
-        'email' => $user->email,
+        'username' => 'ratelimited',
         'password' => 'wrong-password',
     ]);
 

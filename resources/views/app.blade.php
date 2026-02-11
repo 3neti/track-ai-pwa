@@ -30,11 +30,28 @@
             }
         </style>
 
-        <title inertia>{{ config('app.name', 'Laravel') }}</title>
+        <title inertia>{{ config('app.name', 'Track AI') }}</title>
 
+        {{-- PWA Meta Tags --}}
+        <meta name="theme-color" content="#1e40af">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Track AI">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="application-name" content="Track AI">
+        <meta name="msapplication-TileColor" content="#1e40af">
+        <meta name="msapplication-config" content="/browserconfig.xml">
+
+        {{-- PWA Manifest --}}
+        <link rel="manifest" href="/manifest.webmanifest">
+
+        {{-- Icons --}}
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png">
+        <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192x192.png">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
