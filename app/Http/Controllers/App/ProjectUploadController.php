@@ -195,4 +195,55 @@ class ProjectUploadController extends Controller
             'message' => 'Upload queued for retry.',
         ]);
     }
+
+    /**
+     * Upload a file for an existing upload record.
+     */
+    public function file(Request $request, Project $project, Upload $upload): JsonResponse
+    {
+        $this->authorize('update', $upload);
+
+        $request->validate([
+            'file' => ['required', 'file', 'max:20480'], // 20MB max
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+        ]);
+
+        // Check upload is in a state that allows file upload
+        if ($upload->status === Upload::STATUS_UPLOADED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File already uploaded for this record.',
+            ], 422);
+        }
+
+        if ($upload->isLocked()) {
+            return response()->json([
+                'success' => false,
+                'message' => "Upload is locked: {$upload->locked_reason}",
+            ], 423);
+        }
+
+        $upload = $this->uploadService->uploadFileToRemote(
+            upload: $upload,
+            file: $request->file('file'),
+            latitude: $request->input('latitude', 0),
+            longitude: $request->input('longitude', 0),
+            ipAddress: $request->ip(),
+        );
+
+        if ($upload->isFailed()) {
+            return response()->json([
+                'success' => false,
+                'upload' => $upload,
+                'message' => $upload->last_error ?? 'File upload failed.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'upload' => $upload,
+            'message' => 'File uploaded successfully.',
+        ]);
+    }
 }

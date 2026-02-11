@@ -20,6 +20,7 @@ import UploadDeleteDialog from '@/components/app/UploadDeleteDialog.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveProject } from '@/composables/useActiveProject';
 import type { Upload as UploadType } from '@/composables/useProjectUploads';
+import axios from 'axios';
 
 interface Project {
     id: number;
@@ -65,18 +66,15 @@ async function fetchUploads(page = 1, reset = true) {
         if (statusFilter.value && statusFilter.value !== 'all') params.status = statusFilter.value;
         if (searchQuery.value) params.q = searchQuery.value;
 
-        const response = await fetch(`/api/projects/${selectedProject.value.id}/uploads?` + new URLSearchParams(params as Record<string, string>), {
-            credentials: 'include',
-        });
-        const data = await response.json();
+        const response = await axios.get(`/api/projects/${selectedProject.value.id}/uploads`, { params });
 
-        if (data.success) {
+        if (response.data.success) {
             if (reset) {
-                uploads.value = data.data;
+                uploads.value = response.data.data;
             } else {
-                uploads.value = [...uploads.value, ...data.data];
+                uploads.value = [...uploads.value, ...response.data.data];
             }
-            pagination.value = data.meta;
+            pagination.value = response.data.meta;
         }
     } catch (err) {
         uploadsError.value = 'Failed to fetch uploads';
@@ -125,17 +123,14 @@ async function handleSaveEdit(data: { title: string; document_type: string; tags
     if (!editingUpload.value || !selectedProject.value) return;
 
     try {
-        const response = await fetch(`/api/projects/${selectedProject.value.id}/uploads/${editingUpload.value.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(data),
-        });
-        const result = await response.json();
-        if (result.success) {
+        const response = await axios.patch(
+            `/api/projects/${selectedProject.value.id}/uploads/${editingUpload.value.id}`,
+            data
+        );
+        if (response.data.success) {
             const index = uploads.value.findIndex(u => u.id === editingUpload.value!.id);
             if (index !== -1) {
-                uploads.value[index] = result.upload;
+                uploads.value[index] = response.data.upload;
             }
             editSheetOpen.value = false;
             editingUpload.value = null;
@@ -158,14 +153,11 @@ async function handleConfirmDelete(reason: string | undefined) {
     if (!deletingUpload.value || !selectedProject.value) return;
 
     try {
-        const response = await fetch(`/api/projects/${selectedProject.value.id}/uploads/${deletingUpload.value.id}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ reason }),
-        });
-        const result = await response.json();
-        if (result.success) {
+        const response = await axios.delete(
+            `/api/projects/${selectedProject.value.id}/uploads/${deletingUpload.value.id}`,
+            { data: { reason } }
+        );
+        if (response.data.success) {
             uploads.value = uploads.value.filter(u => u.id !== deletingUpload.value!.id);
             deleteDialogOpen.value = false;
             deletingUpload.value = null;
@@ -180,15 +172,13 @@ async function handleRetry(upload: UploadType) {
     if (!selectedProject.value) return;
 
     try {
-        const response = await fetch(`/api/projects/${selectedProject.value.id}/uploads/${upload.id}/retry`, {
-            method: 'POST',
-            credentials: 'include',
-        });
-        const result = await response.json();
-        if (result.success) {
+        const response = await axios.post(
+            `/api/projects/${selectedProject.value.id}/uploads/${upload.id}/retry`
+        );
+        if (response.data.success) {
             const index = uploads.value.findIndex(u => u.id === upload.id);
             if (index !== -1) {
-                uploads.value[index] = result.upload;
+                uploads.value[index] = response.data.upload;
             }
         }
     } catch (err) {

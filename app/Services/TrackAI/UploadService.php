@@ -124,7 +124,65 @@ class UploadService
     }
 
     /**
+     * Initialize remote entry in Saras for an Upload record.
+     * This creates the entry_id that's needed before file upload.
+     */
+    public function initRemoteEntry(
+        Upload $upload,
+        float $latitude = 0,
+        float $longitude = 0,
+        ?string $ipAddress = null,
+    ): Upload {
+        // Use client_request_id for deterministic idempotency
+        $idempotencyKey = $upload->client_request_id ?? $this->generateIdempotencyKey(
+            $upload->user_id,
+            $upload->contract_id,
+            'upload_init'
+        );
+
+        $response = $this->sarasClient->createAnEntry([
+            'type' => 'upload',
+            'user_id' => $upload->user_id,
+            'contract_id' => $upload->contract_id,
+            'document_type' => $upload->document_type,
+            'tags' => $upload->tags ?? [],
+            'name' => $upload->title,
+            'remarks' => $upload->remarks,
+            'geo_location' => [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+            ],
+            'ip_address' => $ipAddress,
+            'timestamp' => now()->toIso8601String(),
+        ], $idempotencyKey);
+
+        if ($response->success) {
+            $upload->update(['entry_id' => $response->entryId]);
+
+            AuditLog::log($upload->user_id, 'upload_entry_created', $upload->contract_id, [
+                'upload_id' => $upload->id,
+                'entry_id' => $response->entryId,
+                'idempotency_key' => $idempotencyKey,
+            ]);
+        } else {
+            $upload->update([
+                'status' => Upload::STATUS_FAILED,
+                'last_error' => $response->message,
+            ]);
+
+            AuditLog::log($upload->user_id, 'upload_entry_failed', $upload->contract_id, [
+                'upload_id' => $upload->id,
+                'error' => $response->message,
+            ]);
+        }
+
+        return $upload->fresh();
+    }
+
+    /**
      * Initialize an upload entry.
+     *
+     * @deprecated Use createUploadRecord() + initRemoteEntry() instead
      */
     public function initUpload(
         int $userId,
@@ -170,7 +228,72 @@ class UploadService
     }
 
     /**
+     * Upload a file to remote storage for an Upload record.
+     * Handles entry creation if not already done.
+     */
+    public function uploadFileToRemote(
+        Upload $upload,
+        UploadedFile $file,
+        float $latitude = 0,
+        float $longitude = 0,
+        ?string $ipAddress = null,
+    ): Upload {
+        // Create remote entry if not already done
+        if (! $upload->entry_id) {
+            $upload = $this->initRemoteEntry($upload, $latitude, $longitude, $ipAddress);
+
+            // If entry creation failed, return early
+            if ($upload->isFailed()) {
+                return $upload;
+            }
+        }
+
+        // Now upload the file
+        $upload->update(['status' => Upload::STATUS_UPLOADING]);
+
+        $idempotencyKey = $upload->client_request_id.'_file';
+
+        $response = $this->sarasClient->uploadFile($file, [
+            'entry_id' => $upload->entry_id,
+            'contract_id' => $upload->contract_id,
+        ], $idempotencyKey);
+
+        if ($response->success) {
+            $upload->update([
+                'remote_file_id' => $response->fileId,
+                'status' => Upload::STATUS_UPLOADED,
+                'mime' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ]);
+
+            AuditLog::log($upload->user_id, 'upload_synced', $upload->contract_id, [
+                'upload_id' => $upload->id,
+                'entry_id' => $upload->entry_id,
+                'file_id' => $response->fileId,
+                'idempotency_key' => $idempotencyKey,
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+            ]);
+        } else {
+            $upload->update([
+                'status' => Upload::STATUS_FAILED,
+                'last_error' => $response->message,
+            ]);
+
+            AuditLog::log($upload->user_id, 'upload_failed', $upload->contract_id, [
+                'upload_id' => $upload->id,
+                'entry_id' => $upload->entry_id,
+                'error' => $response->message,
+            ]);
+        }
+
+        return $upload->fresh();
+    }
+
+    /**
      * Upload a file and update the Upload record.
+     *
+     * @deprecated Use uploadFileToRemote() instead
      */
     public function uploadFile(
         int $userId,
