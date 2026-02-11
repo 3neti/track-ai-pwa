@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Check, Edit, Trash2, RefreshCw, Lock, FileImage, FileText, File, ZoomIn, ZoomOut, AlertCircle, Loader2 } from 'lucide-vue-next';
+import { Check, Edit, Trash2, RefreshCw, Lock, FileImage, FileText, File, ZoomIn, ZoomOut, AlertCircle, Loader2, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
