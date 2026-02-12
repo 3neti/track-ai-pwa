@@ -6,6 +6,7 @@ use App\Contracts\SarasClientInterface;
 use App\Exceptions\SarasApiException;
 use App\Models\AttendanceSession;
 use App\Models\AuditLog;
+use App\Models\User;
 use App\Services\Saras\DTO\ProcessResponse;
 use Illuminate\Support\Str;
 
@@ -22,7 +23,7 @@ class AttendanceService
      * @return array{response: ProcessResponse, session: ?AttendanceSession, attendance_status: string}
      */
     public function checkIn(
-        int $userId,
+        User $user,
         string $contractId,
         float $latitude,
         float $longitude,
@@ -30,6 +31,8 @@ class AttendanceService
         ?string $ipAddress = null,
         ?string $clientRequestId = null,
     ): array {
+        $userId = $user->id;
+
         // Auto-close any orphaned sessions from previous days
         $this->sessionService->autoClosePreviousDaySessions($userId);
 
@@ -56,7 +59,7 @@ class AttendanceService
             $response = $this->sarasClient->createProcess(
                 subProjectId: config('saras.subproject_ids.attendance'),
                 fields: [
-                    'userId' => $userId, // TODO: Use saras_user_id when available
+                    'userId' => $user->saras_user_id,
                     'contractId' => $resolvedContractId,
                     'ipAddressCheckIn' => $ipAddress,
                     'geoLocationCheckIn' => "{$latitude},{$longitude}",
@@ -112,7 +115,7 @@ class AttendanceService
      * @return array{response: ProcessResponse, session: ?AttendanceSession, attendance_status: string}
      */
     public function checkOut(
-        int $userId,
+        User $user,
         string $contractId,
         float $latitude,
         float $longitude,
@@ -120,6 +123,8 @@ class AttendanceService
         ?string $ipAddress = null,
         ?string $clientRequestId = null,
     ): array {
+        $userId = $user->id;
+
         // Get the open session
         $session = $this->sessionService->getOpenSession($userId, $contractId);
 
@@ -146,7 +151,7 @@ class AttendanceService
             $response = $this->sarasClient->createProcess(
                 subProjectId: config('saras.subproject_ids.attendance'),
                 fields: [
-                    'userId' => $userId, // TODO: Use saras_user_id when available
+                    'userId' => $user->saras_user_id,
                     'contractId' => $resolvedContractId,
                     'ipAddressCheckOut' => $ipAddress,
                     'geoLocationCheckOut' => "{$latitude},{$longitude}",

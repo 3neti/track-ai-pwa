@@ -51,8 +51,12 @@ class ProjectController extends Controller
                     $project = Project::updateOrCreate(
                         ['external_id' => $sarasProject->externalId],
                         [
+                            'contract_id' => $sarasProject->contractId,
                             'name' => $sarasProject->name,
                             'description' => $sarasProject->description,
+                            'status' => $sarasProject->status,
+                            'tenant_id' => $sarasProject->tenantId,
+                            'tenant_name' => $sarasProject->tenantName,
                             'cached_at' => now(),
                         ]
                     );

@@ -37,7 +37,8 @@ class TrackAIDemoSeeder extends Seeder
         }
 
         $this->seedUsers();
-        $this->seedProjects();
+        // Projects are now synced JIT from Saras - no longer seeded
+        // $this->seedProjects();
         $this->seedUploads();
         $this->seedAuditLogs();
 
@@ -51,7 +52,7 @@ class TrackAIDemoSeeder extends Seeder
     {
         $this->command->info('👥 Creating demo users...');
 
-        // Admin
+        // Admin (local-only, no Saras ID)
         User::create([
             'name' => 'Admin User',
             'username' => 'admin',
@@ -61,7 +62,7 @@ class TrackAIDemoSeeder extends Seeder
             'email_verified_at' => now(),
         ]);
 
-        // Engineers
+        // Engineers with Saras IDs for development
         foreach (range(1, 5) as $i) {
             User::create([
                 'name' => "Engineer $i",
@@ -69,11 +70,14 @@ class TrackAIDemoSeeder extends Seeder
                 'email' => sprintf('engineer%02d@track-ai.test', $i),
                 'password' => Hash::make('password'),
                 'role' => 'engineer',
+                'saras_user_id' => Str::uuid()->toString(),
+                'tenant_id' => 'demo-tenant-001',
+                'tenant_name' => 'DPWH Philippines (Demo)',
                 'email_verified_at' => now(),
             ]);
         }
 
-        // Inspectors
+        // Inspectors with Saras IDs
         foreach (range(1, 2) as $i) {
             User::create([
                 'name' => "Inspector $i",
@@ -81,6 +85,9 @@ class TrackAIDemoSeeder extends Seeder
                 'email' => sprintf('inspector%02d@track-ai.test', $i),
                 'password' => Hash::make('password'),
                 'role' => 'inspector',
+                'saras_user_id' => Str::uuid()->toString(),
+                'tenant_id' => 'demo-tenant-001',
+                'tenant_name' => 'DPWH Philippines (Demo)',
                 'email_verified_at' => now(),
             ]);
         }
@@ -90,59 +97,32 @@ class TrackAIDemoSeeder extends Seeder
 
     /**
      * Seed realistic DPWH projects.
+     *
+     * @deprecated Projects are now synced JIT from Saras API on user login.
+     *             This method is kept for reference but not called.
      */
     protected function seedProjects(): void
     {
-        $this->command->info('🏗️  Creating demo projects...');
-
-        $projects = [
-            ['NCR', 'Manila-Cavite Expressway Extension', 'Extension of MCX from Bacoor to Noveleta with 4-lane highway construction.'],
-            ['R1', 'Ilocos Norte Coastal Road Rehabilitation', 'Rehabilitation and widening of coastal road from Laoag to Pagudpud.'],
-            ['R3', 'Nueva Ecija Farm-to-Market Road', null],
-            ['R4A', 'Batangas Port Access Road', 'Construction of 6km access road to Batangas International Port with 2 bridges.'],
-            ['NCR', 'Pasig River Flood Control Project', 'Installation of flood gates and embankment strengthening along 8km stretch.'],
-            ['R3', 'Tarlac-Pangasinan-La Union Expressway', 'TPLEX extension phase 2 covering 40km with 3 interchanges.'],
-            ['R4A', 'Cavite-Laguna Expressway (CALAX)', 'Completion of remaining 15km segment with toll plaza construction.'],
-            ['R1', 'Baguio-Bontoc Road Improvement', 'Road widening and slope protection works for 25km mountain road.'],
-            ['NCR', 'Skyway Stage 4 Construction', null],
-            ['R3', 'Pampanga River Bridge Construction', 'Construction of 800-meter bridge with approach roads in San Fernando.'],
-            ['R4A', 'Tagaytay Ridge Road Development', 'New ridge road construction with scenic viewpoints, 12km length.'],
-            ['NCR', 'EDSA Greenways Project', 'Installation of bike lanes, pedestrian facilities, and green spaces along EDSA.'],
-            ['R1', 'Pangasinan Drainage Improvement', 'Comprehensive drainage system upgrade for flood mitigation in Dagupan City area.'],
-            ['R3', 'Nueva Ecija Irrigation Support Road', 'All-weather road construction to support NIA irrigation projects.'],
-            ['R4A', 'Batangas Earthquake Retrofit Program', 'Seismic retrofitting of 5 bridges and 3 government buildings in Batangas province.'],
-        ];
-
-        $cachedAtOptions = [
-            now(),
-            now()->subDays(1),
-            now()->subDays(3),
-            now()->subDays(7),
-            now()->subDays(10),
-        ];
-
-        foreach ($projects as $index => $projectData) {
-            [$region, $name, $description] = $projectData;
-            Project::create([
-                'external_id' => sprintf('DPWH-%s-2024-%03d', $region, $index + 101),
-                'name' => $name,
-                'description' => $description,
-                'cached_at' => $cachedAtOptions[$index % count($cachedAtOptions)],
-            ]);
-        }
-
-        $this->command->info('   Created 15 projects across different regions');
+        $this->command->info('🏗️  Skipping projects (now synced from Saras)...');
     }
 
     /**
      * Seed demo uploads across various statuses.
+     * Only runs if projects exist (either synced from Saras or created manually).
      */
     protected function seedUploads(): void
     {
+        $projects = Project::all();
+
+        if ($projects->isEmpty()) {
+            $this->command->info('📤 Skipping uploads (no projects - sync from Saras first)...');
+
+            return;
+        }
+
         $this->command->info('📤 Creating demo uploads...');
 
         $users = User::whereIn('role', ['engineer', 'inspector'])->get();
-        $projects = Project::all();
 
         $documentTypes = ['equipment_pictures', 'delivery_receipts', 'purchase_order', 'documents', 'meals'];
         $tagOptions = [['daily', 'inspection'], ['progress', 'equipment'], ['daily', 'progress'], ['inspection', 'equipment']];
@@ -250,13 +230,21 @@ class TrackAIDemoSeeder extends Seeder
 
     /**
      * Seed audit logs with realistic timeline.
+     * Only runs if projects exist (either synced from Saras or created manually).
      */
     protected function seedAuditLogs(): void
     {
+        $projects = Project::all();
+
+        if ($projects->isEmpty()) {
+            $this->command->info('📝 Skipping audit logs (no projects - sync from Saras first)...');
+
+            return;
+        }
+
         $this->command->info('📝 Creating audit logs...');
 
         $users = User::whereIn('role', ['engineer', 'inspector'])->get();
-        $projects = Project::all();
         $admin = User::where('role', 'admin')->first();
 
         $documentTypes = ['equipment_pictures', 'delivery_receipts', 'meals'];

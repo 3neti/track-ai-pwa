@@ -74,7 +74,7 @@ class AttendanceController extends Controller
         $validated = $request->validated();
 
         $result = $this->attendanceService->checkIn(
-            userId: $user->id,
+            user: $user,
             contractId: $validated['contract_id'],
             latitude: $validated['latitude'],
             longitude: $validated['longitude'],
@@ -106,7 +106,7 @@ class AttendanceController extends Controller
         $validated = $request->validated();
 
         $result = $this->attendanceService->checkOut(
-            userId: $user->id,
+            user: $user,
             contractId: $validated['contract_id'],
             latitude: $validated['latitude'],
             longitude: $validated['longitude'],

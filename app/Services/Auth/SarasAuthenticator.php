@@ -124,17 +124,22 @@ class SarasAuthenticator
         $sarasUserId = $sarasData['id'] ?? null;
         $name = $sarasData['name'] ?? $this->extractNameFromEmail($email);
         $tenant = $sarasData['tenantId'] ?? [];
+        $tenantId = is_array($tenant) ? ($tenant['id'] ?? null) : null;
+        $tenantName = is_array($tenant) ? ($tenant['name'] ?? null) : null;
 
         if ($user) {
             // Update existing user with latest Saras data and password
             $user->update([
                 'password' => Hash::make($password),
                 'saras_user_id' => $sarasUserId ?? $user->saras_user_id,
+                'tenant_id' => $tenantId ?? $user->tenant_id,
+                'tenant_name' => $tenantName ?? $user->tenant_name,
             ]);
 
             Log::info('Updated existing user from Saras login', [
                 'user_id' => $user->id,
                 'email' => $email,
+                'tenant' => $tenantName,
             ]);
 
             return $user;
@@ -147,13 +152,15 @@ class SarasAuthenticator
             'username' => $email,
             'password' => Hash::make($password),
             'saras_user_id' => $sarasUserId,
+            'tenant_id' => $tenantId,
+            'tenant_name' => $tenantName,
         ]);
 
         Log::info('JIT provisioned new user from Saras login', [
             'user_id' => $user->id,
             'email' => $email,
             'saras_user_id' => $sarasUserId,
-            'tenant' => $tenant['name'] ?? null,
+            'tenant' => $tenantName,
         ]);
 
         return $user;

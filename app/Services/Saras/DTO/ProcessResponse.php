@@ -12,8 +12,30 @@ readonly class ProcessResponse
         public ?string $createdAt,
     ) {}
 
+    /**
+     * Create from Saras API response.
+     *
+     * Saras live API returns:
+     * { "traceId": "...", "process": { "id": "...", "createdTs": "...", ... } }
+     *
+     * Stub/legacy format:
+     * { "success": true, "id": "...", "entryId": "...", "message": "..." }
+     */
     public static function fromArray(array $data): self
     {
+        // Handle Saras live API nested response format
+        $process = $data['process'] ?? null;
+        if ($process && isset($process['id'])) {
+            return new self(
+                success: true,
+                entryId: $process['id'],
+                processId: $process['id'],
+                message: $data['message'] ?? 'Process created successfully',
+                createdAt: $process['createdTs'] ?? null,
+            );
+        }
+
+        // Handle stub/legacy format
         return new self(
             success: $data['success'] ?? (isset($data['id']) || isset($data['entryId'])),
             entryId: $data['entryId'] ?? $data['entry_id'] ?? $data['id'] ?? null,

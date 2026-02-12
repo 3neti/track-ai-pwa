@@ -5,6 +5,7 @@ namespace App\Services\TrackAI;
 use App\Contracts\SarasClientInterface;
 use App\Exceptions\SarasApiException;
 use App\Models\AuditLog;
+use App\Models\User;
 use App\Services\Saras\DTO\AiWorkflowResponse;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\DTO\ProcessResponse;
@@ -33,7 +34,7 @@ class ProgressService
      * and only logs locally. Progress UI remains functional.
      */
     public function submitProgress(
-        int $userId,
+        User $user,
         string $contractId,
         array $checklistItems,
         ?string $remarks = null,
@@ -42,6 +43,7 @@ class ProgressService
         ?string $ipAddress = null,
         ?string $clientRequestId = null,
     ): ProcessResponse {
+        $userId = $user->id;
         $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'progress');
 
         // Feature flag: skip Saras sync if progress is disabled
@@ -59,11 +61,14 @@ class ProgressService
             ]);
         }
 
+        // Use progress subProjectId when available, fallback to trackdata
+        $subProjectId = config('saras.subproject_ids.progress') ?: config('saras.subproject_ids.trackdata');
+
         try {
             $response = $this->sarasClient->createProcess(
-                subProjectId: config('saras.subproject_ids.trackdata'), // TODO: Use progress subProjectId when available
+                subProjectId: $subProjectId,
                 fields: [
-                    'userId' => $userId,
+                    'userId' => $user->saras_user_id,
                     'contractId' => $contractId ?: config('saras.default_contract_id'),
                     'checklistItems' => $checklistItems,
                     'remarks' => $remarks,

@@ -26,6 +26,8 @@ class User extends Authenticatable
         'password',
         'role',
         'saras_user_id',
+        'tenant_id',
+        'tenant_name',
     ];
 
     /**

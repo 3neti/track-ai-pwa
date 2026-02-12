@@ -122,19 +122,19 @@ class SarasLiveClient implements SarasClientInterface
                 ->withToken($token)
                 ->acceptJson();
 
-            // Attach each file
-            foreach ($files as $index => $file) {
+            // Attach each file - Saras expects 'files[]' field name
+            foreach ($files as $file) {
                 /** @var UploadedFile $file */
                 $request = $request->attach(
-                    "files[{$index}]",
+                    'files[]',
                     fopen($file->getRealPath(), 'r'),
                     $file->getClientOriginalName()
                 );
             }
 
-            $response = $request->post('/process/knowledges/createStorage', [
-                'pluginName' => 'knowledgeRepo',
-            ]);
+            // pluginName sent as query parameter for multipart upload
+            $pluginName = config('saras.plugin_name', 'knowledgeRepo');
+            $response = $request->post("/process/knowledges/createStorage?pluginName={$pluginName}");
 
             Log::info('Saras API: uploadFiles response', [
                 'request_id' => $requestId,

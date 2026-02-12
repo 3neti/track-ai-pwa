@@ -23,7 +23,7 @@ return [
     |
     */
 
-    'mode' => env('SARAS_MODE', 'stub'),
+    'mode' => env('SARAS_MODE', 'live'),
 
     /*
     |--------------------------------------------------------------------------
@@ -86,6 +86,18 @@ return [
         'trackdata' => env('SARAS_SUBPROJECT_TRACKDATA', 'efb3b7c8-f6af-479f-95e3-bd623add7c56'),
         'progress' => env('SARAS_SUBPROJECT_PROGRESS', ''),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | File Upload Plugin Name
+    |--------------------------------------------------------------------------
+    |
+    | The plugin name for file uploads to /process/knowledges/createStorage.
+    | Get the correct value from Saras for your tenant.
+    |
+    */
+
+    'plugin_name' => env('SARAS_PLUGIN_NAME', 'knowledgeRepo'),
 
     /*
     |--------------------------------------------------------------------------

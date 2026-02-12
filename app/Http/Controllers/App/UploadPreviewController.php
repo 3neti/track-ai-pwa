@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Contracts\SarasClientInterface;
 use App\Http\Controllers\Controller;
 use App\Models\Upload;
-use App\Services\Saras\SarasClient;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UploadPreviewController extends Controller
 {
     public function __construct(
-        protected SarasClient $sarasClient,
+        protected SarasClientInterface $sarasClient,
     ) {}
 
     /**

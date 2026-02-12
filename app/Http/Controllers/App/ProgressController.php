@@ -37,7 +37,7 @@ class ProgressController extends Controller
         $validated = $request->validated();
 
         $response = $this->progressService->submitProgress(
-            userId: $user->id,
+            user: $user,
             contractId: $validated['contract_id'],
             checklistItems: $validated['checklist_items'],
             remarks: $validated['remarks'] ?? null,

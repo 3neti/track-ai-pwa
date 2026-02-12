@@ -22,9 +22,12 @@ class Project extends Model
 
     protected $fillable = [
         'external_id',
+        'contract_id',
         'name',
         'description',
         'status',
+        'tenant_id',
+        'tenant_name',
         'cached_at',
     ];
 
