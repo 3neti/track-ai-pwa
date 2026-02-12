@@ -127,7 +127,7 @@ class TrackAIDemoSeeder extends Seeder
                 'external_id' => sprintf('DPWH-%s-2024-%03d', $region, $index + 101),
                 'name' => $name,
                 'description' => $description,
-                'cached_at' => fake()->randomElement($cachedAtOptions),
+                'cached_at' => $cachedAtOptions[$index % count($cachedAtOptions)],
             ]);
         }
 
@@ -145,65 +145,63 @@ class TrackAIDemoSeeder extends Seeder
         $projects = Project::all();
 
         $documentTypes = ['equipment_pictures', 'delivery_receipts', 'purchase_order', 'documents', 'meals'];
+        $tagOptions = [['daily', 'inspection'], ['progress', 'equipment'], ['daily', 'progress'], ['inspection', 'equipment']];
+        $titles = ['Site progress photo', 'Equipment delivery', 'Material inspection', 'Foundation work', 'Steel reinforcement', 'Concrete pouring'];
+        $errors = ['Network timeout', 'File too large', 'Server error (500)', 'Invalid file format'];
         $totalUploads = 0;
 
-        foreach ($projects->take(5) as $project) {
-            $user = $users->random();
+        foreach ($projects->take(5) as $projectIndex => $project) {
+            $user = $users[$projectIndex % $users->count()];
 
-            // Uploaded items (5-8 per project)
-            foreach (range(1, fake()->numberBetween(5, 8)) as $i) {
+            // Uploaded items (6 per project)
+            foreach (range(1, 6) as $i) {
                 Upload::create([
                     'user_id' => $user->id,
                     'project_id' => $project->id,
                     'contract_id' => $project->external_id,
                     'entry_id' => 'ENT-'.Str::ulid(),
                     'remote_file_id' => 'FILE-'.Str::ulid(),
-                    'title' => fake()->sentence(3),
-                    'remarks' => fake()->optional(0.5)->sentence(),
-                    'document_type' => fake()->randomElement($documentTypes),
-                    'tags' => fake()->randomElements(['daily', 'inspection', 'progress', 'equipment'], 2),
+                    'title' => $titles[($projectIndex + $i) % count($titles)],
+                    'remarks' => $i % 2 === 0 ? 'Progress documentation' : null,
+                    'document_type' => $documentTypes[$i % count($documentTypes)],
+                    'tags' => $tagOptions[$i % count($tagOptions)],
                     'mime' => 'image/jpeg',
-                    'size' => fake()->numberBetween(500000, 5000000),
+                    'size' => 500000 + ($i * 100000),
                     'status' => Upload::STATUS_UPLOADED,
                     'client_request_id' => Str::uuid()->toString(),
-                    'created_at' => now()->subDays(fake()->numberBetween(1, 30)),
+                    'created_at' => now()->subDays($i + $projectIndex),
                 ]);
                 $totalUploads++;
             }
 
-            // Pending items (2-3 per project)
-            foreach (range(1, fake()->numberBetween(2, 3)) as $i) {
+            // Pending items (2 per project)
+            foreach (range(1, 2) as $i) {
                 Upload::create([
                     'user_id' => $user->id,
                     'project_id' => $project->id,
                     'contract_id' => $project->external_id,
-                    'title' => 'Pending: '.fake()->sentence(2),
-                    'document_type' => fake()->randomElement($documentTypes),
+                    'title' => 'Pending: Upload '.$i,
+                    'document_type' => $documentTypes[$i % count($documentTypes)],
                     'tags' => ['pending_sync'],
                     'status' => Upload::STATUS_PENDING,
                     'client_request_id' => Str::uuid()->toString(),
-                    'created_at' => now()->subHours(fake()->numberBetween(1, 12)),
+                    'created_at' => now()->subHours($i + $projectIndex),
                 ]);
                 $totalUploads++;
             }
 
-            // Failed items (1-2 per project)
-            foreach (range(1, fake()->numberBetween(1, 2)) as $i) {
+            // Failed items (2 per project)
+            foreach (range(1, 2) as $i) {
                 Upload::create([
                     'user_id' => $user->id,
                     'project_id' => $project->id,
                     'contract_id' => $project->external_id,
-                    'title' => 'Failed: '.fake()->sentence(2),
-                    'document_type' => fake()->randomElement($documentTypes),
+                    'title' => 'Failed: Upload '.$i,
+                    'document_type' => $documentTypes[$i % count($documentTypes)],
                     'status' => Upload::STATUS_FAILED,
-                    'last_error' => fake()->randomElement([
-                        'Network timeout',
-                        'File too large',
-                        'Server error (500)',
-                        'Invalid file format',
-                    ]),
+                    'last_error' => $errors[($projectIndex + $i) % count($errors)],
                     'client_request_id' => Str::uuid()->toString(),
-                    'created_at' => now()->subDays(fake()->numberBetween(1, 5)),
+                    'created_at' => now()->subDays($i),
                 ]);
                 $totalUploads++;
             }
@@ -261,11 +259,12 @@ class TrackAIDemoSeeder extends Seeder
         $projects = Project::all();
         $admin = User::where('role', 'admin')->first();
 
+        $documentTypes = ['equipment_pictures', 'delivery_receipts', 'meals'];
         $totalLogs = 0;
 
         // Generate activity for each field user over 45 days
-        foreach ($users as $user) {
-            $assignedProjects = $projects->random(min(5, $projects->count()));
+        foreach ($users as $userIndex => $user) {
+            $assignedProjects = $projects->take(min(5, $projects->count()));
 
             // Projects sync entry
             AuditLog::create([
@@ -277,24 +276,25 @@ class TrackAIDemoSeeder extends Seeder
             ]);
             $totalLogs++;
 
-            // Generate daily activities over 45 days
+            // Generate daily activities over 45 days (skip some days deterministically)
             foreach (range(1, 45) as $daysAgo) {
                 $date = now()->subDays($daysAgo);
 
-                // Skip weekends randomly
-                if ($date->isWeekend() && fake()->boolean(60)) {
+                // Skip weekends
+                if ($date->isWeekend()) {
                     continue;
                 }
 
-                // Skip some days randomly
-                if (fake()->boolean(30)) {
+                // Skip every 3rd day to simulate missed days
+                if ($daysAgo % 3 === 0) {
                     continue;
                 }
 
-                $project = $assignedProjects->random();
+                $project = $assignedProjects[$daysAgo % $assignedProjects->count()];
+                $minuteOffset = ($daysAgo + $userIndex) % 30;
 
                 // Morning check-in
-                $checkInTime = $date->copy()->setTime(8, fake()->numberBetween(0, 30));
+                $checkInTime = $date->copy()->setTime(8, $minuteOffset);
                 AuditLog::create([
                     'user_id' => $user->id,
                     'action' => 'attendance_check_in',
@@ -302,20 +302,20 @@ class TrackAIDemoSeeder extends Seeder
                     'metadata_json' => [
                         'entry_id' => 'ENT-'.Str::ulid(),
                         'contract_id' => $project->external_id,
-                        'latitude' => fake()->latitude(14.0, 15.0),
-                        'longitude' => fake()->longitude(120.5, 121.5),
-                        'remarks' => fake()->optional(0.2)->sentence(),
+                        'latitude' => 14.5 + ($daysAgo * 0.01),
+                        'longitude' => 121.0 + ($daysAgo * 0.01),
+                        'remarks' => $daysAgo % 5 === 0 ? 'Morning inspection' : null,
                     ],
                     'created_at' => $checkInTime,
                 ]);
                 $totalLogs++;
 
-                // Mid-day activities (random uploads/progress)
-                if (fake()->boolean(70)) {
-                    $midDayTime = $date->copy()->setTime(fake()->numberBetween(10, 14), fake()->numberBetween(0, 59));
+                // Mid-day activities (on most days)
+                if ($daysAgo % 2 === 0) {
+                    $midDayTime = $date->copy()->setTime(10 + ($daysAgo % 4), $minuteOffset);
 
                     // Upload
-                    if (fake()->boolean(60)) {
+                    if ($daysAgo % 3 !== 2) {
                         $entryId = 'ENT-'.Str::ulid();
 
                         AuditLog::create([
@@ -325,7 +325,7 @@ class TrackAIDemoSeeder extends Seeder
                             'metadata_json' => [
                                 'entry_id' => $entryId,
                                 'contract_id' => $project->external_id,
-                                'document_type' => fake()->randomElement(['equipment_pictures', 'delivery_receipts', 'meals']),
+                                'document_type' => $documentTypes[$daysAgo % count($documentTypes)],
                                 'tags' => ['daily_report'],
                             ],
                             'created_at' => $midDayTime,
@@ -340,7 +340,7 @@ class TrackAIDemoSeeder extends Seeder
                                 'entry_id' => $entryId,
                                 'file_id' => 'FILE-'.Str::ulid(),
                                 'file_mime' => 'image/jpeg',
-                                'file_size' => fake()->numberBetween(500000, 3000000),
+                                'file_size' => 500000 + ($daysAgo * 50000),
                             ],
                             'created_at' => $midDayTime->copy()->addSeconds(5),
                         ]);
@@ -348,7 +348,7 @@ class TrackAIDemoSeeder extends Seeder
                     }
 
                     // Progress report
-                    if (fake()->boolean(50)) {
+                    if ($daysAgo % 2 === 0) {
                         $progressTime = $midDayTime->copy()->addHours(1);
                         $entryId = 'ENT-'.Str::ulid();
 
@@ -359,16 +359,16 @@ class TrackAIDemoSeeder extends Seeder
                             'metadata_json' => [
                                 'entry_id' => $entryId,
                                 'contract_id' => $project->external_id,
-                                'checklist_completed' => fake()->numberBetween(3, 5),
-                                'latitude' => fake()->latitude(14.0, 15.0),
-                                'longitude' => fake()->longitude(120.5, 121.5),
+                                'checklist_completed' => 3 + ($daysAgo % 3),
+                                'latitude' => 14.5 + ($daysAgo * 0.01),
+                                'longitude' => 121.0 + ($daysAgo * 0.01),
                             ],
                             'created_at' => $progressTime,
                         ]);
                         $totalLogs++;
 
-                        // AI workflow
-                        if (fake()->boolean(80)) {
+                        // AI workflow (on most progress reports)
+                        if ($daysAgo % 5 !== 0) {
                             $workflowId = 'WF-'.Str::ulid();
 
                             AuditLog::create([
@@ -392,11 +392,11 @@ class TrackAIDemoSeeder extends Seeder
                                     'workflow_id' => $workflowId,
                                     'status' => 'completed',
                                     'results' => [
-                                        'progress_percentage' => fake()->numberBetween(65, 92),
-                                        'quality_score' => fake()->randomFloat(2, 7.5, 9.5),
+                                        'progress_percentage' => 65 + ($daysAgo % 28),
+                                        'quality_score' => round(7.5 + (($daysAgo % 20) * 0.1), 2),
                                     ],
                                 ],
-                                'created_at' => $progressTime->copy()->addMinutes(fake()->numberBetween(1, 5)),
+                                'created_at' => $progressTime->copy()->addMinutes(1 + ($daysAgo % 4)),
                             ]);
                             $totalLogs++;
                         }
@@ -404,7 +404,7 @@ class TrackAIDemoSeeder extends Seeder
                 }
 
                 // Evening check-out
-                $checkOutTime = $date->copy()->setTime(17, fake()->numberBetween(0, 45));
+                $checkOutTime = $date->copy()->setTime(17, $minuteOffset);
                 AuditLog::create([
                     'user_id' => $user->id,
                     'action' => 'attendance_check_out',
@@ -412,9 +412,9 @@ class TrackAIDemoSeeder extends Seeder
                     'metadata_json' => [
                         'entry_id' => 'ENT-'.Str::ulid(),
                         'contract_id' => $project->external_id,
-                        'latitude' => fake()->latitude(14.0, 15.0),
-                        'longitude' => fake()->longitude(120.5, 121.5),
-                        'remarks' => fake()->optional(0.3)->sentence(),
+                        'latitude' => 14.5 + ($daysAgo * 0.01),
+                        'longitude' => 121.0 + ($daysAgo * 0.01),
+                        'remarks' => $daysAgo % 4 === 0 ? 'End of day report submitted' : null,
                     ],
                     'created_at' => $checkOutTime,
                 ]);
@@ -424,7 +424,7 @@ class TrackAIDemoSeeder extends Seeder
 
         // Add edge case logs
         $user = $users->first();
-        $project = $projects->random();
+        $project = $projects->first();
 
         // Failed upload
         AuditLog::create([
