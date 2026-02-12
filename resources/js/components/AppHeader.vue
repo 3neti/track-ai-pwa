@@ -5,6 +5,7 @@ import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import SarasStatusBadge from '@/components/SarasStatusBadge.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -199,6 +200,8 @@ const rightNavItems: NavItem[] = [
                                 class="size-5 opacity-80 group-hover:opacity-100"
                             />
                         </Button>
+
+                        <SarasStatusBadge />
 
                         <div class="hidden space-x-1 lg:flex">
                             <template

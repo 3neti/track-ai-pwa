@@ -2,12 +2,11 @@
 
 namespace App\Services\TrackAI;
 
+use App\Contracts\SarasClientInterface;
+use App\Exceptions\SarasApiException;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\Upload;
-use App\Services\Saras\DTO\EntryResponse;
-use App\Services\Saras\DTO\FileUploadResponse;
-use App\Services\Saras\SarasClient;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -15,7 +14,7 @@ use Illuminate\Support\Str;
 class UploadService
 {
     public function __construct(
-        protected SarasClient $sarasClient,
+        protected SarasClientInterface $sarasClient,
     ) {}
 
     /**
@@ -125,112 +124,12 @@ class UploadService
     }
 
     /**
-     * Initialize remote entry in Saras for an Upload record.
-     * This creates the entry_id that's needed before file upload.
-     */
-    public function initRemoteEntry(
-        Upload $upload,
-        float $latitude = 0,
-        float $longitude = 0,
-        ?string $ipAddress = null,
-    ): Upload {
-        // Use client_request_id for deterministic idempotency
-        $idempotencyKey = $upload->client_request_id ?? $this->generateIdempotencyKey(
-            $upload->user_id,
-            $upload->contract_id,
-            'upload_init'
-        );
-
-        $response = $this->sarasClient->createAnEntry([
-            'type' => 'upload',
-            'user_id' => $upload->user_id,
-            'contract_id' => $upload->contract_id,
-            'document_type' => $upload->document_type,
-            'tags' => $upload->tags ?? [],
-            'name' => $upload->title,
-            'remarks' => $upload->remarks,
-            'geo_location' => [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-            ],
-            'ip_address' => $ipAddress,
-            'timestamp' => now()->toIso8601String(),
-        ], $idempotencyKey);
-
-        if ($response->success) {
-            $upload->update(['entry_id' => $response->entryId]);
-
-            AuditLog::log($upload->user_id, 'upload_entry_created', $upload->contract_id, [
-                'upload_id' => $upload->id,
-                'entry_id' => $response->entryId,
-                'idempotency_key' => $idempotencyKey,
-            ]);
-        } else {
-            $upload->update([
-                'status' => Upload::STATUS_FAILED,
-                'last_error' => $response->message,
-            ]);
-
-            AuditLog::log($upload->user_id, 'upload_entry_failed', $upload->contract_id, [
-                'upload_id' => $upload->id,
-                'error' => $response->message,
-            ]);
-        }
-
-        return $upload->fresh();
-    }
-
-    /**
-     * Initialize an upload entry.
-     *
-     * @deprecated Use createUploadRecord() + initRemoteEntry() instead
-     */
-    public function initUpload(
-        int $userId,
-        string $contractId,
-        string $documentType,
-        array $tags,
-        ?string $name = null,
-        ?string $remarks = null,
-        float $latitude = 0,
-        float $longitude = 0,
-        ?string $ipAddress = null,
-        ?string $clientRequestId = null,
-    ): EntryResponse {
-        // Use client_request_id for deterministic idempotency (offline replay safe)
-        $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'upload_init');
-
-        $response = $this->sarasClient->createAnEntry([
-            'type' => 'upload',
-            'user_id' => $userId,
-            'contract_id' => $contractId,
-            'document_type' => $documentType,
-            'tags' => $tags,
-            'name' => $name,
-            'remarks' => $remarks,
-            'geo_location' => [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-            ],
-            'ip_address' => $ipAddress,
-            'timestamp' => now()->toIso8601String(),
-        ], $idempotencyKey);
-
-        if ($response->success) {
-            AuditLog::log($userId, 'upload_init', $contractId, [
-                'entry_id' => $response->entryId,
-                'idempotency_key' => $idempotencyKey,
-                'document_type' => $documentType,
-                'tags' => $tags,
-            ]);
-        }
-
-        return $response;
-    }
-
-    /**
      * Upload a file to remote storage for an Upload record.
-     * Handles entry creation if not already done.
+     *
+     * New Saras flow:
+     * 1. Upload file to Saras storage → get file UUID
+     * 2. Create process with file UUID in fields.file
+     *
      * Also saves the file locally for preview purposes.
      */
     public function uploadFileToRemote(
@@ -245,59 +144,107 @@ class UploadService
             'mime' => $file->getMimeType(),
             'size' => $file->getSize(),
         ]);
-        $upload->refresh(); // Refresh to get updated mime for local path
+        $upload->refresh();
 
         // Save file locally for preview (before remote upload)
         $this->saveFileLocally($upload, $file);
 
-        // Create remote entry if not already done
-        if (! $upload->entry_id) {
-            $upload = $this->initRemoteEntry($upload, $latitude, $longitude, $ipAddress);
-
-            // If entry creation failed, return early
-            if ($upload->isFailed()) {
-                return $upload;
-            }
-        }
-
-        // Now upload the file
+        // Mark as uploading
         $upload->update(['status' => Upload::STATUS_UPLOADING]);
 
-        $idempotencyKey = $upload->client_request_id.'_file';
+        try {
+            // Step 1: Upload file to Saras storage
+            $fileResponse = $this->sarasClient->uploadFiles([$file]);
 
-        $response = $this->sarasClient->uploadFile($file, [
-            'entry_id' => $upload->entry_id,
-            'contract_id' => $upload->contract_id,
-        ], $idempotencyKey);
+            if (! $fileResponse->success || ! $fileResponse->getFirstFileId()) {
+                throw SarasApiException::uploadFailed(
+                    $fileResponse->message ?? 'File upload returned no file ID'
+                );
+            }
 
-        if ($response->success) {
+            $remoteFileId = $fileResponse->getFirstFileId();
+
+            // Step 2: Create process entry with file UUID
+            $idempotencyKey = $upload->client_request_id ?? $this->generateIdempotencyKey(
+                $upload->user_id,
+                $upload->contract_id,
+                'upload'
+            );
+
+            // Resolve contract ID - use default if not provided by Saras yet
+            $resolvedContractId = $upload->contract_id ?: config('saras.default_contract_id');
+
+            $processResponse = $this->sarasClient->createProcess(
+                subProjectId: config('saras.subproject_ids.trackdata'),
+                fields: [
+                    'file' => $remoteFileId,
+                    'contractId' => $resolvedContractId,
+                    'name' => $upload->title,
+                    'documentType' => $upload->document_type,
+                    'tags' => $upload->tags ?? [],
+                    'remarks' => $upload->remarks,
+                    'ipAddress' => $ipAddress,
+                    'geoLocation' => "{$latitude},{$longitude}",
+                    'date' => now()->toDateString(),
+                    'time' => now()->toTimeString(),
+                ],
+                idempotencyKey: $idempotencyKey,
+            );
+
+            if (! $processResponse->success) {
+                throw SarasApiException::validationError(
+                    '/process/createProcess',
+                    $processResponse->message ?? 'Failed to create process entry'
+                );
+            }
+
+            // Success - update upload record
             $upload->update([
-                'remote_file_id' => $response->fileId,
+                'entry_id' => $processResponse->entryId,
+                'remote_file_id' => $remoteFileId,
                 'status' => Upload::STATUS_UPLOADED,
             ]);
 
             AuditLog::log($upload->user_id, 'upload_synced', $upload->contract_id, [
                 'upload_id' => $upload->id,
-                'entry_id' => $upload->entry_id,
-                'file_id' => $response->fileId,
+                'entry_id' => $processResponse->entryId,
+                'file_id' => $remoteFileId,
                 'idempotency_key' => $idempotencyKey,
                 'file_name' => $file->getClientOriginalName(),
                 'file_size' => $file->getSize(),
             ]);
-        } else {
+
+        } catch (SarasApiException $e) {
             $upload->update([
                 'status' => Upload::STATUS_FAILED,
-                'last_error' => $response->message,
+                'last_error' => $e->getMessage(),
             ]);
 
             AuditLog::log($upload->user_id, 'upload_failed', $upload->contract_id, [
                 'upload_id' => $upload->id,
-                'entry_id' => $upload->entry_id,
-                'error' => $response->message,
+                'error' => $e->getMessage(),
+                'error_type' => $e->type,
             ]);
         }
 
         return $upload->fresh();
+    }
+
+    /**
+     * Initialize remote entry in Saras for an Upload record.
+     *
+     * @deprecated The new Saras flow uploads file first, then creates process.
+     *             Use uploadFileToRemote() directly instead.
+     */
+    public function initRemoteEntry(
+        Upload $upload,
+        float $latitude = 0,
+        float $longitude = 0,
+        ?string $ipAddress = null,
+    ): Upload {
+        // For backwards compatibility, just return the upload as-is
+        // The actual entry creation now happens in uploadFileToRemote()
+        return $upload;
     }
 
     /**
@@ -317,70 +264,6 @@ class UploadService
 
         // Save the file
         $file->storeAs($directory, basename($path), 'local');
-    }
-
-    /**
-     * Upload a file and update the Upload record.
-     *
-     * @deprecated Use uploadFileToRemote() instead
-     */
-    public function uploadFile(
-        int $userId,
-        string $contractId,
-        string $entryId,
-        UploadedFile $file,
-        array $metadata = [],
-        ?Upload $upload = null,
-    ): FileUploadResponse {
-        $idempotencyKey = $upload?->client_request_id ?? $this->generateIdempotencyKey($userId, $contractId, 'file_upload');
-
-        // Mark as uploading if we have an upload record
-        if ($upload) {
-            $upload->update(['status' => Upload::STATUS_UPLOADING]);
-        }
-
-        $response = $this->sarasClient->uploadFile($file, [
-            'entry_id' => $entryId,
-            'contract_id' => $contractId,
-            ...$metadata,
-        ], $idempotencyKey);
-
-        if ($response->success) {
-            // Update the upload record with Saras response
-            if ($upload) {
-                $upload->update([
-                    'remote_file_id' => $response->fileId,
-                    'status' => Upload::STATUS_UPLOADED,
-                    'mime' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                ]);
-            }
-
-            AuditLog::log($userId, 'upload_synced', $contractId, [
-                'upload_id' => $upload?->id,
-                'entry_id' => $entryId,
-                'file_id' => $response->fileId,
-                'idempotency_key' => $idempotencyKey,
-                'file_name' => $file->getClientOriginalName(),
-                'file_size' => $file->getSize(),
-            ]);
-        } else {
-            // Mark as failed if we have an upload record
-            if ($upload) {
-                $upload->update([
-                    'status' => Upload::STATUS_FAILED,
-                    'last_error' => $response->message,
-                ]);
-            }
-
-            AuditLog::log($userId, 'upload_failed', $contractId, [
-                'upload_id' => $upload?->id,
-                'entry_id' => $entryId,
-                'error' => $response->message,
-            ]);
-        }
-
-        return $response;
     }
 
     /**

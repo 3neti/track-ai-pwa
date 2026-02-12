@@ -3,8 +3,13 @@
 namespace App\Providers;
 
 use App\Contracts\FaceAuthProviderInterface;
+use App\Contracts\SarasClientInterface;
+use App\Contracts\SarasTokenManagerInterface;
 use App\Services\FaceAuth\HypervergeDirectProvider;
 use App\Services\FaceAuth\HypervergeStubProvider;
+use App\Services\Saras\SarasLiveClient;
+use App\Services\Saras\SarasStubClient;
+use App\Services\Saras\SarasTokenManager;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->registerFaceAuthProvider();
+        $this->registerSarasProvider();
     }
 
     /**
@@ -38,6 +44,30 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return new HypervergeStubProvider;
+        });
+    }
+
+    /**
+     * Register the Saras API client and token manager.
+     */
+    private function registerSarasProvider(): void
+    {
+        // Register token manager as singleton
+        $this->app->singleton(SarasTokenManagerInterface::class, SarasTokenManager::class);
+
+        // Register Saras client based on mode
+        $this->app->singleton(SarasClientInterface::class, function () {
+            if (config('saras.mode') === 'live') {
+                return new SarasLiveClient(
+                    tokenManager: $this->app->make(SarasTokenManagerInterface::class),
+                    baseUrl: config('saras.base_url'),
+                    timeout: config('saras.timeout'),
+                    retryAttempts: config('saras.retry.attempts', 2),
+                    retryDelayMs: config('saras.retry.delay_ms', 500),
+                );
+            }
+
+            return new SarasStubClient;
         });
     }
 

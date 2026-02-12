@@ -2,23 +2,24 @@
 
 namespace App\Services\TrackAI;
 
+use App\Contracts\SarasClientInterface;
+use App\Exceptions\SarasApiException;
 use App\Models\AttendanceSession;
 use App\Models\AuditLog;
-use App\Services\Saras\DTO\EntryResponse;
-use App\Services\Saras\SarasClient;
+use App\Services\Saras\DTO\ProcessResponse;
 use Illuminate\Support\Str;
 
 class AttendanceService
 {
     public function __construct(
-        protected SarasClient $sarasClient,
+        protected SarasClientInterface $sarasClient,
         protected AttendanceSessionService $sessionService,
     ) {}
 
     /**
      * Record check-in for a user.
      *
-     * @return array{response: EntryResponse, session: ?AttendanceSession, attendance_status: string}
+     * @return array{response: ProcessResponse, session: ?AttendanceSession, attendance_status: string}
      */
     public function checkIn(
         int $userId,
@@ -35,7 +36,7 @@ class AttendanceService
         // Check if user can check in
         if (! $this->sessionService->canCheckIn($userId, $contractId)) {
             return [
-                'response' => EntryResponse::fromArray([
+                'response' => ProcessResponse::fromArray([
                     'success' => false,
                     'entry_id' => null,
                     'message' => 'Already checked in to this project. Please check out first.',
@@ -48,18 +49,34 @@ class AttendanceService
         // Use client_request_id for deterministic idempotency (offline replay safe)
         $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'check_in');
 
-        $response = $this->sarasClient->createAnEntry([
-            'type' => 'attendance_check_in',
-            'user_id' => $userId,
-            'contract_id' => $contractId,
-            'geo_location' => [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-            ],
-            'ip_address' => $ipAddress,
-            'remarks' => $remarks,
-            'timestamp' => now()->toIso8601String(),
-        ], $idempotencyKey);
+        // Resolve contract ID - use default if not provided by Saras yet
+        $resolvedContractId = $contractId ?: config('saras.default_contract_id');
+
+        try {
+            $response = $this->sarasClient->createProcess(
+                subProjectId: config('saras.subproject_ids.attendance'),
+                fields: [
+                    'userId' => $userId, // TODO: Use saras_user_id when available
+                    'contractId' => $resolvedContractId,
+                    'ipAddressCheckIn' => $ipAddress,
+                    'geoLocationCheckIn' => "{$latitude},{$longitude}",
+                    'date' => now()->toDateString(),
+                    'checkInTime' => now()->toTimeString(),
+                    'remarks' => $remarks,
+                ],
+                idempotencyKey: $idempotencyKey,
+            );
+        } catch (SarasApiException $e) {
+            return [
+                'response' => ProcessResponse::fromArray([
+                    'success' => false,
+                    'entry_id' => null,
+                    'message' => $e->getMessage(),
+                ]),
+                'session' => null,
+                'attendance_status' => 'checked_out',
+            ];
+        }
 
         $session = null;
 
@@ -92,7 +109,7 @@ class AttendanceService
     /**
      * Record check-out for a user.
      *
-     * @return array{response: EntryResponse, session: ?AttendanceSession, attendance_status: string}
+     * @return array{response: ProcessResponse, session: ?AttendanceSession, attendance_status: string}
      */
     public function checkOut(
         int $userId,
@@ -109,7 +126,7 @@ class AttendanceService
         // Check if user can check out
         if (! $session) {
             return [
-                'response' => EntryResponse::fromArray([
+                'response' => ProcessResponse::fromArray([
                     'success' => false,
                     'entry_id' => null,
                     'message' => 'Not checked in to this project. Please check in first.',
@@ -122,18 +139,34 @@ class AttendanceService
         // Use client_request_id for deterministic idempotency (offline replay safe)
         $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'check_out');
 
-        $response = $this->sarasClient->createAnEntry([
-            'type' => 'attendance_check_out',
-            'user_id' => $userId,
-            'contract_id' => $contractId,
-            'geo_location' => [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-            ],
-            'ip_address' => $ipAddress,
-            'remarks' => $remarks,
-            'timestamp' => now()->toIso8601String(),
-        ], $idempotencyKey);
+        // Resolve contract ID - use default if not provided by Saras yet
+        $resolvedContractId = $contractId ?: config('saras.default_contract_id');
+
+        try {
+            $response = $this->sarasClient->createProcess(
+                subProjectId: config('saras.subproject_ids.attendance'),
+                fields: [
+                    'userId' => $userId, // TODO: Use saras_user_id when available
+                    'contractId' => $resolvedContractId,
+                    'ipAddressCheckOut' => $ipAddress,
+                    'geoLocationCheckOut' => "{$latitude},{$longitude}",
+                    'date' => now()->toDateString(),
+                    'checkOutTime' => now()->toTimeString(),
+                    'remarks' => $remarks,
+                ],
+                idempotencyKey: $idempotencyKey,
+            );
+        } catch (SarasApiException $e) {
+            return [
+                'response' => ProcessResponse::fromArray([
+                    'success' => false,
+                    'entry_id' => null,
+                    'message' => $e->getMessage(),
+                ]),
+                'session' => $session,
+                'attendance_status' => 'checked_in',
+            ];
+        }
 
         if ($response->success) {
             // Close the local session

@@ -327,7 +327,7 @@ test('uploads can be filtered by status', function () {
 // Unified Flow Tests (Legacy + New)
 // ========================================
 
-test('legacy init endpoint creates upload record and entry_id', function () {
+test('legacy init endpoint creates upload record', function () {
     $clientRequestId = fake()->uuid();
 
     $response = $this->actingAs($this->user)
@@ -351,13 +351,15 @@ test('legacy init endpoint creates upload record and entry_id', function () {
         'document_type' => 'equipment_pictures',
     ]);
 
-    // Verify entry_id was saved
+    // NOTE: With the new Saras flow, entry_id is null until file upload.
+    // The init endpoint creates the Upload record; entry_id is set when file is uploaded.
     $upload = Upload::where('client_request_id', $clientRequestId)->first();
-    expect($upload->entry_id)->not->toBeNull();
+    expect($upload)->not->toBeNull();
+    expect($upload->status)->toBe('pending');
 });
 
-test('legacy file endpoint updates upload status to uploaded', function () {
-    // First create via init
+test('legacy file endpoint uploads file and creates entry', function () {
+    // First create via init (creates Upload record, no entry_id yet)
     $initResponse = $this->actingAs($this->user)
         ->postJson('/api/uploads/init', [
             'contract_id' => $this->project->external_id,
@@ -367,7 +369,6 @@ test('legacy file endpoint updates upload status to uploaded', function () {
         ]);
 
     $uploadId = $initResponse->json('upload_id');
-    $entryId = $initResponse->json('entry_id');
 
     // Upload file using legacy endpoint with upload_id
     $file = \Illuminate\Http\UploadedFile::fake()->image('test.jpg', 100, 100);
@@ -376,18 +377,17 @@ test('legacy file endpoint updates upload status to uploaded', function () {
         ->postJson('/api/uploads/file', [
             'contract_id' => $this->project->external_id,
             'upload_id' => $uploadId,
-            'entry_id' => $entryId,
             'file' => $file,
         ]);
 
     $response->assertStatus(200)
         ->assertJson(['success' => true]);
 
-    // Verify Upload status is now 'uploaded'
-    $this->assertDatabaseHas('uploads', [
-        'id' => $uploadId,
-        'status' => 'uploaded',
-    ]);
+    // Verify Upload status is now 'uploaded' and entry_id is set
+    $upload = Upload::find($uploadId);
+    expect($upload->status)->toBe('uploaded');
+    expect($upload->entry_id)->not->toBeNull();
+    expect($upload->remote_file_id)->not->toBeNull();
 });
 
 test('new file endpoint uploads and updates status', function () {

@@ -4,6 +4,7 @@ use App\Http\Controllers\App\AttendanceController;
 use App\Http\Controllers\App\ProgressController;
 use App\Http\Controllers\App\ProjectController;
 use App\Http\Controllers\App\ProjectUploadController;
+use App\Http\Controllers\App\SarasStatusController;
 use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
 use App\Http\Controllers\App\UploadPreviewController;
@@ -54,4 +55,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Upload Preview (direct upload access, not project-scoped)
     Route::get('/uploads/{upload}/preview', [UploadPreviewController::class, 'preview'])->name('api.uploads.preview');
+
+    // Saras Status
+    Route::get('/saras/status', [SarasStatusController::class, 'status'])->name('api.saras.status');
+    Route::post('/saras/health-check', [SarasStatusController::class, 'healthCheck'])->name('api.saras.health-check');
 });

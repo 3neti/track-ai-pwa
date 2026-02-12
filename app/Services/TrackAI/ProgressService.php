@@ -2,22 +2,35 @@
 
 namespace App\Services\TrackAI;
 
+use App\Contracts\SarasClientInterface;
+use App\Exceptions\SarasApiException;
 use App\Models\AuditLog;
 use App\Services\Saras\DTO\AiWorkflowResponse;
-use App\Services\Saras\DTO\EntryResponse;
 use App\Services\Saras\DTO\FileUploadResponse;
-use App\Services\Saras\SarasClient;
+use App\Services\Saras\DTO\ProcessResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 
 class ProgressService
 {
     public function __construct(
-        protected SarasClient $sarasClient,
+        protected SarasClientInterface $sarasClient,
     ) {}
 
     /**
+     * Check if progress sync to Saras is enabled.
+     */
+    protected function isProgressSyncEnabled(): bool
+    {
+        return config('saras.feature_flags.enabled', true)
+            && config('saras.feature_flags.progress_enabled', false);
+    }
+
+    /**
      * Submit a progress update.
+     *
+     * NOTE: Saras sync is feature-flagged. When disabled, returns a stub response
+     * and only logs locally. Progress UI remains functional.
      */
     public function submitProgress(
         int $userId,
@@ -28,33 +41,57 @@ class ProgressService
         float $longitude = 0,
         ?string $ipAddress = null,
         ?string $clientRequestId = null,
-    ): EntryResponse {
-        // Use client_request_id for deterministic idempotency (offline replay safe)
+    ): ProcessResponse {
         $idempotencyKey = $clientRequestId ?? $this->generateIdempotencyKey($userId, $contractId, 'progress');
 
-        $response = $this->sarasClient->createAnEntry([
-            'type' => 'progress_update',
-            'user_id' => $userId,
-            'contract_id' => $contractId,
-            'checklist_items' => $checklistItems,
-            'remarks' => $remarks,
-            'geo_location' => [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-            ],
-            'ip_address' => $ipAddress,
-            'timestamp' => now()->toIso8601String(),
-        ], $idempotencyKey);
-
-        if ($response->success) {
-            AuditLog::log($userId, 'progress_submit', $contractId, [
-                'entry_id' => $response->entryId,
+        // Feature flag: skip Saras sync if progress is disabled
+        if (! $this->isProgressSyncEnabled()) {
+            AuditLog::log($userId, 'progress_submit_local', $contractId, [
                 'idempotency_key' => $idempotencyKey,
                 'checklist_count' => count($checklistItems),
+                'saras_sync' => false,
+            ]);
+
+            return ProcessResponse::fromArray([
+                'success' => true,
+                'entry_id' => 'local_'.Str::random(12),
+                'message' => 'Progress saved locally (Saras sync pending)',
             ]);
         }
 
-        return $response;
+        try {
+            $response = $this->sarasClient->createProcess(
+                subProjectId: config('saras.subproject_ids.trackdata'), // TODO: Use progress subProjectId when available
+                fields: [
+                    'userId' => $userId,
+                    'contractId' => $contractId ?: config('saras.default_contract_id'),
+                    'checklistItems' => $checklistItems,
+                    'remarks' => $remarks,
+                    'geoLocation' => "{$latitude},{$longitude}",
+                    'ipAddress' => $ipAddress,
+                    'date' => now()->toDateString(),
+                    'time' => now()->toTimeString(),
+                ],
+                idempotencyKey: $idempotencyKey,
+            );
+
+            if ($response->success) {
+                AuditLog::log($userId, 'progress_submit', $contractId, [
+                    'entry_id' => $response->entryId,
+                    'idempotency_key' => $idempotencyKey,
+                    'checklist_count' => count($checklistItems),
+                ]);
+            }
+
+            return $response;
+
+        } catch (SarasApiException $e) {
+            return ProcessResponse::fromArray([
+                'success' => false,
+                'entry_id' => null,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -67,44 +104,62 @@ class ProgressService
         UploadedFile $file,
         string $photoType,
     ): FileUploadResponse {
-        $idempotencyKey = $this->generateIdempotencyKey($userId, $contractId, 'progress_photo');
-
-        $response = $this->sarasClient->uploadFile($file, [
-            'entry_id' => $entryId,
-            'contract_id' => $contractId,
-            'photo_type' => $photoType,
-        ], $idempotencyKey);
-
-        if ($response->success) {
-            AuditLog::log($userId, 'progress_photo_upload', $contractId, [
-                'entry_id' => $entryId,
-                'file_id' => $response->fileId,
-                'photo_type' => $photoType,
-                'idempotency_key' => $idempotencyKey,
+        // Feature flag: skip Saras sync if progress is disabled
+        if (! $this->isProgressSyncEnabled()) {
+            return FileUploadResponse::fromArray([
+                'success' => true,
+                'files' => [['id' => 'local_'.Str::random(16)]],
+                'message' => 'Photo saved locally (Saras sync pending)',
             ]);
         }
 
-        return $response;
+        try {
+            $response = $this->sarasClient->uploadFiles([$file]);
+
+            if ($response->success) {
+                AuditLog::log($userId, 'progress_photo_upload', $contractId, [
+                    'entry_id' => $entryId,
+                    'file_id' => $response->getFirstFileId(),
+                    'photo_type' => $photoType,
+                ]);
+            }
+
+            return $response;
+
+        } catch (SarasApiException $e) {
+            return FileUploadResponse::fromArray([
+                'success' => false,
+                'files' => [],
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
      * Trigger AI workflow for progress analysis.
+     *
+     * NOTE: AI workflow is part of the progress feature which is currently disabled.
+     * This returns a stub response when the feature flag is off.
      */
     public function runAiAnalysis(int $userId, string $contractId, string $entryId): AiWorkflowResponse
     {
-        $idempotencyKey = $this->generateIdempotencyKey($userId, $contractId, 'ai_workflow');
-
-        $response = $this->sarasClient->runAiWorkflow($entryId, $idempotencyKey);
-
-        if ($response->success) {
-            AuditLog::log($userId, 'ai_workflow_triggered', $contractId, [
-                'entry_id' => $entryId,
-                'workflow_id' => $response->workflowId,
-                'idempotency_key' => $idempotencyKey,
+        // Feature flag: skip if progress is disabled
+        if (! $this->isProgressSyncEnabled()) {
+            return AiWorkflowResponse::fromArray([
+                'success' => false,
+                'workflow_id' => null,
+                'status' => 'disabled',
+                'message' => 'AI workflow is not available (Saras sync pending)',
             ]);
         }
 
-        return $response;
+        // TODO: Implement when Saras provides AI workflow API
+        return AiWorkflowResponse::fromArray([
+            'success' => false,
+            'workflow_id' => null,
+            'status' => 'not_implemented',
+            'message' => 'AI workflow API not yet implemented',
+        ]);
     }
 
     /**
@@ -112,7 +167,23 @@ class ProgressService
      */
     public function getAiStatus(string $workflowId): AiWorkflowResponse
     {
-        return $this->sarasClient->getAiWorkflowStatus($workflowId);
+        // Feature flag: skip if progress is disabled
+        if (! $this->isProgressSyncEnabled()) {
+            return AiWorkflowResponse::fromArray([
+                'success' => false,
+                'workflow_id' => $workflowId,
+                'status' => 'disabled',
+                'message' => 'AI workflow is not available (Saras sync pending)',
+            ]);
+        }
+
+        // TODO: Implement when Saras provides AI workflow API
+        return AiWorkflowResponse::fromArray([
+            'success' => false,
+            'workflow_id' => $workflowId,
+            'status' => 'not_implemented',
+            'message' => 'AI workflow API not yet implemented',
+        ]);
     }
 
     /**
