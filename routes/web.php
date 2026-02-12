@@ -16,6 +16,10 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::get('/docs/user-guide', function () {
+    return Inertia::render('docs/UserGuide');
+})->name('docs.user-guide');
+
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
