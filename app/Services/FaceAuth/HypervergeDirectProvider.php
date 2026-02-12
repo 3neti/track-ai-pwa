@@ -15,6 +15,7 @@ class HypervergeDirectProvider implements FaceAuthProviderInterface
         private readonly string $baseUrl,
         private readonly string $appId,
         private readonly string $appKey,
+        private readonly string $verifyPath = '/photo/verifyPair',
         private readonly int $timeout = 30,
     ) {}
 
@@ -27,8 +28,8 @@ class HypervergeDirectProvider implements FaceAuthProviderInterface
                     'appKey' => $this->appKey,
                     'transactionId' => $transactionId,
                 ])
-                ->attach('selfie', $selfie->getContent(), $selfie->getClientOriginalName())
-                ->post("{$this->baseUrl}/photo/verifyPair", [
+                ->attach('selfie', fopen($selfie->getRealPath(), 'r'), $selfie->getClientOriginalName())
+                ->post("{$this->baseUrl}{$this->verifyPath}", [
                     'referenceId' => $username,
                 ]);
 
@@ -62,7 +63,7 @@ class HypervergeDirectProvider implements FaceAuthProviderInterface
     private function parseResponse(array $data): FaceVerificationResult
     {
         $result = $data['result'] ?? [];
-        $status = $result['status'] ?? 'error';
+        $status = $result['status'] ?? null;
 
         // Handle quality issues
         if ($status === 'quality_check_failed') {
@@ -76,8 +77,17 @@ class HypervergeDirectProvider implements FaceAuthProviderInterface
             return FaceVerificationResult::notEnrolled();
         }
 
-        // Handle match result
-        $matched = ($result['match'] ?? false) === true;
+        // Handle match result - requires 'match' key to be present
+        if (! array_key_exists('match', $result)) {
+            // Unknown response shape - log and return error
+            Log::warning('Hyperverge unexpected response shape', [
+                'data' => app()->isProduction() ? '[redacted]' : $data,
+            ]);
+
+            return FaceVerificationResult::error('Unexpected response from verification service');
+        }
+
+        $matched = $result['match'] === true;
         $confidence = $result['confidence'] ?? null;
 
         if ($matched && $confidence !== null) {

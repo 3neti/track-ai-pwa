@@ -32,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
                     baseUrl: config('hyperverge.base_url'),
                     appId: config('hyperverge.app_id'),
                     appKey: config('hyperverge.app_key'),
+                    verifyPath: config('hyperverge.verify_path'),
                     timeout: config('hyperverge.timeout'),
                 );
             }

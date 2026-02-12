@@ -24,15 +24,11 @@ class FaceAuthController extends Controller
 
         // Look up user - don't leak existence in response
         $user = User::where('username', $username)->first();
-        $userExists = $user !== null;
 
-        // If user doesn't exist, still call provider to avoid timing attacks
-        // but use a dummy result
-        if (! $userExists) {
-            $result = $this->faceAuth->verify($username, $selfie, $transactionId);
-
-            // Log attempt without revealing user doesn't exist
-            $this->logAttempt(null, $transactionId, false, 'not_matched', null, $userExists);
+        // Short-circuit for non-existent users: add randomized delay to prevent timing attacks
+        // without burning API credits
+        if ($user === null) {
+            usleep(random_int(250000, 450000)); // 250-450ms delay
 
             return response()->json([
                 'ok' => true,
@@ -52,7 +48,6 @@ class FaceAuthController extends Controller
             $result->verified,
             $result->reason,
             $result->confidence,
-            $userExists
         );
 
         // If verified, log the user in
@@ -78,24 +73,17 @@ class FaceAuthController extends Controller
     }
 
     private function logAttempt(
-        ?int $userId,
+        int $userId,
         string $transactionId,
         bool $verified,
         string $reason,
         ?float $confidence,
-        bool $userExists,
     ): void {
-        // Only log if we have a user ID
-        if ($userId === null) {
-            return;
-        }
-
         AuditLog::log($userId, 'face_login_attempt', null, [
             'transaction_id' => $transactionId,
             'result' => $verified ? 'verified' : 'not_verified',
             'reason' => $reason,
             'confidence' => $confidence,
-            'username_exists' => $userExists,
         ]);
     }
 }

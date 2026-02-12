@@ -19,6 +19,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const capturedImage = ref<string | null>(null);
 const stream = ref<MediaStream | null>(null);
 const isOffline = ref(!navigator.onLine);
+const cameraInitialized = ref(false);
 
 const stateMessage = computed(() => {
     switch (state.value) {
@@ -49,10 +50,12 @@ async function startCamera() {
         if (videoRef.value) {
             videoRef.value.srcObject = stream.value;
             await videoRef.value.play();
+            cameraInitialized.value = true;
             state.value = 'ready';
         }
     } catch (err) {
         state.value = 'error';
+        cameraInitialized.value = false;
         errorMessage.value = 'Could not access camera. Please allow camera permissions.';
     }
 }
@@ -88,6 +91,12 @@ function capture() {
 function retake() {
     capturedImage.value = null;
     state.value = 'ready';
+}
+
+function retryCamera() {
+    state.value = 'initializing';
+    errorMessage.value = '';
+    startCamera();
 }
 
 async function submit() {
@@ -281,12 +290,23 @@ onUnmounted(() => {
 
             <!-- Error State Buttons -->
             <template v-if="state === 'error'">
+                <!-- Camera never initialized -->
                 <Button
+                    v-if="!cameraInitialized"
+                    type="button"
+                    class="w-full"
+                    @click="retryCamera"
+                >
+                    Retry Camera
+                </Button>
+                <!-- Verification failed after capture -->
+                <Button
+                    v-else
                     type="button"
                     class="w-full"
                     @click="retake"
                 >
-                    Try Again
+                    Retake Photo
                 </Button>
             </template>
         </div>
