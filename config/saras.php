@@ -38,31 +38,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Authentication Credentials
-    |--------------------------------------------------------------------------
-    |
-    | Username and password for server-to-server OAuth2 authentication.
-    | These are used to obtain access tokens from /users/userLogin.
-    |
-    */
-
-    'username' => env('SARAS_USERNAME'),
-
-    'password' => env('SARAS_PASSWORD'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Token Cache Key
-    |--------------------------------------------------------------------------
-    |
-    | The cache key used to store the access token.
-    |
-    */
-
-    'token_cache_key' => env('SARAS_TOKEN_CACHE_KEY', 'saras:token'),
-
-    /*
-    |--------------------------------------------------------------------------
     | Default Contract ID
     |--------------------------------------------------------------------------
     |

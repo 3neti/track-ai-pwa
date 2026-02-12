@@ -28,6 +28,8 @@ class User extends Authenticatable
         'saras_user_id',
         'tenant_id',
         'tenant_name',
+        'saras_access_token',
+        'saras_token_expires_at',
     ];
 
     /**
@@ -40,6 +42,7 @@ class User extends Authenticatable
         'two_factor_secret',
         'two_factor_recovery_codes',
         'remember_token',
+        'saras_access_token',
     ];
 
     /**
@@ -53,6 +56,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'saras_token_expires_at' => 'datetime',
         ];
     }
 }

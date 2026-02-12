@@ -19,18 +19,19 @@ All Saras API calls are server-side only. Tokens are never exposed to the browse
 ```env
 # Saras API Configuration
 SARAS_BASE_URL=https://ind-prod.sarasfinance.com/v1
-SARAS_MODE=stub                    # stub | live
-SARAS_USERNAME=your_username       # For OAuth2 login
-SARAS_PASSWORD=your_password       # For OAuth2 login
+SARAS_MODE=live                    # stub | live (default: live)
 
-# Contract & Module IDs
-SARAS_CONTRACT_ID_DEFAULT=         # Temporary default until Saras provisions contracts
+# All other settings have sensible defaults - no credentials needed!
+# User tokens are obtained during login and stored per-user.
+```
+
+**Optional overrides** (all have defaults):
+```env
 SARAS_SUBPROJECT_ATTENDANCE=78053120-7685-42a2-b802-ca144b6ed010
 SARAS_SUBPROJECT_TRACKDATA=efb3b7c8-f6af-479f-95e3-bd623add7c56
-
-# Feature Flags
+SARAS_PLUGIN_NAME=knowledgeRepo
 SARAS_ENABLED=true
-SARAS_PROGRESS_ENABLED=false       # Disabled until Saras provides progress API
+SARAS_PROGRESS_ENABLED=false
 ```
 
 ### Switching Modes
@@ -82,58 +83,53 @@ SARAS_PROGRESS_ENABLED=false       # Disabled until Saras provides progress API
 
 ## Authentication Flow
 
-### Token Management
+### User-Based Token Management
 
-Track AI uses **server-to-server OAuth2** with username/password credentials.
+Track AI uses **per-user OAuth2 tokens**. When a user logs in with their Saras credentials:
+1. The app authenticates against Saras API
+2. The access token is stored in the user's database record
+3. Subsequent API calls use the user's stored token
 
-The login API expects `client_id` and `client_secret` as field names:
-```json
-POST /users/userLogin
-{
-    "client_id": "your_username",
-    "client_secret": "your_password"
-}
-```
+**No service account required!**
 
 ```
 ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│  Any Service │         │ TokenManager │         │  Saras API   │
+│    User      │         │   Track AI   │         │  Saras API   │
 └──────┬───────┘         └──────┬───────┘         └──────┬───────┘
        │                        │                        │
-       │  getAccessToken()      │                        │
+       │  Login (email/pass)    │                        │
        │───────────────────────▶│                        │
        │                        │                        │
-       │                        │  Check cache           │
-       │                        │◀─────────────┐         │
-       │                        │              │         │
-       │                   ┌────┴────┐         │         │
-       │                   │ Cached? │─────────┘         │
-       │                   └────┬────┘                   │
-       │                        │ No                     │
-       │                        │                        │
        │                        │  POST /users/userLogin │
-       │                        │  {client_id,           │
-       │                        │   client_secret}       │
+       │                        │  {client_id: email,    │
+       │                        │   client_secret: pass} │
        │                        │───────────────────────▶│
        │                        │                        │
        │                        │  {access_token,        │
        │                        │   expires_in}          │
        │                        │◀───────────────────────│
        │                        │                        │
-       │                        │  Cache token           │
-       │                        │  TTL = expires_in - 60s│
+       │                        │  Store token in        │
+       │                        │  users.saras_access_   │
+       │                        │  token                 │
        │                        │                        │
-       │  access_token          │                        │
+       │  Login success         │                        │
        │◀───────────────────────│                        │
+       │                        │                        │
+       │  (Later) API calls     │                        │
+       │───────────────────────▶│                        │
+       │                        │  Use user's stored     │
+       │                        │  token for request     │
+       │                        │───────────────────────▶│
        │                        │                        │
 ```
 
-### Token Caching
+### Token Storage
 
-- **Cache Key**: `saras:token` (configurable)
+- **Location**: `users.saras_access_token` (encrypted column)
+- **Expiry**: `users.saras_token_expires_at`
 - **TTL**: `expires_in - 60 seconds` (buffer to avoid using expired tokens)
-- **Storage**: Laravel Cache (Redis recommended for production)
-- **Invalidation**: Automatic on 401/403 responses
+- **Invalidation**: On logout or 401/403 responses
 
 ---
 

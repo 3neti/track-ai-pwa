@@ -33,6 +33,8 @@ class UserFactory extends Factory
             'saras_user_id' => fake()->uuid(),
             'tenant_id' => fake()->uuid(),
             'tenant_name' => 'DPWH Philippines',
+            'saras_access_token' => 'test_token_'.Str::random(32),
+            'saras_token_expires_at' => now()->addHour(),
             'remember_token' => Str::random(10),
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,

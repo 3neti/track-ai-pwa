@@ -81,6 +81,7 @@ class SarasAuthenticator
 
             $tokenData = $response->json();
             $accessToken = $tokenData['access_token'] ?? $tokenData['token'] ?? null;
+            $expiresIn = $tokenData['expires_in'] ?? $tokenData['expiresIn'] ?? 3600;
 
             if (! $accessToken) {
                 Log::warning('Saras auth succeeded but no token returned', [
@@ -98,8 +99,8 @@ class SarasAuthenticator
 
             $userData = $userResponse->successful() ? $userResponse->json() : [];
 
-            // JIT provision: get or create local user
-            return $this->getOrCreateUser($email, $password, $userData);
+            // JIT provision: get or create local user with their token
+            return $this->getOrCreateUser($email, $password, $userData, $accessToken, $expiresIn);
 
         } catch (ConnectionException $e) {
             Log::error('Saras connection failed during authentication', [
@@ -117,8 +118,13 @@ class SarasAuthenticator
     /**
      * Get existing user or create new one with Saras data.
      */
-    protected function getOrCreateUser(string $email, string $password, array $sarasData): User
-    {
+    protected function getOrCreateUser(
+        string $email,
+        string $password,
+        array $sarasData,
+        ?string $accessToken = null,
+        int $expiresIn = 3600
+    ): User {
         $user = User::where('email', $email)->first();
 
         $sarasUserId = $sarasData['id'] ?? null;
@@ -127,13 +133,18 @@ class SarasAuthenticator
         $tenantId = is_array($tenant) ? ($tenant['id'] ?? null) : null;
         $tenantName = is_array($tenant) ? ($tenant['name'] ?? null) : null;
 
+        // Calculate token expiry (with 60s buffer)
+        $tokenExpiresAt = $accessToken ? now()->addSeconds($expiresIn - 60) : null;
+
         if ($user) {
-            // Update existing user with latest Saras data and password
+            // Update existing user with latest Saras data, password, and token
             $user->update([
                 'password' => Hash::make($password),
                 'saras_user_id' => $sarasUserId ?? $user->saras_user_id,
                 'tenant_id' => $tenantId ?? $user->tenant_id,
                 'tenant_name' => $tenantName ?? $user->tenant_name,
+                'saras_access_token' => $accessToken,
+                'saras_token_expires_at' => $tokenExpiresAt,
             ]);
 
             Log::info('Updated existing user from Saras login', [
@@ -154,6 +165,8 @@ class SarasAuthenticator
             'saras_user_id' => $sarasUserId,
             'tenant_id' => $tenantId,
             'tenant_name' => $tenantName,
+            'saras_access_token' => $accessToken,
+            'saras_token_expires_at' => $tokenExpiresAt,
         ]);
 
         Log::info('JIT provisioned new user from Saras login', [

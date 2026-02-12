@@ -4,133 +4,69 @@ namespace App\Services\Saras;
 
 use App\Contracts\SarasTokenManagerInterface;
 use App\Exceptions\SarasApiException;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
+/**
+ * Manages Saras API tokens using the authenticated user's stored token.
+ *
+ * Tokens are obtained during login and stored in the users table.
+ * This eliminates the need for a service account.
+ */
 class SarasTokenManager implements SarasTokenManagerInterface
 {
-    protected string $baseUrl;
-
-    protected string $username;
-
-    protected string $password;
-
-    protected string $cacheKey;
-
-    protected int $timeout;
-
-    public function __construct()
-    {
-        $this->baseUrl = config('saras.base_url');
-        $this->username = config('saras.username');
-        $this->password = config('saras.password');
-        $this->cacheKey = config('saras.token_cache_key', 'saras:token');
-        $this->timeout = config('saras.timeout', 30);
-    }
-
     /**
-     * Get a valid access token, fetching a new one if necessary.
+     * Get a valid access token from the authenticated user.
      *
      * @throws SarasApiException
      */
     public function getAccessToken(): string
     {
-        $cached = Cache::get($this->cacheKey);
+        $user = Auth::user();
 
-        if ($cached && isset($cached['access_token'], $cached['expires_at'])) {
-            // Check if token is still valid (with 60s buffer already applied when cached)
-            if (now()->timestamp < $cached['expires_at']) {
-                return $cached['access_token'];
-            }
+        if (! $user) {
+            Log::error('Saras API: No authenticated user for token retrieval');
+            throw SarasApiException::authFailed('No authenticated user');
         }
 
-        return $this->fetchNewToken();
+        $token = $user->saras_access_token;
+        $expiresAt = $user->saras_token_expires_at;
+
+        if (! $token) {
+            Log::error('Saras API: User has no Saras token', [
+                'user_id' => $user->id,
+            ]);
+            throw SarasApiException::authFailed('User has no Saras token. Please log in again.');
+        }
+
+        // Check if token is expired
+        if ($expiresAt && now()->greaterThan($expiresAt)) {
+            Log::warning('Saras API: User token expired', [
+                'user_id' => $user->id,
+                'expired_at' => $expiresAt,
+            ]);
+            throw SarasApiException::authFailed('Saras token expired. Please log in again.');
+        }
+
+        return $token;
     }
 
     /**
-     * Invalidate the cached token.
+     * Invalidate the current user's token.
      */
     public function invalidateToken(): void
     {
-        Cache::forget($this->cacheKey);
-    }
+        $user = Auth::user();
 
-    /**
-     * Fetch a new token from Saras API.
-     *
-     * @throws SarasApiException
-     */
-    protected function fetchNewToken(): string
-    {
-        $requestId = Str::uuid()->toString();
-
-        Log::info('Saras API: Fetching new access token', [
-            'request_id' => $requestId,
-            'endpoint' => '/users/userLogin',
-        ]);
-
-        try {
-            $response = Http::baseUrl($this->baseUrl)
-                ->timeout($this->timeout)
-                ->acceptJson()
-                ->asJson()
-                ->post('/users/userLogin', [
-                    'client_id' => $this->username,
-                    'client_secret' => $this->password,
-                ]);
-
-            if (! $response->successful()) {
-                Log::error('Saras API: Authentication failed', [
-                    'request_id' => $requestId,
-                    'status' => $response->status(),
-                ]);
-
-                throw SarasApiException::authFailed(
-                    $response->json('message') ?? 'Authentication failed with status '.$response->status()
-                );
-            }
-
-            $data = $response->json();
-
-            // Extract token and expiry from response
-            // Saras returns: { access_token, expires_in (seconds), ... }
-            $accessToken = $data['access_token'] ?? $data['token'] ?? null;
-            $expiresIn = $data['expires_in'] ?? $data['expiresIn'] ?? 3600; // Default 1 hour
-
-            if (! $accessToken) {
-                Log::error('Saras API: No access token in response', [
-                    'request_id' => $requestId,
-                ]);
-
-                throw SarasApiException::authFailed('No access token in response');
-            }
-
-            // Cache with 60 second buffer before actual expiry
-            $expiresAt = now()->timestamp + $expiresIn - 60;
-            $ttlSeconds = max($expiresIn - 60, 60); // At least 60 seconds TTL
-
-            Cache::put($this->cacheKey, [
-                'access_token' => $accessToken,
-                'expires_at' => $expiresAt,
-            ], $ttlSeconds);
-
-            Log::info('Saras API: Token obtained successfully', [
-                'request_id' => $requestId,
-                'expires_in_seconds' => $expiresIn,
+        if ($user) {
+            $user->update([
+                'saras_access_token' => null,
+                'saras_token_expires_at' => null,
             ]);
 
-            return $accessToken;
-
-        } catch (ConnectionException $e) {
-            Log::error('Saras API: Connection failed during authentication', [
-                'request_id' => $requestId,
-                'error' => $e->getMessage(),
+            Log::info('Saras API: User token invalidated', [
+                'user_id' => $user->id,
             ]);
-
-            throw SarasApiException::unavailable('/users/userLogin', 'Connection failed', $e);
         }
     }
 }
