@@ -87,5 +87,11 @@ class FortifyServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($throttleKey);
         });
+
+        RateLimiter::for('face-login', function (Request $request) {
+            $throttleKey = Str::transliterate(Str::lower($request->input('username')).'|'.$request->ip());
+
+            return Limit::perMinute(10)->by($throttleKey);
+        });
     }
 }

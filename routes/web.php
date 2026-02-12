@@ -6,6 +6,8 @@ use App\Http\Controllers\App\ProjectController;
 use App\Http\Controllers\App\ProjectUploadController;
 use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
+use App\Http\Controllers\Auth\FaceAuthController;
+use App\Http\Controllers\Auth\FaceLoginController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -19,6 +21,20 @@ Route::get('/', function () {
 Route::get('/docs/user-guide', function () {
     return Inertia::render('docs/UserGuide');
 })->name('docs.user-guide');
+
+/*
+|--------------------------------------------------------------------------
+| Face Login Routes
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/face-login', [FaceLoginController::class, 'index'])
+    ->middleware('guest')
+    ->name('face-login');
+
+Route::post('/auth/face/verify', [FaceAuthController::class, 'verify'])
+    ->middleware(['web', 'throttle:face-login'])
+    ->name('auth.face.verify');
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
