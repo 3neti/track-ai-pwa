@@ -1,0 +1,1153 @@
+{
+    "token": {
+        "endpoint": "/users/userLogin",
+        "method": "POST",
+        "status": 200,
+        "body": {
+            "traceId": "d929f454-d155-49de-ae9e-28427b67eb6c",
+            "status": true,
+            "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiYzE1Mjg3NjYtNjY1Mi00ZGZhLWFlOGQtYjY0NmIwZjc2NzliIiwibmFtZSI6Ikxlc3RlciIsImVtYWlsIjoibGVzdGVyQGh1cnRhZG8ucGgiLCJyb2xlIjoyLCJ0ZW5hbnRJZCI6eyJpZCI6IjY4MWUwZDVlLWZjZDktNDZlNi1iMmU4LTQwNWIwZDE3NzU1OCIsIm5hbWUiOiJEUFdIIFBoaWxpcHBpbmVzIiwidGVuYW50Q29uZmlndXJhdGlvbiI6eyJ0ZW5hbnROYW1lIjoiRFBXSCBQaGlsaXBwaW5lcyJ9fX0sInBsdWdpbklkcyI6WyI4Yzg2MzcyMC0wMzE2LTRjYzAtODE1ZS1kYTgxYjU5ZDliM2U6NjNiZGZkYjYtNGMxMS00NzlmLWI4YzAtOTkwMWQ3YmVmY2ZlIiwiMzExYWRkMGQtMzBmMy00ZmNhLWEzY2YtOTc4MzY2ZGY5Yzk0OjM4ZmM5ODA3LTdiYTgtNDAxZS1hZTQzLWFmYTFiYWYyODM1YyIsIjAzYzIwZDAwLWM2Y2YtNDAyOS05MmM4LTUzOWFhODBkY2M5YzozNjYyODk0Yy1iOWRmLTQ1NWItYTIzOC1kZTk5OWIxMDgwNjIiLCIwOWU3MDY3Mi01ODZjLTRkYzctODUyOC1jMTM3NmFiNjg5NDU6OGI1MzkzZWQtNTllOS00MDhmLTk5ZTQtMjY0ZWFjZDk3ZWZkIl0sImV4cCI6MTc4MDMzMTAxNH0.v7DWrJTNDrfGBLYBzIdG5q7NsZGaE4x3eSOFbKnBXsg",
+            "clientId": "lester@hurtado.ph",
+            "expiresIn": 86400,
+            "role": 2,
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiYzE1Mjg3NjYtNjY1Mi00ZGZhLWFlOGQtYjY0NmIwZjc2NzliIiwibmFtZSI6Ikxlc3RlciIsImVtYWlsIjoibGVzdGVyQGh1cnRhZG8ucGgiLCJyb2xlIjoyLCJ0ZW5hbnRJZCI6eyJpZCI6IjY4MWUwZDVlLWZjZDktNDZlNi1iMmU4LTQwNWIwZDE3NzU1OCIsIm5hbWUiOiJEUFdIIFBoaWxpcHBpbmVzIiwidGVuYW50Q29uZmlndXJhdGlvbiI6eyJ0ZW5hbnROYW1lIjoiRFBXSCBQaGlsaXBwaW5lcyJ9fX0sInBsdWdpbklkcyI6WyI4Yzg2MzcyMC0wMzE2LTRjYzAtODE1ZS1kYTgxYjU5ZDliM2U6NjNiZGZkYjYtNGMxMS00NzlmLWI4YzAtOTkwMWQ3YmVmY2ZlIiwiMzExYWRkMGQtMzBmMy00ZmNhLWEzY2YtOTc4MzY2ZGY5Yzk0OjM4ZmM5ODA3LTdiYTgtNDAxZS1hZTQzLWFmYTFiYWYyODM1YyIsIjAzYzIwZDAwLWM2Y2YtNDAyOS05MmM4LTUzOWFhODBkY2M5YzozNjYyODk0Yy1iOWRmLTQ1NWItYTIzOC1kZTk5OWIxMDgwNjIiLCIwOWU3MDY3Mi01ODZjLTRkYzctODUyOC1jMTM3NmFiNjg5NDU6OGI1MzkzZWQtNTllOS00MDhmLTk5ZTQtMjY0ZWFjZDk3ZWZkIl0sImV4cCI6MTc4MDMzMTAxNH0.v7DWrJTNDrfGBLYBzIdG5q7NsZGaE4x3eSOFbKnBXsg"
+        }
+    },
+    "user_details": {
+        "endpoint": "/users/getUserDetails",
+        "method": "GET",
+        "status": 200,
+        "body": {
+            "id": "c1528766-6652-4dfa-ae8d-b646b0f7679b",
+            "name": "Lester",
+            "email": "lester@hurtado.ph",
+            "role": "USER",
+            "tenantId": {
+                "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                "name": "DPWH Philippines",
+                "tenantConfiguration": {
+                    "tenantName": "DPWH Philippines"
+                }
+            }
+        }
+    },
+    "projects": {
+        "endpoint": "/process/projects/getProjectsForUser",
+        "method": "GET",
+        "status": 200,
+        "body": {
+            "traceId": "09658b2d-f1a4-4920-928f-06f2a847f180",
+            "meta": {
+                "page": "1",
+                "perPageCount": "5",
+                "totalCount": "2",
+                "totalPages": "1"
+            },
+            "projects": [
+                {
+                    "id": "d3999d8f-c367-4213-a630-a528cfdd7eb6",
+                    "createdTs": "2026-02-11T16:30:25.552021Z",
+                    "updatedTs": "2026-02-11T16:30:25.552021Z",
+                    "tenantId": {
+                        "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "name": "DPWH Philippines",
+                        "createdTs": "2025-10-01T05:46:58.443821Z"
+                    },
+                    "userId": {
+                        "id": "7dfd4a44-e43f-41c4-8c12-73516b5b9614",
+                        "name": "Danny Cuevas",
+                        "email": "danny@sarasfinance.com",
+                        "createdTs": "2025-10-01T05:50:19.905619Z"
+                    },
+                    "projectMeta": {
+                        "projectId": "trackai",
+                        "name": "Track AI",
+                        "logo": "Compass",
+                        "type": "PROJECT",
+                        "path": "/process/trackai"
+                    },
+                    "fields": [],
+                    "stages": [],
+                    "integrationDetails": [],
+                    "uiSettings": [],
+                    "businessRules": [],
+                    "subProjects": [
+                        {
+                            "id": "794a98cf-afea-49f9-aa02-c3a430ba714f",
+                            "createdTs": "2026-05-27T06:24:14.734273Z",
+                            "updatedTs": "2026-05-27T07:14:10.114551Z",
+                            "tenantId": {
+                                "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                                "name": "DPWH Philippines",
+                                "createdTs": "2025-10-01T05:46:58.443821Z"
+                            },
+                            "userId": {
+                                "id": "899a09d8-b8db-43f2-a854-13b8454229b8",
+                                "name": "Saras Admin 681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                                "email": "681e0d5e-fcd9-46e6-b2e8-405b0d177558@sarasfinance.com",
+                                "createdTs": "2026-03-19T14:00:13.431284Z"
+                            },
+                            "projectMeta": {
+                                "projectId": "projectprogress",
+                                "name": "ProjectProgress",
+                                "logo": "CopyDocument",
+                                "type": "SUB_PROJECT",
+                                "prefix": "PP"
+                            },
+                            "parentId": "d3999d8f-c367-4213-a630-a528cfdd7eb6",
+                            "otherDetails": [],
+                            "fields": {
+                                "date": {
+                                    "name": "date",
+                                    "span": 1,
+                                    "type": "date",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "name": {
+                                    "name": "name",
+                                    "span": 1,
+                                    "type": "string",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "tags": {
+                                    "name": "tags",
+                                    "span": 1,
+                                    "type": "list of strings",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "time": {
+                                    "name": "time",
+                                    "span": 1,
+                                    "type": "date",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "remarks": {
+                                    "name": "Engineers Remark",
+                                    "span": 1,
+                                    "type": "string",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "ipAddress": {
+                                    "name": "ipAddress",
+                                    "span": 1,
+                                    "type": "string",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "contractId": {
+                                    "name": "contractId",
+                                    "span": 1,
+                                    "type": "process",
+                                    "select": false,
+                                    "filters": {
+                                        "subProjectId_id": "acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99"
+                                    },
+                                    "options": [],
+                                    "project": "Procure AI",
+                                    "internal": false,
+                                    "selector": "metadetails.title",
+                                    "projectId": "cba69718-be72-4a7f-860b-fc16aeea835a",
+                                    "identifier": "Contract AI"
+                                },
+                                "geoLocation": {
+                                    "name": "geoLocation",
+                                    "span": 1,
+                                    "type": "string",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "milestoneList": {
+                                    "name": "Milestone List",
+                                    "span": 1,
+                                    "type": "list of strings",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": true
+                                },
+                                "currentMilestone": {
+                                    "name": "Current Milestone",
+                                    "span": 1,
+                                    "type": "string",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "currentProgressFiles": {
+                                    "name": "Current Progress Files",
+                                    "span": 1,
+                                    "type": "list of files",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "previousProgressFiles": {
+                                    "name": "Previous Progress Files",
+                                    "span": 1,
+                                    "type": "list of files",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                },
+                                "certificateOfCompletion": {
+                                    "name": "Certificate Of Completion",
+                                    "span": 1,
+                                    "type": "file",
+                                    "select": false,
+                                    "options": [],
+                                    "internal": false
+                                }
+                            },
+                            "stages": {
+                                "stages": {
+                                    "stage_1779863565116_eqt6": {
+                                        "name": "Progress Comparison",
+                                        "workflowIds": [
+                                            {
+                                                "workflowId": "d702fb25-51ae-4d7f-88fc-132d555b2f00",
+                                                "slotsToFieldsMapper": {
+                                                    "engineersRemarks": "remarks"
+                                                },
+                                                "limitsOfRuns": 1
+                                            }
+                                        ],
+                                        "fileNames": [
+                                            "previousProgressImages",
+                                            "currentProgressImages"
+                                        ]
+                                    }
+                                },
+                                "stageOrder": [
+                                    "stage_1779863565116_eqt6"
+                                ]
+                            },
+                            "integrationDetails": [],
+                            "uiSettings": {
+                                "processTable": {
+                                    "actionButtons": [
+                                        {
+                                            "id": "",
+                                            "href": "/process/{{projectId}}/projectprogress/{{id}}",
+                                            "name": "View"
+                                        }
+                                    ],
+                                    "visibleFields": {
+                                        "dates": [],
+                                        "fields": [
+                                            {
+                                                "key": "fields.contractId",
+                                                "name": "",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.date",
+                                                "name": "",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.time",
+                                                "name": "",
+                                                "filter": false
+                                            }
+                                        ],
+                                        "toShow": [
+                                            "details",
+                                            "dates",
+                                            "fields"
+                                        ],
+                                        "details": {
+                                            "body": "",
+                                            "foot": "",
+                                            "head": ""
+                                        }
+                                    },
+                                    "serialNumberField": ""
+                                },
+                                "processViewer": {
+                                    "groups": [
+                                        {
+                                            "name": "Metadetails",
+                                            "fields": [
+                                                "date",
+                                                "name",
+                                                "tags",
+                                                "time",
+                                                "ipAddress",
+                                                "contractId",
+                                                "geoLocation"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        },
+                                        {
+                                            "name": "Progress",
+                                            "fields": [
+                                                "remarks",
+                                                "currentProgressFiles",
+                                                "previousProgressFiles",
+                                                "currentMilestone"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        },
+                                        {
+                                            "name": "Certificate",
+                                            "fields": [
+                                                "certificateOfCompletion"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        }
+                                    ],
+                                    "visibleTabs": [
+                                        "details",
+                                        "stagesAndFiles"
+                                    ]
+                                },
+                                "processExpandedViewer": []
+                            },
+                            "businessRules": []
+                        },
+                        {
+                            "id": "efb3b7c8-f6af-479f-95e3-bd623add7c56",
+                            "createdTs": "2026-02-12T03:54:20.307743Z",
+                            "updatedTs": "2026-03-31T22:18:14.120915Z",
+                            "tenantId": {
+                                "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                                "name": "DPWH Philippines",
+                                "createdTs": "2025-10-01T05:46:58.443821Z"
+                            },
+                            "userId": {
+                                "id": "7dfd4a44-e43f-41c4-8c12-73516b5b9614",
+                                "name": "Danny Cuevas",
+                                "email": "danny@sarasfinance.com",
+                                "createdTs": "2025-10-01T05:50:19.905619Z"
+                            },
+                            "projectMeta": {
+                                "projectId": "trackdata",
+                                "name": "TrackData",
+                                "logo": "Download",
+                                "type": "SUB_PROJECT",
+                                "prefix": "TD"
+                            },
+                            "parentId": "d3999d8f-c367-4213-a630-a528cfdd7eb6",
+                            "fields": {
+                                "date": {
+                                    "name": "date",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "file": {
+                                    "name": "file",
+                                    "type": "file",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "name": {
+                                    "name": "name",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "tags": {
+                                    "name": "tags",
+                                    "type": "list of strings",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "time": {
+                                    "name": "time",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "remarks": {
+                                    "name": "remarks",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "ipAddress": {
+                                    "name": "ipAddress",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "contractId": {
+                                    "name": "contractId",
+                                    "type": "process",
+                                    "select": false,
+                                    "filters": {
+                                        "subProjectId_id": "acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99"
+                                    },
+                                    "options": [],
+                                    "project": "procureai",
+                                    "selector": "metadetails.externalField",
+                                    "identifier": "bidcontracts"
+                                },
+                                "documentId": {
+                                    "name": "documentId",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "geoLocation": {
+                                    "name": "geoLocation",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "documentType": {
+                                    "name": "documentType",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                }
+                            },
+                            "stages": [],
+                            "integrationDetails": {
+                                "integration": []
+                            },
+                            "uiSettings": {
+                                "processTable": {
+                                    "actionButtons": [
+                                        {
+                                            "id": "",
+                                            "href": "/process/trackai/trackdata/{{id}}",
+                                            "name": "Open Process"
+                                        }
+                                    ],
+                                    "visibleFields": {
+                                        "dates": [],
+                                        "fields": [
+                                            {
+                                                "key": "fields.date",
+                                                "name": "date",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.time",
+                                                "name": "time",
+                                                "filter": false
+                                            }
+                                        ],
+                                        "toShow": [
+                                            "details",
+                                            "fields"
+                                        ],
+                                        "details": {
+                                            "body": "",
+                                            "foot": "fields.name",
+                                            "head": "fields.documentId"
+                                        }
+                                    }
+                                },
+                                "processViewer": {
+                                    "title": {
+                                        "relatedProcess": []
+                                    },
+                                    "groups": [
+                                        {
+                                            "name": "Details",
+                                            "fields": [
+                                                "contractId",
+                                                "file",
+                                                "tags",
+                                                "name",
+                                                "documentType",
+                                                "ipAddress",
+                                                "geoLocation",
+                                                "date",
+                                                "time",
+                                                "remarks"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        }
+                                    ],
+                                    "visibleTabs": [
+                                        "details"
+                                    ]
+                                },
+                                "processExpandedViewer": []
+                            },
+                            "businessRules": {
+                                "create": [],
+                                "update": [],
+                                "superLock": []
+                            }
+                        },
+                        {
+                            "id": "78053120-7685-42a2-b802-ca144b6ed010",
+                            "createdTs": "2026-02-12T03:08:23.688550Z",
+                            "updatedTs": "2026-03-31T22:17:58.904708Z",
+                            "tenantId": {
+                                "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                                "name": "DPWH Philippines",
+                                "createdTs": "2025-10-01T05:46:58.443821Z"
+                            },
+                            "userId": {
+                                "id": "7dfd4a44-e43f-41c4-8c12-73516b5b9614",
+                                "name": "Danny Cuevas",
+                                "email": "danny@sarasfinance.com",
+                                "createdTs": "2025-10-01T05:50:19.905619Z"
+                            },
+                            "projectMeta": {
+                                "projectId": "attendance",
+                                "name": "Attendance",
+                                "logo": "User",
+                                "type": "SUB_PROJECT",
+                                "prefix": "ATT"
+                            },
+                            "parentId": "d3999d8f-c367-4213-a630-a528cfdd7eb6",
+                            "fields": {
+                                "date": {
+                                    "name": "date",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "userId": {
+                                    "name": "userId",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "remarks": {
+                                    "name": "remarks",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "contractId": {
+                                    "name": "contractId",
+                                    "type": "process",
+                                    "select": false,
+                                    "filters": {
+                                        "subProjectId_id": "acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99"
+                                    },
+                                    "options": [],
+                                    "project": "procureai",
+                                    "selector": "metadetails.externalField",
+                                    "identifier": "bidcontracts"
+                                },
+                                "checkInTime": {
+                                    "name": "checkInTime",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "checkOutTime": {
+                                    "name": "checkOutTime",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "ipAddressCheckIn": {
+                                    "name": "ipAddressCheckIn",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "ipAddressCheckOut": {
+                                    "name": "ipAddressCheckOut",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "geoLocationCheckIn": {
+                                    "name": "geoLocationCheckIn",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "geoLocationCheckOut": {
+                                    "name": "geoLocationCheckOut",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                }
+                            },
+                            "stages": {
+                                "stages": {
+                                    "Contract Files": {
+                                        "name": "Contract Files",
+                                        "inputs": []
+                                    }
+                                },
+                                "stageOrder": [
+                                    "Contract Files"
+                                ]
+                            },
+                            "integrationDetails": {
+                                "integration": []
+                            },
+                            "uiSettings": {
+                                "processTable": {
+                                    "actionButtons": [
+                                        {
+                                            "id": "",
+                                            "href": "/process/trackai/attendance/{{id}}",
+                                            "name": "Open Process"
+                                        }
+                                    ],
+                                    "visibleFields": {
+                                        "dates": [],
+                                        "fields": [
+                                            {
+                                                "key": "fields.ipAddressCheckIn",
+                                                "name": "Check In IP Add",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.geoLocationCheckOut",
+                                                "name": "Check Out IP Add",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.contractId",
+                                                "name": "Contract ID",
+                                                "filter": false
+                                            }
+                                        ],
+                                        "toShow": [
+                                            "details",
+                                            "fields"
+                                        ],
+                                        "details": {
+                                            "body": "fields.checkOutTime",
+                                            "foot": "",
+                                            "head": "fields.checkInTime"
+                                        }
+                                    }
+                                },
+                                "processViewer": {
+                                    "title": {
+                                        "relatedProcess": []
+                                    },
+                                    "groups": [
+                                        {
+                                            "name": "Location & Address",
+                                            "fields": [
+                                                "ipAddressCheckIn",
+                                                "ipAddressCheckOut",
+                                                "geoLocationCheckIn",
+                                                "geoLocationCheckOut"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        },
+                                        {
+                                            "name": "Time",
+                                            "fields": [
+                                                "date",
+                                                "checkInTime",
+                                                "checkOutTime"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        },
+                                        {
+                                            "name": "Other Details",
+                                            "fields": [
+                                                "contractId",
+                                                "remarks"
+                                            ],
+                                            "neededForNewProcess": false,
+                                            "dontShowInProjectDetails": false
+                                        }
+                                    ],
+                                    "visibleTabs": [
+                                        "details"
+                                    ]
+                                },
+                                "processExpandedViewer": []
+                            },
+                            "businessRules": {
+                                "create": [],
+                                "update": [],
+                                "superLock": []
+                            }
+                        }
+                    ]
+                },
+                {
+                    "id": "cba69718-be72-4a7f-860b-fc16aeea835a",
+                    "createdTs": "2026-02-11T00:00:39.564626Z",
+                    "updatedTs": "2026-02-11T00:00:39.564626Z",
+                    "tenantId": {
+                        "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "name": "DPWH Philippines",
+                        "createdTs": "2025-10-01T05:46:58.443821Z"
+                    },
+                    "userId": {
+                        "id": "7dfd4a44-e43f-41c4-8c12-73516b5b9614",
+                        "name": "Danny Cuevas",
+                        "email": "danny@sarasfinance.com",
+                        "createdTs": "2025-10-01T05:50:19.905619Z"
+                    },
+                    "projectMeta": {
+                        "projectId": "procureai",
+                        "name": "Procure AI",
+                        "logo": "Calendar",
+                        "type": "PROJECT",
+                        "path": "/process/procureai?tab=tenderprojects"
+                    },
+                    "fields": [],
+                    "stages": [],
+                    "integrationDetails": [],
+                    "uiSettings": [],
+                    "businessRules": [],
+                    "subProjects": [
+                        {
+                            "id": "acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99",
+                            "createdTs": "2026-02-11T00:14:46.974649Z",
+                            "updatedTs": "2026-03-31T22:17:20.126744Z",
+                            "tenantId": {
+                                "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                                "name": "DPWH Philippines",
+                                "createdTs": "2025-10-01T05:46:58.443821Z"
+                            },
+                            "userId": {
+                                "id": "7dfd4a44-e43f-41c4-8c12-73516b5b9614",
+                                "name": "Danny Cuevas",
+                                "email": "danny@sarasfinance.com",
+                                "createdTs": "2025-10-01T05:50:19.905619Z"
+                            },
+                            "projectMeta": {
+                                "projectId": "bidcontracts",
+                                "name": "Contract AI",
+                                "logo": "Suitcase",
+                                "type": "SUB_PROJECT"
+                            },
+                            "parentId": "cba69718-be72-4a7f-860b-fc16aeea835a",
+                            "fields": {
+                                "abc": {
+                                    "name": "ABC",
+                                    "type": "number",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "clause1": {
+                                    "name": "clause1",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "clause2": {
+                                    "name": "clause2",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "clause3": {
+                                    "name": "clause3",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "clause4": {
+                                    "name": "clause4",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "legalName1": {
+                                    "name": "Legal Name 1",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "legalName2": {
+                                    "name": "Legal Name 2",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "indemnityClauses": {
+                                    "name": "indemnityClauses",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "endDateOfContract": {
+                                    "name": "End Date",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "legal1PromoterName": {
+                                    "name": "legal1PromoterName",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "legal2PromoterName": {
+                                    "name": "legal2PromoterName",
+                                    "type": "string",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "startDateOfContract": {
+                                    "name": "Start Date",
+                                    "type": "date",
+                                    "select": false,
+                                    "options": []
+                                },
+                                "percentageInvolvement": {
+                                    "name": "% Involvement",
+                                    "type": "number",
+                                    "select": false,
+                                    "options": []
+                                }
+                            },
+                            "stages": {
+                                "stages": {
+                                    "Contract Files": {
+                                        "name": "Contract Files",
+                                        "inputs": []
+                                    }
+                                },
+                                "stageOrder": [
+                                    "Contract Files"
+                                ]
+                            },
+                            "integrationDetails": {
+                                "integration": []
+                            },
+                            "uiSettings": {
+                                "processTable": {
+                                    "actionButtons": [
+                                        {
+                                            "id": "",
+                                            "href": "/process/procureai/bidcontracts/{{id}}",
+                                            "name": "View Contract"
+                                        }
+                                    ],
+                                    "visibleFields": {
+                                        "dates": [
+                                            {
+                                                "key": "fields.startDateOfContract",
+                                                "tooltip": "Contract Start Date"
+                                            },
+                                            {
+                                                "key": "fields.endDateOfContract",
+                                                "tooltip": "Contract End Date"
+                                            }
+                                        ],
+                                        "fields": [
+                                            {
+                                                "key": "fields.legalName1",
+                                                "name": "Contract With",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.legal1PromoterName",
+                                                "name": "Person",
+                                                "filter": false
+                                            },
+                                            {
+                                                "key": "fields.abc",
+                                                "name": "Cost",
+                                                "filter": false
+                                            }
+                                        ],
+                                        "toShow": [],
+                                        "details": {
+                                            "body": "fields.legal2PromoterName",
+                                            "foot": "fields.abc",
+                                            "head": "legalName2"
+                                        }
+                                    },
+                                    "serialNumberField": "metaDetails.displayNumber"
+                                },
+                                "processViewer": {
+                                    "groups": [
+                                        {
+                                            "name": "Contract Details",
+                                            "fields": [
+                                                "legalName1",
+                                                "legal1PromoterName",
+                                                "abc"
+                                            ]
+                                        },
+                                        {
+                                            "name": "Key Dates",
+                                            "fields": [
+                                                "startDateOfContract",
+                                                "endDateOfContract"
+                                            ]
+                                        }
+                                    ],
+                                    "visibleTabs": [
+                                        "details",
+                                        "stagesAndFiles",
+                                        "workNotes"
+                                    ],
+                                    "serialNumberField": "metaDetails.displayNumber"
+                                },
+                                "processExpandedViewer": []
+                            },
+                            "businessRules": []
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "create_process_minimal": {
+        "endpoint": "/process/createProcess",
+        "method": "POST",
+        "status": 200,
+        "body": {
+            "traceId": "7793fef7-c300-4a94-8455-a86848a3e9ae",
+            "process": {
+                "id": "89e068c7-4597-4713-a32d-a693a65ba163",
+                "createdTs": "2026-05-31T16:23:36.124451Z",
+                "updatedTs": "2026-05-31T16:23:36.124451Z",
+                "tenantId": {
+                    "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                    "name": "DPWH Philippines",
+                    "createdTs": "2025-10-01T05:46:58.443821Z"
+                },
+                "userId": {
+                    "id": "c1528766-6652-4dfa-ae8d-b646b0f7679b",
+                    "name": "Lester",
+                    "email": "lester@hurtado.ph",
+                    "role": "USER",
+                    "valid": true,
+                    "createdTs": "2026-02-12T04:14:53.115910Z",
+                    "tenantId": {
+                        "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "name": "DPWH Philippines",
+                        "createdTs": "2025-10-01T05:46:58.443821Z"
+                    }
+                },
+                "currentAssignedUserId": {
+                    "id": "c1528766-6652-4dfa-ae8d-b646b0f7679b",
+                    "name": "Lester",
+                    "email": "lester@hurtado.ph",
+                    "role": "USER",
+                    "valid": true,
+                    "createdTs": "2026-02-12T04:14:53.115910Z",
+                    "tenantId": {
+                        "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "name": "DPWH Philippines",
+                        "createdTs": "2025-10-01T05:46:58.443821Z"
+                    }
+                },
+                "state": "INIT",
+                "priority": "LOW",
+                "subProjectId": {
+                    "id": "794a98cf-afea-49f9-aa02-c3a430ba714f"
+                },
+                "caseFiles": [],
+                "metaDetails": {
+                    "displayNumber": "4"
+                },
+                "caseActivity": {
+                    "activities": []
+                },
+                "fields": {
+                    "remarks": "API probe test - Track AI",
+                    "contractId": "d3999d8f-c367-4213-a630-a528cfdd7eb6"
+                }
+            }
+        }
+    },
+    "fetch_processes": {
+        "endpoint": "/process/getProcesses?subProjectId=794a98cf-afea-49f9-aa02-c3a430ba714f&page=1&perPageCount=5",
+        "method": "GET",
+        "status": 417,
+        "body": {
+            "errorCode": 1503,
+            "msg": "No licenses found for the user / tenant",
+            "addMsg": "Not a Valid Endpoint and License",
+            "statusCode": 417,
+            "grpcStatus": "PERMISSION_DENIED"
+        }
+    },
+    "execute_workflow": {
+        "endpoint": "/process/workflows/executeWorkflow",
+        "method": "POST",
+        "status": 200,
+        "body": {
+            "traceId": "1f09e876-b82b-4ed1-9546-79a0771017ed",
+            "runId": {
+                "id": "73dd2f02-0b65-483b-a948-de69844bbb53",
+                "createdTs": "2026-05-31T16:23:37.263570Z",
+                "updatedTs": "2026-05-31T16:23:37.263570Z",
+                "userId": {
+                    "id": "c1528766-6652-4dfa-ae8d-b646b0f7679b",
+                    "name": "Lester",
+                    "email": "lester@hurtado.ph",
+                    "role": "USER",
+                    "valid": true,
+                    "createdTs": "2026-02-12T04:14:53.115910Z",
+                    "tenantId": {
+                        "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "name": "DPWH Philippines",
+                        "createdTs": "2025-10-01T05:46:58.443821Z"
+                    }
+                },
+                "workflowId": {
+                    "id": "d702fb25-51ae-4d7f-88fc-132d555b2f00",
+                    "createdTs": "2026-05-27T06:34:31.241226Z",
+                    "updatedTs": "2026-05-27T06:34:31.241226Z",
+                    "userId": {
+                        "id": "899a09d8-b8db-43f2-a854-13b8454229b8",
+                        "name": "Saras Admin 681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "email": "681e0d5e-fcd9-46e6-b2e8-405b0d177558@sarasfinance.com",
+                        "role": "SARAS_ADMIN",
+                        "valid": true,
+                        "createdTs": "2026-03-19T14:00:13.431284Z",
+                        "tenantId": {
+                            "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                            "name": "DPWH Philippines",
+                            "createdTs": "2025-10-01T05:46:58.443821Z"
+                        }
+                    },
+                    "tenantId": {
+                        "id": "681e0d5e-fcd9-46e6-b2e8-405b0d177558",
+                        "name": "DPWH Philippines",
+                        "createdTs": "2025-10-01T05:46:58.443821Z"
+                    },
+                    "name": "Construction Progress Comparison ",
+                    "description": "This workflow takes multiple images as inputs and compares and suggests the progress report.",
+                    "workflowSlots": [
+                        {
+                            "id": "engineersRemarks",
+                            "name": "engineersRemarks",
+                            "desc": "This is the remarks on progress given manually by the engineers",
+                            "slotType": "STRING"
+                        }
+                    ],
+                    "dashboardLayout": []
+                },
+                "flow": [
+                    {
+                        "type": "AGENT",
+                        "customName": "Default Node",
+                        "style": []
+                    }
+                ],
+                "state": "INITIALISED",
+                "flowState": "-1.-1",
+                "otherDetails": {
+                    "maxExecutionWaitTime": 300,
+                    "workflowSlots": [
+                        {
+                            "id": "engineersRemarks",
+                            "name": "engineersRemarks",
+                            "desc": "This is the remarks on progress given manually by the engineers",
+                            "slotType": "STRING"
+                        }
+                    ],
+                    "initiator": "INITIATOR_PROCESS",
+                    "processId": "89e068c7-4597-4713-a32d-a693a65ba163",
+                    "initiatorMeta": {
+                        "stageKey": "stage_1779863565116_eqt6"
+                    }
+                }
+            }
+        }
+    },
+    "get_workflow_runs_unfiltered": {
+        "endpoint": "/process/workflows/getWorkflowRuns",
+        "method": "GET",
+        "status": 200,
+        "body": {
+            "meta": {
+                "page": "1",
+                "perPageCount": "3",
+                "totalCount": "50",
+                "totalPages": "17"
+            },
+            "runs": [
+                {
+                    "id": "73dd2f02-0b65-483b-a948-de69844bbb53",
+                    "createdTs": "2026-05-31T16:23:37.263570Z",
+                    "updatedTs": "2026-05-31T16:23:37.273515Z",
+                    "userId": {
+                        "id": "c1528766-6652-4dfa-ae8d-b646b0f7679b",
+                        "name": "Lester",
+                        "email": "lester@hurtado.ph",
+                        "createdTs": "2026-02-12T04:14:53.115910Z"
+                    },
+                    "state": "INITIALISED",
+                    "flowState": "-1.-1"
+                },
+                {
+                    "id": "ca633822-622b-4eed-8c43-70578d3ef23d",
+                    "createdTs": "2026-05-27T06:52:50.343629Z",
+                    "updatedTs": "2026-05-27T06:52:55.457221Z",
+                    "userId": {
+                        "id": "c1528766-6652-4dfa-ae8d-b646b0f7679b",
+                        "name": "Lester",
+                        "email": "lester@hurtado.ph",
+                        "createdTs": "2026-02-12T04:14:53.115910Z"
+                    },
+                    "state": "FAILED",
+                    "flowState": "0.0"
+                },
+                {
+                    "id": "34ffb6ac-e291-492f-b74b-8dfb474a62ff",
+                    "createdTs": "2026-04-16T09:50:18.376662Z",
+                    "updatedTs": "2026-04-16T09:50:23.451740Z",
+                    "userId": {
+                        "id": "8edf44b5-8eaf-46da-9215-9010e17095f7",
+                        "name": "Atul Pandey",
+                        "email": "atul.pandey@the-rita.com",
+                        "createdTs": "2026-04-01T18:09:57.427303Z"
+                    },
+                    "state": "WAITING",
+                    "flowState": "0.0"
+                }
+            ]
+        }
+    },
+    "get_workflow_runs_filtered_workflowId": {
+        "endpoint": "/process/workflows/getWorkflowRuns",
+        "method": "POST",
+        "status": 405,
+        "body": {
+            "detail": "Method Not Allowed"
+        }
+    },
+    "get_workflow_runs_filtered_processId": {
+        "endpoint": "/process/workflows/getWorkflowRuns",
+        "method": "POST",
+        "status": 405,
+        "body": {
+            "detail": "Method Not Allowed"
+        }
+    },
+    "get_workflow_runs_filtered_workflowId_id": {
+        "endpoint": "/process/workflows/getWorkflowRuns",
+        "method": "POST",
+        "status": 405,
+        "body": {
+            "detail": "Method Not Allowed"
+        }
+    },
+    "get_workflow_runs_filtered_processId_id": {
+        "endpoint": "/process/workflows/getWorkflowRuns",
+        "method": "POST",
+        "status": 405,
+        "body": {
+            "detail": "Method Not Allowed"
+        }
+    }
+}

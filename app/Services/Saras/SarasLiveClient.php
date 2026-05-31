@@ -10,6 +10,7 @@ use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\ProjectsResponse;
 use App\Services\Saras\DTO\UserDetails;
 use App\Services\Saras\DTO\WorkflowResponse;
+use App\Services\Saras\DTO\WorkflowRunsResponse;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\UploadedFile;
@@ -181,6 +182,30 @@ class SarasLiveClient implements SarasClientInterface
         );
 
         return WorkflowResponse::fromArray(array_merge($response, ['workflowId' => $workflowId]));
+    }
+
+    public function getWorkflowRuns(int $page = 1, int $perPage = 10): WorkflowRunsResponse
+    {
+        $requestId = Str::uuid()->toString();
+
+        Log::info('Saras API: getWorkflowRuns', [
+            'request_id' => $requestId,
+            'endpoint' => '/process/workflows/getWorkflowRuns',
+            'page' => $page,
+            'per_page' => $perPage,
+        ]);
+
+        $response = $this->makeRequest(
+            method: 'GET',
+            endpoint: '/process/workflows/getWorkflowRuns',
+            requestId: $requestId,
+            query: [
+                'page' => $page,
+                'perPageCount' => $perPage,
+            ],
+        );
+
+        return WorkflowRunsResponse::fromArray($response);
     }
 
     /**

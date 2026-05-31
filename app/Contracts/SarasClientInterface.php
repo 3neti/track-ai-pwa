@@ -7,6 +7,7 @@ use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\ProjectsResponse;
 use App\Services\Saras\DTO\UserDetails;
 use App\Services\Saras\DTO\WorkflowResponse;
+use App\Services\Saras\DTO\WorkflowRunsResponse;
 use Illuminate\Http\UploadedFile;
 
 interface SarasClientInterface
@@ -57,4 +58,11 @@ interface SarasClientInterface
      * @throws \App\Exceptions\SarasApiException
      */
     public function executeWorkflow(?string $workflowId = null, array $otherDetails = [], array $payload = []): WorkflowResponse;
+
+    /**
+     * Get workflow runs (paginated, no server-side filtering).
+     *
+     * @throws \App\Exceptions\SarasApiException
+     */
+    public function getWorkflowRuns(int $page = 1, int $perPage = 10): WorkflowRunsResponse;
 }

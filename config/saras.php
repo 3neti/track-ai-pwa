@@ -60,6 +60,7 @@ return [
         'attendance' => env('SARAS_SUBPROJECT_ATTENDANCE', '78053120-7685-42a2-b802-ca144b6ed010'),
         'trackdata' => env('SARAS_SUBPROJECT_TRACKDATA', 'efb3b7c8-f6af-479f-95e3-bd623add7c56'),
         'progress' => env('SARAS_SUBPROJECT_PROGRESS', ''),
+        'project_progress' => env('SARAS_SUBPROJECT_PROJECT_PROGRESS', '794a98cf-afea-49f9-aa02-c3a430ba714f'),
     ],
 
     /*
@@ -84,6 +85,21 @@ return [
     */
 
     'workflow_id' => env('SARAS_WORKFLOW_ID', 'df4b1009-8ee3-4b10-a5df-3a78b8b29739'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Completion Workflow Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Workflow ID and stage key for the ProjectProgress completion workflow
+    | ("Construction Progress Comparison").
+    |
+    */
+
+    'workflows' => [
+        'completion_id' => env('SARAS_WORKFLOW_COMPLETION_ID', 'd702fb25-51ae-4d7f-88fc-132d555b2f00'),
+        'completion_stage_key' => env('SARAS_WORKFLOW_COMPLETION_STAGE_KEY', 'stage_1779863565116_eqt6'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

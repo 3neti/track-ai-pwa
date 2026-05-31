@@ -8,6 +8,7 @@ use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\ProjectsResponse;
 use App\Services\Saras\DTO\UserDetails;
 use App\Services\Saras\DTO\WorkflowResponse;
+use App\Services\Saras\DTO\WorkflowRunsResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 
@@ -130,6 +131,44 @@ class SarasStubClient implements SarasClientInterface
                 'tags' => ['construction', 'progress', 'site'],
             ],
             'message' => 'Workflow executed successfully (stub)',
+        ]);
+    }
+
+    public function getWorkflowRuns(int $page = 1, int $perPage = 10): WorkflowRunsResponse
+    {
+        return WorkflowRunsResponse::fromArray([
+            'meta' => [
+                'page' => (string) $page,
+                'perPageCount' => (string) $perPage,
+                'totalCount' => '3',
+                'totalPages' => '1',
+            ],
+            'runs' => [
+                [
+                    'id' => 'run_stub_success_001',
+                    'createdTs' => now()->subHours(2)->toIso8601String(),
+                    'updatedTs' => now()->subHours(1)->toIso8601String(),
+                    'userId' => ['id' => 'stub_user_001', 'name' => 'Stub User'],
+                    'state' => 'SUCCESS',
+                    'flowState' => '3.0',
+                ],
+                [
+                    'id' => 'run_stub_failed_001',
+                    'createdTs' => now()->subHours(3)->toIso8601String(),
+                    'updatedTs' => now()->subHours(2)->toIso8601String(),
+                    'userId' => ['id' => 'stub_user_001', 'name' => 'Stub User'],
+                    'state' => 'FAILED',
+                    'flowState' => '0.0',
+                ],
+                [
+                    'id' => 'run_stub_init_001',
+                    'createdTs' => now()->toIso8601String(),
+                    'updatedTs' => now()->toIso8601String(),
+                    'userId' => ['id' => 'stub_user_001', 'name' => 'Stub User'],
+                    'state' => 'INITIALISED',
+                    'flowState' => '-1.-1',
+                ],
+            ],
         ]);
     }
 }

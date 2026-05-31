@@ -3,6 +3,7 @@
 use App\Http\Controllers\App\AttendanceController;
 use App\Http\Controllers\App\ProgressController;
 use App\Http\Controllers\App\ProjectController;
+use App\Http\Controllers\App\ProjectProgressController;
 use App\Http\Controllers\App\ProjectUploadController;
 use App\Http\Controllers\App\SarasStatusController;
 use App\Http\Controllers\App\SyncController;
@@ -38,6 +39,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/progress/photo', [ProgressController::class, 'uploadPhoto'])->name('api.progress.photo');
     Route::post('/progress/ai', [ProgressController::class, 'runAi'])->name('api.progress.ai');
     Route::get('/progress/ai/{workflowId}', [ProgressController::class, 'aiStatus'])->name('api.progress.ai-status');
+
+    // Project Progress Reports
+    Route::prefix('/projects/{project}/progress-reports')->group(function () {
+        Route::get('/', [ProjectProgressController::class, 'list'])->name('api.projects.progress-reports.index');
+        Route::post('/', [ProjectProgressController::class, 'store'])->name('api.projects.progress-reports.store');
+    });
+    Route::post('/progress-reports/{progressReport}/workflow', [ProjectProgressController::class, 'triggerWorkflow'])->name('api.progress-reports.workflow');
+    Route::get('/progress-reports/{progressReport}/workflow', [ProjectProgressController::class, 'workflowStatus'])->name('api.progress-reports.workflow-status');
 
     // Offline Sync
     Route::post('/sync/batch', [SyncController::class, 'batch'])->name('api.sync.batch');
