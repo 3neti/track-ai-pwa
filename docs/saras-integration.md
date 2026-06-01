@@ -296,6 +296,7 @@ The new Saras flow requires uploading the file first, then creating a process en
 | `SarasClient.createProcess()` | `/process/createProcess` | POST |
 | `SarasClient.uploadFiles()` | `/process/knowledges/createStorage` | POST (multipart) |
 | `SarasClient.executeWorkflow()` | `/process/workflows/executeWorkflow` | POST |
+| `SarasClient.getWorkflowRuns()` | `/process/workflows/getWorkflowRuns` | GET |
 
 ---
 
@@ -322,22 +323,25 @@ The new Saras flow requires uploading the file first, then creating a process en
 
 ## Feature Flags
 
-### Progress Sync (Disabled)
+### Progress Sync
 
-Progress updates are feature-flagged because Saras API for progress/workflow is pending.
+ProjectProgress sync is controlled by a feature flag.
 
 ```php
 // config/saras.php
 'feature_flags' => [
     'enabled' => env('SARAS_ENABLED', true),
-    'progress_enabled' => env('SARAS_PROGRESS_ENABLED', false),
+    'progress_enabled' => env('SARAS_PROGRESS_ENABLED', true),
 ],
 ```
 
 When `progress_enabled = false`:
 - Progress submissions save locally only
 - Returns stub response: `"Progress saved locally (Saras sync pending)"`
-- UI remains functional
+
+When `progress_enabled = true`:
+- Progress reports sync to Saras via `createProcess` with `subProjectId: project_progress`
+- Completion workflow can be triggered and polled
 
 ---
 
@@ -452,39 +456,81 @@ php artisan test --filter=Attendance
 | `remarks` | string | Optional notes |
 | `documentId` | string | External document ID |
 
-### Progress Updates / ProjectUpdates (`subProjectId: pending`)
+### ProjectProgress (`subProjectId: 794a98cf-afea-49f9-aa02-c3a430ba714f`)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `contractId` | UUID | Contract reference |
-| `checklist` | array | List of file UUIDs (sent as stage files) |
+| `contractId` | process | Links to Contract AI subproject |
+| `name` | string | Report display name |
+| `currentMilestone` | string | Current construction milestone |
+| `remarks` | string | Engineer's remarks (maps to workflow slot `engineersRemarks`) |
+| `previousProgressFiles` | list of files | Baseline/old image file UUIDs |
+| `currentProgressFiles` | list of files | Current progress image file UUIDs |
+| `certificateOfCompletion` | file | Certificate file UUID (output) |
+| `milestoneList` | list of strings | System-managed milestone list (internal) |
+| `tags` | list of strings | Searchable tags |
 | `ipAddress` | string | Client IP |
 | `geoLocation` | string | Coordinates |
 | `date` | ISO date | Submission date |
 | `time` | ISO datetime | Submission timestamp |
-| `remarks` | string | Engineer comments |
 
 ---
 
-## AI Workflow
+## AI Workflows
 
-The `executeWorkflow` method runs AI analysis on uploaded images.
+### Default AI Analysis
+
+**Workflow ID**: `df4b1009-8ee3-4b10-a5df-3a78b8b29739`
+
+### Construction Progress Comparison
+
+**Workflow ID**: `d702fb25-51ae-4d7f-88fc-132d555b2f00`
+**Stage Key**: `stage_1779863565116_eqt6`
 
 ```json
 POST /process/workflows/executeWorkflow
 {
-    "workflowId": "df4b1009-8ee3-4b10-a5df-3a78b8b29739",
-    "otherDetails": {},
-    "payload": {}
+    "workflowId": "d702fb25-51ae-4d7f-88fc-132d555b2f00",
+    "otherDetails": {
+        "initiator": "INITIATOR_PROCESS",
+        "processId": "<ProjectProgress processId>",
+        "initiatorMeta": { "stageKey": "stage_1779863565116_eqt6" }
+    },
+    "payload": { "engineersRemarks": "<observations>" }
 }
 ```
 
-**Default Workflow ID**: `df4b1009-8ee3-4b10-a5df-3a78b8b29739`
+Workflow run states: `INITIALISED` → `WAITING` → `SUCCESS` / `FAILED`
+
+### Polling Workflow Runs
+
+```
+GET /process/workflows/getWorkflowRuns?page=1&perPageCount=20
+```
+
+No server-side filtering. Client paginates and matches by `runId`.
 
 ---
 
-## Future Enhancements (Pending Saras)
+## Lifecycle Scenario Runtime
 
-1. **Progress Updates** - Waiting for subProjectId
-2. **Stage Files** - API for attaching checklist files to workflow stages
-3. **Real Contract IDs** - Replace hardcoded default with actual DPWH contracts
+| Scenario | Mode | Description |
+|----------|------|-------------|
+| `basic_progress` | `default` | Submit a progress report to Saras |
+| `full_lifecycle` | `full_lifecycle` | Submit → trigger workflow → poll |
+| `dpwh_field_day` | `field_day` | Check-in → upload → progress → workflow → poll → check-out |
+
+```bash
+php artisan trackai:lifecycle:run --list
+php artisan trackai:lifecycle:run dpwh_field_day
+php artisan trackai:lifecycle:run dpwh_field_day --json
+```
+
+---
+
+## Future Enhancements
+
+1. **Certificate Display** - Show `certificateOfCompletion` when workflow produces it
+2. **Real Construction Images** - Replace test fixtures with actual site photos
+3. **Stage Files** - API for attaching checklist files to workflow stages
+4. **Real Contract IDs** - Replace hardcoded default with actual DPWH contracts

@@ -10,7 +10,7 @@ final class ScenarioRunnerRegistry
 {
     public function has(?string $mode): bool
     {
-        return in_array($mode, [null, 'default', 'full_lifecycle'], true);
+        return in_array($mode, [null, 'default', 'full_lifecycle', 'field_day'], true);
     }
 
     public function for(?string $mode): ScenarioRunnerContract
@@ -18,6 +18,7 @@ final class ScenarioRunnerRegistry
         return match ($mode) {
             null, 'default' => app(DefaultProgressScenarioRunner::class),
             'full_lifecycle' => app(FullLifecycleScenarioRunner::class),
+            'field_day' => app(FieldDayScenarioRunner::class),
             default => throw new RuntimeException("No lifecycle scenario runner registered for mode [{$mode}]."),
         };
     }

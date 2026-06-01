@@ -188,7 +188,7 @@ class UploadService
                     'ipAddress' => $ipAddress,
                     'geoLocation' => "{$latitude},{$longitude}",
                     'date' => now()->toDateString(),
-                    'time' => now()->toTimeString(),
+                    'time' => now()->toIso8601String(),
                 ],
                 idempotencyKey: $idempotencyKey,
             );

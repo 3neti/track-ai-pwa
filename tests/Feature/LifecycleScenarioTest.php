@@ -37,11 +37,14 @@ test('run basic_progress scenario', function () {
 });
 
 test('run full_lifecycle scenario', function () {
+    // Short timeout to avoid 300s wait in stub mode (stub IDs won't match poll IDs)
     $this->artisan('trackai:lifecycle:run', [
         'scenario' => 'full_lifecycle',
         '--user' => $this->user->id,
         '--project' => $this->project->id,
-    ])->assertExitCode(0);
+        '--timeout' => 2,
+        '--poll' => 1,
+    ])->assertSuccessful();
 
     $this->assertDatabaseHas('project_progress_reports', [
         'project_id' => $this->project->id,
@@ -96,4 +99,26 @@ test('repository byCategory filters correctly', function () {
 
     expect($smoke)->toHaveKeys(['basic_progress', 'full_lifecycle']);
     expect($repo->byCategory('nonexistent'))->toBeEmpty();
+});
+
+test('run dpwh_field_day scenario', function () {
+    $this->artisan('trackai:lifecycle:run', [
+        'scenario' => 'dpwh_field_day',
+        '--user' => $this->user->id,
+        '--project' => $this->project->id,
+        '--timeout' => 2,
+        '--poll' => 1,
+    ])->assertExitCode(0);
+
+    // Should have created attendance, uploads, and progress records
+    $this->assertDatabaseHas('project_progress_reports', [
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+    ]);
+});
+
+test('dpwh_field_day appears in --list', function () {
+    $this->artisan('trackai:lifecycle:run', ['--list' => true])
+        ->expectsOutputToContain('dpwh_field_day')
+        ->assertExitCode(0);
 });

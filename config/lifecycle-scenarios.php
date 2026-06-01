@@ -45,6 +45,19 @@ return [
             'remarks' => 'Full lifecycle test - submit, trigger, poll.',
         ],
 
+        'dpwh_field_day' => [
+            'label' => 'DPWH Field Day',
+            'category' => 'contract',
+            'mode' => 'field_day',
+            'risk' => 'high',
+            'tags' => ['attendance', 'upload', 'progress', 'workflow', 'e2e'],
+            'description' => 'Full field engineer day: check-in, upload docs, submit progress, trigger AI, poll, check-out.',
+            'current_milestone' => 'Foundation',
+            'remarks' => 'DPWH field day lifecycle - end-to-end operational validation.',
+            'timeout' => 120,
+            'poll' => 5,
+        ],
+
     ],
 
     /*

@@ -106,8 +106,11 @@ final class FullLifecycleScenarioRunner implements ScenarioRunnerContract
         string $outcome,
         int $pollCount = 0,
     ): ScenarioRunResult {
-        $success = $outcome === ProjectProgressReport::STATUS_EVALUATED
-            || $outcome === 'submitted_local';
+        $success = in_array($outcome, [
+            ProjectProgressReport::STATUS_EVALUATED,
+            ProjectProgressReport::STATUS_PROCESSING,
+            'submitted_local',
+        ]);
 
         return new ScenarioRunResult(
             exitCode: $success ? Command::SUCCESS : Command::FAILURE,

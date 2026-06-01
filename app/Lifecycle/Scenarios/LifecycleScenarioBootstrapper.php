@@ -6,6 +6,9 @@ namespace App\Lifecycle\Scenarios;
 
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 final class LifecycleScenarioBootstrapper
@@ -44,6 +47,14 @@ final class LifecycleScenarioBootstrapper
             throw new RuntimeException("Unable to resolve lifecycle user [{$userId}].");
         }
 
+        // Authenticate user in the Auth guard so SarasTokenManager can use Auth::user()
+        Auth::login($user);
+
+        // Refresh Saras token if expired or missing (live mode only)
+        if (config('saras.mode') === 'live') {
+            $this->ensureFreshSarasToken($user);
+        }
+
         $project = $this->resolveProject($projectId);
         $contractId = $project->contract_id ?: config('saras.default_contract_id', '');
 
@@ -55,6 +66,56 @@ final class LifecycleScenarioBootstrapper
             poll: (int) $poll,
             maxPolls: $maxPolls,
         );
+    }
+
+    /**
+     * Ensure the user has a valid (non-expired) Saras access token.
+     * If expired or missing, re-authenticate against the Saras login endpoint.
+     */
+    private function ensureFreshSarasToken(User $user): void
+    {
+        $token = $user->saras_access_token;
+        $expiresAt = $user->saras_token_expires_at;
+
+        if ($token && $expiresAt && now()->lessThan($expiresAt)) {
+            return; // Token is still valid
+        }
+
+        Log::info('Lifecycle: Refreshing expired Saras token', ['user_id' => $user->id]);
+
+        $baseUrl = config('saras.base_url');
+
+        $response = Http::timeout(30)
+            ->acceptJson()
+            ->asJson()
+            ->post("{$baseUrl}/users/userLogin", [
+                'client_id' => $user->email,
+                'client_secret' => env('SARAS_PASSWORD'),
+            ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException(
+                "Failed to refresh Saras token for user [{$user->id}]: HTTP {$response->status()}"
+            );
+        }
+
+        $data = $response->json();
+        $accessToken = $data['access_token'] ?? $data['token'] ?? null;
+        $expiresIn = $data['expires_in'] ?? $data['expiresIn'] ?? 3600;
+
+        if (! $accessToken) {
+            throw new RuntimeException('Saras login succeeded but no token returned.');
+        }
+
+        $user->update([
+            'saras_access_token' => $accessToken,
+            'saras_token_expires_at' => now()->addSeconds($expiresIn - 60),
+        ]);
+
+        Log::info('Lifecycle: Saras token refreshed', [
+            'user_id' => $user->id,
+            'expires_at' => $user->saras_token_expires_at,
+        ]);
     }
 
     private function resolveProject(mixed $projectId): Project

@@ -70,7 +70,7 @@ class ProjectProgressService
                     'geoLocation' => $input['geo_location'] ?? '',
                     'ipAddress' => $input['ip_address'] ?? '',
                     'date' => now()->toDateString(),
-                    'time' => now()->toTimeString(),
+                    'time' => now()->toIso8601String(),
                     'name' => 'Progress Report - '.now()->toDateString(),
                     'tags' => ['progress', 'track-ai'],
                 ],
