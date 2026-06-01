@@ -70,15 +70,25 @@ final class LifecycleReportRenderer
     {
         $steps = [];
 
-        // Contracts
+        // Modules & Contracts
         $contracts = $phases['contracts'] ?? null;
         if ($contracts) {
-            $count = $contracts['project_count'] ?? 0;
+            $modCount = $contracts['module_count'] ?? 0;
             $selected = $contracts['selected'] ?? 'none';
+            $contractsAvail = $contracts['contracts_available'] ?? false;
+            $contractCount = $contracts['contract_count'] ?? 0;
+
+            $detail = "Modules: {$modCount} | Selected: {$selected}";
+            if ($contractsAvail) {
+                $detail .= " | Contracts: {$contractCount}";
+            } else {
+                $detail .= ' | Contracts: pending license';
+            }
+
             $steps[] = [
-                'label' => "Contracts Fetched ({$count} available)",
+                'label' => 'Modules & Contracts',
                 'status' => ($contracts['success'] ?? false) ? 'success' : 'failed',
-                'detail' => "Selected: {$selected}",
+                'detail' => $detail,
             ];
         }
 
@@ -190,14 +200,26 @@ final class LifecycleReportRenderer
             return;
         }
 
-        $command->line('════════ Contracts & Milestones ════════');
+        $command->line('════════ Modules & Contracts ════════');
         $command->newLine();
 
-        foreach ($contracts['projects'] ?? [] as $project) {
-            $name = $project['name'] ?? 'Unknown';
-            $id = $project['id'] ?? '—';
-            $command->line("  {$name}");
-            $command->line("    ID: {$id}");
+        $command->line('  Saras Modules:');
+        foreach ($contracts['modules'] ?? [] as $m) {
+            $name = $m['name'] ?? 'Unknown';
+            $id = $m['id'] ?? '—';
+            $marker = ($m['id'] === ($contracts['selected_id'] ?? '') || $name === ($contracts['selected'] ?? '')) ? ' ← active' : '';
+            $command->line("    {$name} ({$id}){$marker}");
+        }
+
+        $command->newLine();
+
+        if ($contracts['contracts_available'] ?? false) {
+            $count = $contracts['contract_count'] ?? 0;
+            $command->line("  Contracts: {$count} available");
+        } else {
+            $command->line('  Contracts: ⚠ getProcesses returns 417 (license required)');
+            $command->line('    Endpoint: GET /process/getProcesses?subProjectId=acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99');
+            $command->line('    Action: Request Saras to enable getProcesses for DPWH tenant');
         }
 
         $command->newLine();

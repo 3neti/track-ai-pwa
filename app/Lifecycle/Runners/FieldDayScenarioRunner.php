@@ -92,45 +92,73 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     private function phaseFetchContracts(ScenarioRunContext $context): array
     {
         if (! $context->output->isJson()) {
-            $context->output->line('Phase 0: Fetching contracts & milestones...');
+            $context->output->line('Phase 0: Fetching modules & contracts...');
         }
 
         try {
             $response = $this->sarasClient->getProjectsForUser(page: 1, perPage: 50);
 
-            $projects = [];
-            $selectedProject = null;
+            $modules = [];
+            $selectedModule = null;
 
             foreach ($response->projects as $project) {
-                $projects[] = [
+                $modules[] = [
                     'id' => $project->externalId,
                     'name' => $project->name,
                     'contract_id' => $project->contractId,
                 ];
 
                 if ($project->externalId === $context->contractId || $project->contractId === $context->contractId) {
-                    $selectedProject = $project;
+                    $selectedModule = $project;
                 }
             }
 
             if (! $context->output->isJson()) {
-                $context->output->info('  ✓ '.count($projects).' project(s) available');
+                $context->output->info('  ✓ '.count($modules).' module(s) available');
 
-                foreach ($projects as $p) {
-                    $marker = ($p['id'] === $context->contractId || $p['contract_id'] === $context->contractId) ? ' ← selected' : '';
-                    $context->output->line("    {$p['name']} ({$p['id']}){$marker}");
+                foreach ($modules as $m) {
+                    $marker = ($m['id'] === $context->contractId || $m['contract_id'] === $context->contractId) ? ' ← active' : '';
+                    $context->output->line("    {$m['name']} ({$m['id']}){$marker}");
+                }
+            }
+
+            // Try to fetch contracts from Contract AI subproject
+            $contracts = [];
+            $contractsAvailable = false;
+
+            try {
+                $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
+                $contractResponse = $this->sarasClient->getProcesses($contractAiId, 1, 10);
+                $contracts = $contractResponse;
+                $contractsAvailable = true;
+
+                if (! $context->output->isJson()) {
+                    $count = $contractResponse['meta']['totalCount'] ?? count($contractResponse['processes'] ?? []);
+                    $context->output->info("  ✓ {$count} contract(s) available");
+
+                    foreach (($contractResponse['processes'] ?? []) as $c) {
+                        $name = $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? $c['metaDetails']['displayNumber'] ?? 'unnamed';
+                        $cId = substr($c['id'] ?? '', 0, 8);
+                        $context->output->line("    {$name} ({$cId}...)");
+                    }
+                }
+            } catch (\Exception $e) {
+                if (! $context->output->isJson()) {
+                    $context->output->warn('  ⚠ Contracts: getProcesses not available (417 — license required)');
                 }
             }
 
             return [
                 'success' => true,
-                'project_count' => count($projects),
-                'projects' => $projects,
-                'selected' => $selectedProject?->name,
+                'module_count' => count($modules),
+                'modules' => $modules,
+                'selected' => $selectedModule?->name,
+                'contracts_available' => $contractsAvailable,
+                'contract_count' => count($contracts['processes'] ?? []),
             ];
         } catch (\Exception $e) {
             if (! $context->output->isJson()) {
-                $context->output->warn('  ⚠ Failed to fetch contracts: '.$e->getMessage());
+                $context->output->warn('  ⚠ Failed to fetch modules: '.$e->getMessage());
             }
 
             return ['success' => false, 'message' => $e->getMessage()];

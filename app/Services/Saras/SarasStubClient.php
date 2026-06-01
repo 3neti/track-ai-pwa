@@ -134,6 +134,14 @@ class SarasStubClient implements SarasClientInterface
         ]);
     }
 
+    public function getProcesses(string $subProjectId, int $page = 1, int $perPage = 10): array
+    {
+        return [
+            'meta' => ['page' => (string) $page, 'totalCount' => '0', 'totalPages' => '1'],
+            'processes' => [],
+        ];
+    }
+
     public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array
     {
         return [

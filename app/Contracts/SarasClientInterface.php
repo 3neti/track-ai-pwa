@@ -77,4 +77,13 @@ interface SarasClientInterface
      * @throws \App\Exceptions\SarasApiException
      */
     public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array;
+
+    /**
+     * List processes (entries) under a subproject.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws \App\Exceptions\SarasApiException
+     */
+    public function getProcesses(string $subProjectId, int $page = 1, int $perPage = 10): array;
 }

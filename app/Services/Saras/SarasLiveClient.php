@@ -234,6 +234,28 @@ class SarasLiveClient implements SarasClientInterface
         return WorkflowRunsResponse::fromArray($response);
     }
 
+    public function getProcesses(string $subProjectId, int $page = 1, int $perPage = 10): array
+    {
+        $requestId = Str::uuid()->toString();
+
+        Log::info('Saras API: getProcesses', [
+            'request_id' => $requestId,
+            'endpoint' => '/process/getProcesses',
+            'sub_project_id' => $subProjectId,
+        ]);
+
+        return $this->makeRequest(
+            method: 'GET',
+            endpoint: '/process/getProcesses',
+            requestId: $requestId,
+            query: [
+                'subProjectId' => $subProjectId,
+                'page' => $page,
+                'perPageCount' => $perPage,
+            ],
+        );
+    }
+
     public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array
     {
         $requestId = Str::uuid()->toString();
