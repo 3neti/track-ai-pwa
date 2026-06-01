@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\FaceAuthProviderInterface;
 use App\Contracts\SarasClientInterface;
 use App\Contracts\SarasTokenManagerInterface;
+use App\Lifecycle\Output\SarasApiTracer;
 use App\Services\FaceAuth\HypervergeDirectProvider;
 use App\Services\FaceAuth\HypervergeStubProvider;
 use App\Services\Saras\SarasLiveClient;
@@ -23,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(SarasApiTracer::class);
         $this->registerFaceAuthProvider();
         $this->registerSarasProvider();
     }

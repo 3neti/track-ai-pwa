@@ -12,6 +12,7 @@ final readonly class LifecycleScenarioRunOptions
         public ?int $timeout = null,
         public ?int $poll = null,
         public bool $json = false,
+        public bool $verbose = false,
     ) {}
 
     /**
@@ -25,6 +26,7 @@ final readonly class LifecycleScenarioRunOptions
             timeout: self::intOrNull($options['timeout'] ?? null),
             poll: self::intOrNull($options['poll'] ?? null),
             json: (bool) ($options['json'] ?? false),
+            verbose: (bool) ($options['trace'] ?? false),
         );
     }
 

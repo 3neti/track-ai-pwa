@@ -122,3 +122,12 @@ test('dpwh_field_day appears in --list', function () {
         ->expectsOutputToContain('dpwh_field_day')
         ->assertExitCode(0);
 });
+
+test('verbose mode shows API call summary', function () {
+    $this->artisan('trackai:lifecycle:run', [
+        'scenario' => 'basic_progress',
+        '--user' => $this->user->id,
+        '--project' => $this->project->id,
+        '--trace' => true,
+    ])->assertExitCode(0);
+});

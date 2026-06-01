@@ -5,6 +5,8 @@ namespace App\Services\Saras;
 use App\Contracts\SarasClientInterface;
 use App\Contracts\SarasTokenManagerInterface;
 use App\Exceptions\SarasApiException;
+use App\Lifecycle\Output\SarasApiTrace;
+use App\Lifecycle\Output\SarasApiTracer;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\ProjectsResponse;
@@ -135,18 +137,35 @@ class SarasLiveClient implements SarasClientInterface
 
             // pluginName sent as query parameter for multipart upload
             $pluginName = config('saras.plugin_name', 'knowledgeRepo');
-            $response = $request->post("/process/knowledges/createStorage?pluginName={$pluginName}");
+            $uploadEndpoint = "/process/knowledges/createStorage?pluginName={$pluginName}";
+            $startTime = microtime(true);
+            $response = $request->post($uploadEndpoint);
+            $durationMs = (microtime(true) - $startTime) * 1000;
+
+            $fileNames = array_map(fn ($f) => $f->getClientOriginalName(), $files);
 
             Log::info('Saras API: uploadFiles response', [
                 'request_id' => $requestId,
                 'status' => $response->status(),
             ]);
 
+            $responseData = $response->json() ?? [];
+
+            $this->recordTrace(
+                'POST',
+                $uploadEndpoint,
+                [],
+                $response->status(),
+                $responseData,
+                $durationMs,
+                requestSummaryOverride: ['files' => $fileNames],
+            );
+
             if (! $response->successful()) {
                 $this->handleErrorResponse($response, '/process/knowledges/createStorage', $requestId);
             }
 
-            return FileUploadResponse::fromArray($response->json());
+            return FileUploadResponse::fromArray($responseData);
 
         } catch (ConnectionException $e) {
             Log::error('Saras API: Connection failed', [
@@ -221,6 +240,8 @@ class SarasLiveClient implements SarasClientInterface
         array $query = [],
         array $headers = [],
     ): array {
+        $startTime = microtime(true);
+
         try {
             $token = $this->tokenManager->getAccessToken();
 
@@ -228,31 +249,42 @@ class SarasLiveClient implements SarasClientInterface
                 ->withToken($token)
                 ->withHeaders($headers);
 
+            $fullEndpoint = $endpoint;
             if (! empty($query)) {
-                $endpoint .= '?'.http_build_query($query);
+                $fullEndpoint .= '?'.http_build_query($query);
             }
 
             $response = match (strtoupper($method)) {
-                'GET' => $request->get($endpoint),
-                'POST' => $request->post($endpoint, $data),
-                'PUT' => $request->put($endpoint, $data),
-                'DELETE' => $request->delete($endpoint),
+                'GET' => $request->get($fullEndpoint),
+                'POST' => $request->post($fullEndpoint, $data),
+                'PUT' => $request->put($fullEndpoint, $data),
+                'DELETE' => $request->delete($fullEndpoint),
                 default => throw new \InvalidArgumentException("Unsupported HTTP method: {$method}"),
             };
 
+            $durationMs = (microtime(true) - $startTime) * 1000;
+
             Log::info('Saras API: Response received', [
                 'request_id' => $requestId,
-                'endpoint' => $endpoint,
+                'endpoint' => $fullEndpoint,
                 'status' => $response->status(),
             ]);
 
+            $responseData = $response->json() ?? [];
+
+            $this->recordTrace($method, $fullEndpoint, $data, $response->status(), $responseData, $durationMs);
+
             if (! $response->successful()) {
-                $this->handleErrorResponse($response, $endpoint, $requestId);
+                $this->handleErrorResponse($response, $fullEndpoint, $requestId);
             }
 
-            return $response->json() ?? [];
+            return $responseData;
 
         } catch (ConnectionException $e) {
+            $durationMs = (microtime(true) - $startTime) * 1000;
+
+            $this->recordTrace($method, $endpoint, $data, 0, [], $durationMs, $e->getMessage());
+
             Log::error('Saras API: Connection failed', [
                 'request_id' => $requestId,
                 'endpoint' => $endpoint,
@@ -301,6 +333,133 @@ class SarasLiveClient implements SarasClientInterface
             endpoint: $endpoint,
             statusCode: $status,
         );
+    }
+
+    /**
+     * Record an API trace entry if the tracer is active.
+     */
+    protected function recordTrace(
+        string $method,
+        string $endpoint,
+        array $requestData,
+        int $status,
+        array $responseData,
+        float $durationMs,
+        ?string $error = null,
+        ?array $requestSummaryOverride = null,
+    ): void {
+        $tracer = app(SarasApiTracer::class);
+
+        if (! $tracer->isEnabled()) {
+            return;
+        }
+
+        $requestSummary = $requestSummaryOverride ?? $this->summarizeRequest($requestData);
+        $responseSummary = $this->summarizeResponse($responseData);
+
+        $tracer->record(new SarasApiTrace(
+            method: strtoupper($method),
+            endpoint: $endpoint,
+            status: $status,
+            durationMs: $durationMs,
+            requestSummary: $requestSummary,
+            responseSummary: $responseSummary,
+            error: $error,
+        ));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function summarizeRequest(array $data): array
+    {
+        $summary = [];
+
+        if (isset($data['subProjectId'])) {
+            $id = $data['subProjectId'];
+            $label = $this->subProjectLabel($id);
+            $summary['subProjectId'] = $label ? "{$id} ({$label})" : $id;
+        }
+
+        if (isset($data['workflowId'])) {
+            $summary['workflowId'] = $data['workflowId'];
+        }
+
+        if (isset($data['fields']) && is_array($data['fields'])) {
+            $keys = array_keys($data['fields']);
+            $summary['fields'] = '{'.implode(', ', $keys).'}';
+        }
+
+        if (isset($data['otherDetails']) && is_object($data['otherDetails'])) {
+            $details = (array) $data['otherDetails'];
+            $parts = [];
+
+            if (isset($details['initiator'])) {
+                $parts[] = "initiator: {$details['initiator']}";
+            }
+
+            if (isset($details['processId'])) {
+                $parts[] = "processId: {$details['processId']}";
+            }
+
+            if (isset($details['initiatorMeta']['stageKey'])) {
+                $parts[] = "stageKey: {$details['initiatorMeta']['stageKey']}";
+            }
+
+            $summary['otherDetails'] = '{'.implode(', ', $parts).'}';
+        }
+
+        if (isset($data['payload']) && is_object($data['payload'])) {
+            $payload = (array) $data['payload'];
+            $keys = array_keys($payload);
+            $summary['payload'] = '{'.implode(', ', $keys).'}';
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function summarizeResponse(array $data): array
+    {
+        $summary = [];
+
+        if (isset($data['process']['id'])) {
+            $summary['process.id'] = $data['process']['id'];
+        }
+
+        if (isset($data['runId']['id'])) {
+            $summary['runId.id'] = $data['runId']['id'];
+        }
+
+        if (isset($data['runId']['state'])) {
+            $summary['runId.state'] = $data['runId']['state'];
+        }
+
+        if (isset($data['files']) && is_array($data['files'])) {
+            foreach ($data['files'] as $i => $file) {
+                if (isset($file['id'])) {
+                    $summary["files[{$i}].id"] = $file['id'];
+                }
+            }
+        }
+
+        if (isset($data['meta']['totalCount'])) {
+            $summary['totalCount'] = $data['meta']['totalCount'];
+        }
+
+        return $summary;
+    }
+
+    protected function subProjectLabel(string $id): ?string
+    {
+        return match ($id) {
+            config('saras.subproject_ids.attendance') => 'Attendance',
+            config('saras.subproject_ids.trackdata') => 'TrackData',
+            config('saras.subproject_ids.project_progress') => 'ProjectProgress',
+            default => null,
+        };
     }
 
     /**

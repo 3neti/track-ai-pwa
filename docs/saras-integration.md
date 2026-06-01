@@ -524,7 +524,10 @@ No server-side filtering. Client paginates and matches by `runId`.
 php artisan trackai:lifecycle:run --list
 php artisan trackai:lifecycle:run dpwh_field_day
 php artisan trackai:lifecycle:run dpwh_field_day --json
+php artisan trackai:lifecycle:run dpwh_field_day --trace
 ```
+
+The `--trace` flag shows inline API call details (endpoint, payload fields, response time, Saras IDs) and an API Call Summary at the end. Useful for debugging and presenting to Saras developers.
 
 ---
 

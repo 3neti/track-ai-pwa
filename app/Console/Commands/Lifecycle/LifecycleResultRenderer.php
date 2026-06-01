@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands\Lifecycle;
 
+use App\Lifecycle\Output\SarasApiTracer;
 use Illuminate\Console\Command;
 
 final class LifecycleResultRenderer
@@ -11,9 +12,20 @@ final class LifecycleResultRenderer
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function render(Command $command, array $payload, int $exitCode = 0): int
+    public function render(Command $command, array $payload, int $exitCode = 0, ?SarasApiTracer $tracer = null): int
     {
         if ($command->option('json')) {
+            if ($tracer && $tracer->count() > 0) {
+                $payload['_api_traces'] = array_map(fn ($t) => [
+                    'method' => $t->method,
+                    'endpoint' => $t->endpoint,
+                    'status' => $t->status,
+                    'duration_ms' => round($t->durationMs),
+                    'request' => $t->requestSummary,
+                    'response' => $t->responseSummary,
+                ], $tracer->all());
+            }
+
             $command->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
             return $exitCode;
@@ -62,6 +74,23 @@ final class LifecycleResultRenderer
 
             if (! empty($report['saras_workflow_run_id'])) {
                 $command->line("    Workflow Run: {$report['saras_workflow_run_id']}");
+            }
+        }
+
+        // API Call Summary
+        if ($tracer && $tracer->count() > 0) {
+            $command->newLine();
+            $command->line('═══ API Call Summary ═══');
+            $command->line(sprintf(
+                '  Total calls: %d | Total time: %ss',
+                $tracer->count(),
+                number_format($tracer->totalDurationMs() / 1000, 1),
+            ));
+            $command->line('  Endpoints:');
+
+            foreach ($tracer->endpointCounts() as $endpoint => $count) {
+                $label = $count === 1 ? '1 call' : "{$count} calls";
+                $command->line("    {$endpoint} ... {$label}");
             }
         }
 

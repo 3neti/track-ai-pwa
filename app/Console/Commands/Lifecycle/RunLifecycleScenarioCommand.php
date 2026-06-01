@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Console\Commands\Lifecycle;
 
 use App\Lifecycle\Output\ConsoleLifecycleOutput;
+use App\Lifecycle\Output\SarasApiTracer;
+use App\Lifecycle\Output\TracingLifecycleOutput;
 use App\Lifecycle\Scenarios\LifecycleScenarioEngine;
 use App\Lifecycle\Scenarios\LifecycleScenarioRepository;
 use App\Lifecycle\Scenarios\LifecycleScenarioRunOptions;
@@ -19,7 +21,8 @@ class RunLifecycleScenarioCommand extends Command
         {--project= : Project ID to use}
         {--timeout= : Poll timeout in seconds}
         {--poll= : Poll interval in seconds}
-        {--json : Output JSON}';
+        {--json : Output JSON}
+        {--trace : Show API call traces}';
 
     protected $description = 'Run a named lifecycle scenario.';
 
@@ -41,7 +44,16 @@ class RunLifecycleScenarioCommand extends Command
         }
 
         $options = LifecycleScenarioRunOptions::fromConsoleOptions($this->options());
-        $output = new ConsoleLifecycleOutput($this);
+
+        $tracer = app(SarasApiTracer::class);
+        $consoleOutput = new ConsoleLifecycleOutput($this);
+
+        if ($options->verbose) {
+            $tracer->enable();
+            $output = new TracingLifecycleOutput($consoleOutput, $tracer);
+        } else {
+            $output = $consoleOutput;
+        }
 
         $result = $engine->run(
             scenarioKey: $scenarioKey,
@@ -49,10 +61,16 @@ class RunLifecycleScenarioCommand extends Command
             output: $output,
         );
 
+        // Flush any remaining traces
+        if ($output instanceof TracingLifecycleOutput) {
+            $output->flushRemaining();
+        }
+
         return $renderer->render(
             command: $this,
             payload: $result->payload,
             exitCode: $result->exitCode,
+            tracer: $options->verbose ? $tracer : null,
         );
     }
 
