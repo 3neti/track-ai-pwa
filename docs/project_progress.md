@@ -670,6 +670,8 @@ API probe fixtures saved in `tests/fixtures/saras/`.
 | `project_progress_reports` migration + `ProjectProgressReport` model + factory | ✅ |
 | `ProjectProgressService` (create, trigger workflow, poll, list) | ✅ |
 | `ProjectProgressWorkflowPayloadMapper` (with `oldImage`/`newImage` comma-separated UUIDs) | ✅ |
+| `updateFiles()` in SarasClientInterface + Live/Stub (`POST /process/updateFiles`) | ✅ |
+| `ProjectProgressService::attachStageFiles()` — attaches files to stage checklist | ✅ |
 | `ProjectProgressController` + API routes + Inertia page route | ✅ |
 | `ProjectProgress.vue` frontend page | ✅ |
 | `WorkflowResponse` DTO fix for live `runId.id` extraction | ✅ |
@@ -687,7 +689,7 @@ Adapted from x-change's lifecycle runtime pattern:
 | Repository with config-driven scenario definitions | ✅ |
 | `DefaultProgressScenarioRunner` (submit progress) | ✅ |
 | `FullLifecycleScenarioRunner` (submit → workflow → poll) | ✅ |
-| `FieldDayScenarioRunner` (check-in → upload → progress → workflow → poll → check-out) | ✅ |
+| `FieldDayScenarioRunner` (check-in → upload → progress → stage files → workflow → poll → check-out) | ✅ |
 | CLI auth fix (`Auth::login` + Saras token refresh for artisan context) | ✅ |
 | `--trace` flag for verbose API debug output | ✅ |
 | `SarasApiTracer` singleton + `TracingLifecycleOutput` decorator | ✅ |
@@ -718,6 +720,7 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 - **Attendance**: Check-in and check-out entries created
 - **TrackData**: 5 real construction photos uploaded (2 previous at ~90KB, 3 current at ~50-103KB)
 - **ProjectProgress**: Process created with file UUIDs, milestone, and engineer remarks
+- **Stage Files**: `previousProgressImages` and `currentProgressImages` attached via `POST /process/updateFiles`
 - **Workflow**: "Construction Progress Comparison" triggered with `oldImage`/`newImage` UUIDs, polled via filtered query (`totalCount: 1`)
 - **Dashboard verification**: Metadetails, Progress, and Certificate sections populated
 
@@ -738,7 +741,7 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 1. **Milestone concept** — Saras developers will introduce per-project milestones (e.g., 10 milestones at 10% each). Schema update expected.
 2. **Certificate workflow deployment** — Workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404. Confirm with Saras devs it's deployed for tenant `681e0d5e-fcd9-46e6-b2e8-405b0d177558` (DPWH Philippines).
 3. **Certificate display** — Show `certificateOfCompletion` when workflow produces it.
-4. **Stage file attachment** — The "Required Checklist" in Stages & Files shows `previousProgressImages`/`currentProgressImages` as empty. Files are passed as process fields and as `oldImage`/`newImage` in workflow payload, but the stage checklist may need a separate attachment API.
+4. **Stage file attachment** — ✅ Implemented via `POST /process/updateFiles`. Files now attached to stage checklist with correct `processId`, `stageKey`, and `subProjectId`. Verify on Saras dashboard that `previousProgressImages`/`currentProgressImages` appear populated.
 5. **Webhook/notification** — For long-running AI evaluation, implement webhook or polling notification instead of blocking poll loop.
 6. **Real site photos** — Current bucket has Unsplash stock construction photos. Replace with actual DPWH site images for meaningful AI evaluation.
 7. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState. Need Saras to expose failure reason, node errors, workflow output, and certificate artifacts.
