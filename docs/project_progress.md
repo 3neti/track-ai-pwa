@@ -694,7 +694,22 @@ Adapted from x-change's lifecycle runtime pattern:
 | API Call Summary in result renderer | ✅ |
 | File bucket (`storage/app/lifecycle/progress/{previous,current}/`) + `--bucket=` CLI option | ✅ |
 | Server-side `getWorkflowRuns` filtering via `filters` JSON query param | ✅ |
-| 12 lifecycle tests (24 assertions) | ✅ |
+| `--report` flag: full diagnostic report (9 sections) | ✅ |
+| 13 lifecycle tests (28 assertions) | ✅ |
+
+### Lifecycle Report (`--report`) — COMPLETED
+
+| Section | Description |
+|---------|-------------|
+| Lifecycle Flow | Vertical diagram with ✓/✗/⏳ markers and Saras IDs per phase |
+| Run Artifacts | All process IDs, file counts, workflow run ID at a glance |
+| Saras Action Items | Numbered list of open items for Saras team (5 items) |
+| Full Payloads | Complete JSON for every POST call |
+| Full Responses | Compact Saras responses (stripped of verbose user/tenant data) |
+| Developer Interpretation | Track AI ✓ vs Saras ✗/? status, dynamic conclusion + next steps |
+| Integration Scorecard | 7-line scored checklist with overall health % |
+| Saras Trace IDs | Labeled trace IDs for Saras log search |
+| Executive Summary | Slide-worthy: readiness %, primary blocker, next action |
 
 ### Live Saras Verification — COMPLETED
 
@@ -726,3 +741,5 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 4. **Stage file attachment** — The "Required Checklist" in Stages & Files shows `previousProgressImages`/`currentProgressImages` as empty. Files are passed as process fields and as `oldImage`/`newImage` in workflow payload, but the stage checklist may need a separate attachment API.
 5. **Webhook/notification** — For long-running AI evaluation, implement webhook or polling notification instead of blocking poll loop.
 6. **Real site photos** — Current bucket has Unsplash stock construction photos. Replace with actual DPWH site images for meaningful AI evaluation.
+7. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState. Need Saras to expose failure reason, node errors, workflow output, and certificate artifacts.
+8. **Lifecycle report Phase 2** — Timeline view, debug package export, Saras escalation pack, demo mode (per original enhancement spec).
