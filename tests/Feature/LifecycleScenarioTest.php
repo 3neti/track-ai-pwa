@@ -131,3 +131,17 @@ test('verbose mode shows API call summary', function () {
         '--trace' => true,
     ])->assertExitCode(0);
 });
+
+test('report mode shows flow diagram and artifacts', function () {
+    $this->artisan('trackai:lifecycle:run', [
+        'scenario' => 'dpwh_field_day',
+        '--user' => $this->user->id,
+        '--project' => $this->project->id,
+        '--report' => true,
+        '--timeout' => 2,
+        '--poll' => 1,
+    ])->assertExitCode(0)
+        ->expectsOutputToContain('Lifecycle Flow')
+        ->expectsOutputToContain('Run Artifacts')
+        ->expectsOutputToContain('Saras Action Items');
+});

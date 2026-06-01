@@ -23,6 +23,7 @@ class RunLifecycleScenarioCommand extends Command
         {--poll= : Poll interval in seconds}
         {--json : Output JSON}
         {--trace : Show API call traces}
+        {--report : Show full diagnostic report (flow, artifacts, payloads, action items)}
         {--bucket= : Path to folder with previous/ and current/ subfolders for file uploads}';
 
     protected $description = 'Run a named lifecycle scenario.';
@@ -48,9 +49,13 @@ class RunLifecycleScenarioCommand extends Command
 
         $tracer = app(SarasApiTracer::class);
         $consoleOutput = new ConsoleLifecycleOutput($this);
+        $needsTracer = $options->verbose || $options->report;
+
+        if ($needsTracer) {
+            $tracer->enable();
+        }
 
         if ($options->verbose) {
-            $tracer->enable();
             $output = new TracingLifecycleOutput($consoleOutput, $tracer);
         } else {
             $output = $consoleOutput;
@@ -67,12 +72,23 @@ class RunLifecycleScenarioCommand extends Command
             $output->flushRemaining();
         }
 
-        return $renderer->render(
+        $exitCode = $renderer->render(
             command: $this,
             payload: $result->payload,
             exitCode: $result->exitCode,
             tracer: $options->verbose ? $tracer : null,
         );
+
+        // Render full diagnostic report
+        if ($options->report && ! $options->json) {
+            app(LifecycleReportRenderer::class)->render(
+                command: $this,
+                payload: $result->payload,
+                tracer: $tracer,
+            );
+        }
+
+        return $exitCode;
     }
 
     protected function listScenarios(LifecycleScenarioRepository $scenarioRepository): int

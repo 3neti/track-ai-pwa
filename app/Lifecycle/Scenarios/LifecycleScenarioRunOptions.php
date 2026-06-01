@@ -13,6 +13,7 @@ final readonly class LifecycleScenarioRunOptions
         public ?int $poll = null,
         public bool $json = false,
         public bool $verbose = false,
+        public bool $report = false,
         public ?string $bucket = null,
     ) {}
 
@@ -28,6 +29,7 @@ final readonly class LifecycleScenarioRunOptions
             poll: self::intOrNull($options['poll'] ?? null),
             json: (bool) ($options['json'] ?? false),
             verbose: (bool) ($options['trace'] ?? false),
+            report: (bool) ($options['report'] ?? false),
             bucket: self::stringOrNull($options['bucket'] ?? null),
         );
     }

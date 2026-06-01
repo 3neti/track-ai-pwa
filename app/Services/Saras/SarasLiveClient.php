@@ -372,6 +372,8 @@ class SarasLiveClient implements SarasClientInterface
             requestSummary: $requestSummary,
             responseSummary: $responseSummary,
             error: $error,
+            rawRequest: $requestData,
+            rawResponse: $responseData,
         ));
     }
 

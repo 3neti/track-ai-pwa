@@ -14,6 +14,8 @@ final readonly class SarasApiTrace
         public array $requestSummary = [],
         public array $responseSummary = [],
         public ?string $error = null,
+        public array $rawRequest = [],
+        public array $rawResponse = [],
     ) {}
 
     /**
