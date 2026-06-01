@@ -367,20 +367,51 @@ final class LifecycleReportRenderer
             $command->line('  ? Workflow status unknown');
         }
 
-        $command->line('  ? Workflow output/result payload is not exposed in getWorkflowRuns response');
+        if ($outcome !== 'evaluated') {
+            $command->line('  ? Workflow output/result payload is not exposed in getWorkflowRuns response');
+        }
+
         $command->line('  ? Certificate artifact is not produced or not exposed yet');
         $command->line('  ? Stage checklist attachment behavior remains unresolved');
 
         $command->newLine();
         $command->line('Conclusion:');
-        $command->line('  Track AI integration path is operational up to Saras workflow execution.');
-        $command->line('  The remaining blocker is Saras workflow debugging and certificate artifact exposure.');
+
+        if ($outcome === 'evaluated') {
+            $command->line('  Track AI ↔ Saras integration is fully operational.');
+            $command->line('  Workflow completed successfully. Certificate artifact exposure is the remaining step.');
+        } elseif ($outcome === 'failed') {
+            $command->line('  Track AI integration path is operational up to Saras workflow execution.');
+            $command->line('  The remaining blocker is Saras workflow debugging and certificate artifact exposure.');
+        } elseif ($outcome === 'processing') {
+            $command->line('  Track AI integration path is operational. Workflow was triggered successfully.');
+            $command->line('  The workflow is still processing — results may be available after a longer polling window.');
+        } else {
+            $command->line('  Track AI integration path is operational up to Saras workflow execution.');
+            $command->line('  Workflow was not triggered — verify Saras sync is enabled and processId was obtained.');
+        }
 
         $command->newLine();
-        $command->line('Recommended next request to Saras:');
-        $command->line('  Please provide the endpoint, response expansion option, dashboard path, or API method');
-        $command->line('  that exposes full workflow run details, including failure reason, node-level error,');
-        $command->line('  workflow output, generated task, and certificate artifact if available.');
+        $command->line('Recommended next steps:');
+
+        if ($outcome === 'evaluated') {
+            $command->line('  1. Confirm certificate artifact is produced and accessible via API or dashboard.');
+            $command->line('  2. Implement certificate display in Track AI frontend.');
+            $command->line('  3. Confirm stage file attachment API for previousProgressImages/currentProgressImages.');
+        } elseif ($outcome === 'failed') {
+            $command->line('  Request to Saras:');
+            $command->line('  Please provide the endpoint, response expansion option, dashboard path, or API method');
+            $command->line('  that exposes full workflow run details, including failure reason, node-level error,');
+            $command->line('  workflow output, generated task, and certificate artifact if available.');
+        } elseif ($outcome === 'processing') {
+            $command->line('  1. Increase --timeout or --poll interval and re-run.');
+            $command->line('  2. Check Saras dashboard for workflow run status.');
+            $command->line('  3. If workflow remains in WAITING state, confirm with Saras team.');
+        } else {
+            $command->line('  1. Verify SARAS_PROGRESS_ENABLED=true in .env.');
+            $command->line('  2. Confirm ProjectProgress createProcess returns a valid processId.');
+            $command->line('  3. Check Saras API connectivity and token validity.');
+        }
 
         $command->newLine();
     }
