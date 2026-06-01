@@ -13,6 +13,9 @@ final class ProjectProgressWorkflowPayloadMapper
      */
     public function map(ProjectProgressReport $report): array
     {
+        $previousIds = $report->previous_progress_file_ids ?? [];
+        $currentIds = $report->current_progress_file_ids ?? [];
+
         return [
             'workflowId' => config('saras.workflows.completion_id'),
             'otherDetails' => [
@@ -24,6 +27,8 @@ final class ProjectProgressWorkflowPayloadMapper
             ],
             'payload' => [
                 'engineersRemarks' => $report->remarks ?? '',
+                'oldImage' => implode(',', $previousIds),
+                'newImage' => implode(',', $currentIds),
             ],
         ];
     }

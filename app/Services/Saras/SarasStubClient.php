@@ -134,7 +134,7 @@ class SarasStubClient implements SarasClientInterface
         ]);
     }
 
-    public function getWorkflowRuns(int $page = 1, int $perPage = 10): WorkflowRunsResponse
+    public function getWorkflowRuns(int $page = 1, int $perPage = 10, array $filters = []): WorkflowRunsResponse
     {
         return WorkflowRunsResponse::fromArray([
             'meta' => [

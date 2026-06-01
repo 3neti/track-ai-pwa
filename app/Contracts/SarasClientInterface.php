@@ -60,9 +60,11 @@ interface SarasClientInterface
     public function executeWorkflow(?string $workflowId = null, array $otherDetails = [], array $payload = []): WorkflowResponse;
 
     /**
-     * Get workflow runs (paginated, no server-side filtering).
+     * Get workflow runs with optional server-side filtering.
+     *
+     * @param  array<string, string>  $filters  e.g. ['workflowId_id' => '...', 'otherDetails__processId' => '...']
      *
      * @throws \App\Exceptions\SarasApiException
      */
-    public function getWorkflowRuns(int $page = 1, int $perPage = 10): WorkflowRunsResponse;
+    public function getWorkflowRuns(int $page = 1, int $perPage = 10, array $filters = []): WorkflowRunsResponse;
 }

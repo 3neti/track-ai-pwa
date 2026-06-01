@@ -154,8 +154,7 @@ class ProjectProgressService
     /**
      * Poll workflow status for a progress report.
      *
-     * Since getWorkflowRuns has no server-side filtering, we paginate
-     * and match by the stored saras_workflow_run_id.
+     * Uses server-side filtering by processId + workflowId for direct lookup.
      */
     public function pollWorkflowStatus(ProjectProgressReport $report): ?WorkflowRunDTO
     {
@@ -164,25 +163,22 @@ class ProjectProgressService
         }
 
         try {
-            // Paginate through runs to find our specific run
-            $page = 1;
-            $maxPages = 10;
+            $response = $this->sarasClient->getWorkflowRuns(
+                page: 1,
+                perPage: 5,
+                filters: [
+                    'otherDetails__initiator' => 'INITIATOR_PROCESS',
+                    'otherDetails__processId' => $report->saras_process_id,
+                    'workflowId_id' => config('saras.workflows.completion_id'),
+                ],
+            );
 
-            while ($page <= $maxPages) {
-                $response = $this->sarasClient->getWorkflowRuns(page: $page, perPage: 20);
+            $run = $response->findById($report->saras_workflow_run_id);
 
-                $run = $response->findById($report->saras_workflow_run_id);
-                if ($run) {
-                    $this->updateStatusFromRun($report, $run);
+            if ($run) {
+                $this->updateStatusFromRun($report, $run);
 
-                    return $run;
-                }
-
-                if ($page >= $response->totalPages) {
-                    break;
-                }
-
-                $page++;
+                return $run;
             }
         } catch (SarasApiException $e) {
             Log::error('ProjectProgress: Failed to poll workflow status', [

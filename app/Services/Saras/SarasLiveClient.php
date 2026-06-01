@@ -203,7 +203,7 @@ class SarasLiveClient implements SarasClientInterface
         return WorkflowResponse::fromArray(array_merge($response, ['workflowId' => $workflowId]));
     }
 
-    public function getWorkflowRuns(int $page = 1, int $perPage = 10): WorkflowRunsResponse
+    public function getWorkflowRuns(int $page = 1, int $perPage = 10, array $filters = []): WorkflowRunsResponse
     {
         $requestId = Str::uuid()->toString();
 
@@ -212,16 +212,23 @@ class SarasLiveClient implements SarasClientInterface
             'endpoint' => '/process/workflows/getWorkflowRuns',
             'page' => $page,
             'per_page' => $perPage,
+            'filters' => $filters,
         ]);
+
+        $query = [
+            'page' => $page,
+            'perPageCount' => $perPage,
+        ];
+
+        if (! empty($filters)) {
+            $query['filters'] = json_encode($filters);
+        }
 
         $response = $this->makeRequest(
             method: 'GET',
             endpoint: '/process/workflows/getWorkflowRuns',
             requestId: $requestId,
-            query: [
-                'page' => $page,
-                'perPageCount' => $perPage,
-            ],
+            query: $query,
         );
 
         return WorkflowRunsResponse::fromArray($response);
