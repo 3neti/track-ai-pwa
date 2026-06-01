@@ -16,6 +16,15 @@ final class ProjectProgressWorkflowPayloadMapper
         $previousIds = $report->previous_progress_file_ids ?? [];
         $currentIds = $report->current_progress_file_ids ?? [];
 
+        $payload = [
+            'engineersRemarks' => $report->remarks ?? '',
+        ];
+
+        if (config('saras.workflows.send_image_payload', true)) {
+            $payload['oldImage'] = implode(',', $previousIds);
+            $payload['newImage'] = implode(',', $currentIds);
+        }
+
         return [
             'workflowId' => config('saras.workflows.completion_id'),
             'otherDetails' => [
@@ -25,11 +34,7 @@ final class ProjectProgressWorkflowPayloadMapper
                     'stageKey' => config('saras.workflows.completion_stage_key'),
                 ],
             ],
-            'payload' => [
-                'engineersRemarks' => $report->remarks ?? '',
-                'oldImage' => implode(',', $previousIds),
-                'newImage' => implode(',', $currentIds),
-            ],
+            'payload' => $payload,
         ];
     }
 }

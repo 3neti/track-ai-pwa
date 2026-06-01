@@ -18,7 +18,9 @@ final class LifecycleReportRenderer
         $phases = $payload['phases'] ?? [];
 
         $this->renderFlowDiagram($command, $payload, $phases);
+        $this->renderContractsAndMilestones($command, $phases);
         $this->renderRunArtifacts($command, $payload, $phases);
+        $this->renderWorkflowTriggerSummary($command, $phases);
         $this->renderSarasActionItems($command, $phases);
         $this->renderFullPayloads($command, $tracer);
         $this->renderFullResponses($command, $tracer);
@@ -67,6 +69,18 @@ final class LifecycleReportRenderer
     private function buildFlowSteps(array $payload, array $phases): array
     {
         $steps = [];
+
+        // Contracts
+        $contracts = $phases['contracts'] ?? null;
+        if ($contracts) {
+            $count = $contracts['project_count'] ?? 0;
+            $selected = $contracts['selected'] ?? 'none';
+            $steps[] = [
+                'label' => "Contracts Fetched ({$count} available)",
+                'status' => ($contracts['success'] ?? false) ? 'success' : 'failed',
+                'detail' => "Selected: {$selected}",
+            ];
+        }
 
         // Check-in
         $checkIn = $phases['check_in'] ?? null;
@@ -166,6 +180,56 @@ final class LifecycleReportRenderer
         }
 
         return $steps;
+    }
+
+    private function renderContractsAndMilestones(Command $command, array $phases): void
+    {
+        $contracts = $phases['contracts'] ?? null;
+
+        if (! $contracts || ! ($contracts['success'] ?? false)) {
+            return;
+        }
+
+        $command->line('════════ Contracts & Milestones ════════');
+        $command->newLine();
+
+        foreach ($contracts['projects'] ?? [] as $project) {
+            $name = $project['name'] ?? 'Unknown';
+            $id = $project['id'] ?? '—';
+            $command->line("  {$name}");
+            $command->line("    ID: {$id}");
+        }
+
+        $command->newLine();
+        $command->line('  Stage: '.config('saras.workflows.completion_stage_key', '—'));
+        $command->line('  Workflow: '.config('saras.workflows.completion_id', '—'));
+        $command->newLine();
+    }
+
+    private function renderWorkflowTriggerSummary(Command $command, array $phases): void
+    {
+        $workflow = $phases['workflow'] ?? null;
+
+        if (! $workflow) {
+            return;
+        }
+
+        $command->line('════════ Workflow Trigger ════════');
+        $command->newLine();
+
+        $command->line('  Workflow:   '.config('saras.workflows.completion_id', '—'));
+        $command->line('  Process:    '.($phases['progress']['saras_process_id'] ?? '—'));
+        $command->line('  Stage:      '.config('saras.workflows.completion_stage_key', '—'));
+        $command->line('  Run:        '.($workflow['workflow_run_id'] ?? '—'));
+        $command->line('  State:      '.strtoupper($workflow['outcome'] ?? 'unknown'));
+
+        $payloadKeys = ['engineersRemarks'];
+        if (config('saras.workflows.send_image_payload', true)) {
+            $payloadKeys[] = 'oldImage';
+            $payloadKeys[] = 'newImage';
+        }
+        $command->line('  Payload:    {'.implode(', ', $payloadKeys).'}');
+        $command->newLine();
     }
 
     private function renderRunArtifacts(Command $command, array $payload, array $phases): void

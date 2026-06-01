@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Lifecycle\Runners;
 
+use App\Contracts\SarasClientInterface;
 use App\Models\ProjectProgressReport;
 use App\Models\Upload;
 use App\Services\TrackAI\AttendanceService;
@@ -18,6 +19,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         private readonly AttendanceService $attendanceService,
         private readonly UploadService $uploadService,
         private readonly ProjectProgressService $progressService,
+        private readonly SarasClientInterface $sarasClient,
     ) {}
 
     public function run(ScenarioRunContext $context): ScenarioRunResult
@@ -30,6 +32,10 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             'user' => ['id' => $context->user->id, 'name' => $context->user->name],
             'project' => ['id' => $context->project->id, 'name' => $context->project->name],
         ];
+
+        // Phase 0: Fetch contracts & milestones
+        $contractsResult = $this->phaseFetchContracts($context);
+        $payload['phases']['contracts'] = $contractsResult;
 
         // Phase 1: Attendance Check-In
         $checkInResult = $this->phaseCheckIn($context);
@@ -61,6 +67,12 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
 
         // Phase 4 + 5: Trigger Workflow + Poll (only if we have a saras_process_id)
         if (! empty($progressResult['saras_process_id'])) {
+            if (isset($stageFilesResult) && ! ($stageFilesResult['success'] ?? false)) {
+                if (! $context->output->isJson()) {
+                    $context->output->warn('  ⚠ Stage file attachment failed — workflow may not have stage checklist data');
+                }
+            }
+
             $workflowResult = $this->phaseWorkflow($context, $progressResult['report_id']);
             $payload['phases']['workflow'] = $workflowResult;
         }
@@ -72,6 +84,57 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         $payload['success'] = true;
 
         return $this->result($context, $payload, true);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function phaseFetchContracts(ScenarioRunContext $context): array
+    {
+        if (! $context->output->isJson()) {
+            $context->output->line('Phase 0: Fetching contracts & milestones...');
+        }
+
+        try {
+            $response = $this->sarasClient->getProjectsForUser(page: 1, perPage: 50);
+
+            $projects = [];
+            $selectedProject = null;
+
+            foreach ($response->projects as $project) {
+                $projects[] = [
+                    'id' => $project->externalId,
+                    'name' => $project->name,
+                    'contract_id' => $project->contractId,
+                ];
+
+                if ($project->externalId === $context->contractId || $project->contractId === $context->contractId) {
+                    $selectedProject = $project;
+                }
+            }
+
+            if (! $context->output->isJson()) {
+                $context->output->info('  ✓ '.count($projects).' project(s) available');
+
+                foreach ($projects as $p) {
+                    $marker = ($p['id'] === $context->contractId || $p['contract_id'] === $context->contractId) ? ' ← selected' : '';
+                    $context->output->line("    {$p['name']} ({$p['id']}){$marker}");
+                }
+            }
+
+            return [
+                'success' => true,
+                'project_count' => count($projects),
+                'projects' => $projects,
+                'selected' => $selectedProject?->name,
+            ];
+        } catch (\Exception $e) {
+            if (! $context->output->isJson()) {
+                $context->output->warn('  ⚠ Failed to fetch contracts: '.$e->getMessage());
+            }
+
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**
