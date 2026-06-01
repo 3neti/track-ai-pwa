@@ -631,3 +631,91 @@ Track AI captures field progress evidence and submits it to Saras AI for progres
 ```
 
 This is more accurate, safer, and aligned with government approval/payment realities.
+
+---
+
+## Implementation Status (2026-06-01)
+
+### Research Phase — COMPLETED
+
+All questions from Section 14 were resolved via live API probing (`saras:probe-progress` command):
+
+| Question | Answer |
+|----------|--------|
+| ProjectProgress subProjectId | `794a98cf-afea-49f9-aa02-c3a430ba714f` |
+| Contract/project link field | `contractId` (process type → Contract AI) |
+| Milestone/stage field | `currentMilestone` (string), `milestoneList` (internal) |
+| File fields | `previousProgressFiles` (list of files), `currentProgressFiles` (list of files) |
+| processId in executeWorkflow | Yes, the ProjectProgress process ID |
+| Workflow ID | `d702fb25-51ae-4d7f-88fc-132d555b2f00` ("Construction Progress Comparison") |
+| Stage key | `stage_1779863565116_eqt6` |
+| Certificate field | `certificateOfCompletion` (file type) |
+| Workflow slot | `engineersRemarks` (STRING) → maps to field `remarks` via `slotsToFieldsMapper` |
+
+Key finding: `GET /process/getProcesses` returns 417 (not licensed). Local DB tracking is required.
+
+API probe fixtures saved in `tests/fixtures/saras/`.
+
+### ProjectProgress Integration — COMPLETED
+
+| Component | Status |
+|-----------|--------|
+| Config (`SARAS_SUBPROJECT_PROJECT_PROGRESS`, workflow IDs, stage key) | ✅ |
+| `getWorkflowRuns()` in SarasClientInterface + Live/Stub | ✅ |
+| `WorkflowRunDTO`, `WorkflowRunsResponse` DTOs | ✅ |
+| `project_progress_reports` migration + `ProjectProgressReport` model + factory | ✅ |
+| `ProjectProgressService` (create, trigger workflow, poll, list) | ✅ |
+| `ProjectProgressWorkflowPayloadMapper` | ✅ |
+| `ProjectProgressController` + API routes + Inertia page route | ✅ |
+| `ProjectProgress.vue` frontend page | ✅ |
+| `WorkflowResponse` DTO fix for live `runId.id` extraction | ✅ |
+| ISO 8601 datetime fix for `checkInTime`/`checkOutTime`/`time` fields | ✅ |
+| Feature flag `SARAS_PROGRESS_ENABLED=true` | ✅ |
+| 9 feature tests (26 assertions) | ✅ |
+
+### Lifecycle Scenario Runtime — COMPLETED
+
+Adapted from x-change's lifecycle runtime pattern:
+
+| Component | Status |
+|-----------|--------|
+| Engine → Bootstrapper → Runner architecture | ✅ |
+| Repository with config-driven scenario definitions | ✅ |
+| `DefaultProgressScenarioRunner` (submit progress) | ✅ |
+| `FullLifecycleScenarioRunner` (submit → workflow → poll) | ✅ |
+| `FieldDayScenarioRunner` (check-in → upload → progress → workflow → poll → check-out) | ✅ |
+| CLI auth fix (`Auth::login` + Saras token refresh for artisan context) | ✅ |
+| `--trace` flag for verbose API debug output | ✅ |
+| `SarasApiTracer` singleton + `TracingLifecycleOutput` decorator | ✅ |
+| API Call Summary in result renderer | ✅ |
+| 12 lifecycle tests (24 assertions) | ✅ |
+
+### Live Saras Verification — COMPLETED
+
+The `dpwh_field_day` scenario has been run successfully against live Saras (`ind-prod.sarasfinance.com`). All 6 phases produced entries visible on the Saras dashboard:
+
+- **Attendance**: Check-in and check-out entries created
+- **TrackData**: Previous and current progress images uploaded and tagged
+- **ProjectProgress**: Process created with file UUIDs, milestone, and engineer remarks
+- **Workflow**: "Construction Progress Comparison" triggered and polled
+- **Dashboard verification**: Metadetails, Progress, and Certificate sections populated
+
+### POC Success Criteria (Section 15) — Status
+
+| Criterion | Status |
+|-----------|--------|
+| Create/fetch a ProjectProgress record | ✅ Created (fetch via local DB — `getProcesses` not available) |
+| Attach old/new image UUIDs | ✅ `previousProgressFiles` / `currentProgressFiles` |
+| Include engineer manual progress input | ✅ `remarks` field → `engineersRemarks` workflow slot |
+| Trigger Saras workflow using processId | ✅ `executeWorkflow` with correct workflowId + stageKey |
+| Poll workflow runs | ✅ `getWorkflowRuns` with client-side ID matching |
+| Display normalized status | ✅ INITIALISED → WAITING → SUCCESS/FAILED |
+| Display certificate | ⏳ Pending (field exists in schema but AI workflow returns FAILED with test images) |
+
+### Pending / Next Steps
+
+1. **Milestone concept** — Saras developers will introduce per-project milestones (e.g., 10 milestones at 10% each). Schema update expected.
+2. **Real construction images** — Replace 100x100 test PNGs with actual site photos for meaningful AI evaluation.
+3. **Certificate display** — Show `certificateOfCompletion` when workflow produces it.
+4. **Stage file attachment** — The "Required Checklist" in Stages & Files shows `previousProgressImages` and `currentProgressImages` as empty. May need to use a different API to attach files to stages.
+5. **Webhook/notification** — For long-running AI evaluation, implement webhook or polling notification instead of blocking poll loop.
