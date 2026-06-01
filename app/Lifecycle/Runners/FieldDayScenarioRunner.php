@@ -53,6 +53,12 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             return $this->result($context, $payload, false);
         }
 
+        // Phase 3.5: Attach stage files
+        if (! empty($progressResult['saras_process_id'])) {
+            $stageFilesResult = $this->phaseAttachStageFiles($context, $progressResult['report_id']);
+            $payload['phases']['stage_files'] = $stageFilesResult;
+        }
+
         // Phase 4 + 5: Trigger Workflow + Poll (only if we have a saras_process_id)
         if (! empty($progressResult['saras_process_id'])) {
             $workflowResult = $this->phaseWorkflow($context, $progressResult['report_id']);
@@ -309,6 +315,41 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             'progress_status' => $report->progress_status,
             'saras_process_id' => $report->saras_process_id,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function phaseAttachStageFiles(ScenarioRunContext $context, int $reportId): array
+    {
+        if (! $context->output->isJson()) {
+            $context->output->line('Phase 3.5: Attaching stage files...');
+        }
+
+        $report = ProjectProgressReport::findOrFail($reportId);
+        $result = $this->progressService->attachStageFiles($report);
+
+        if (! $context->output->isJson()) {
+            if ($result['success'] ?? false) {
+                $prev = $result['previous'] ?? 0;
+                $curr = $result['current'] ?? 0;
+
+                if ($prev > 0) {
+                    $context->output->info("  \u2713 previousProgressImages: {$prev} files attached");
+                }
+
+                if ($curr > 0) {
+                    $context->output->info("  \u2713 currentProgressImages: {$curr} files attached");
+                }
+
+                $context->output->info("  \u2713 Stage updated (process: {$report->saras_process_id})");
+            } else {
+                $msg = $result['message'] ?? 'Unknown error';
+                $context->output->warn("  \u26a0 Stage file attachment: {$msg}");
+            }
+        }
+
+        return $result;
     }
 
     /**

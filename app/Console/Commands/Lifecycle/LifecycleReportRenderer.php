@@ -115,6 +115,18 @@ final class LifecycleReportRenderer
             ];
         }
 
+        // Stage files
+        $stageFiles = $phases['stage_files'] ?? null;
+        if ($stageFiles) {
+            $prev = $stageFiles['previous'] ?? 0;
+            $curr = $stageFiles['current'] ?? 0;
+            $steps[] = [
+                'label' => 'Stage Files Attached',
+                'status' => ($stageFiles['success'] ?? false) ? 'success' : 'failed',
+                'detail' => "Previous: {$prev} | Current: {$curr}",
+            ];
+        }
+
         // Workflow
         $workflow = $phases['workflow'] ?? null;
         if ($workflow) {
@@ -203,7 +215,12 @@ final class LifecycleReportRenderer
         $items[] = 'certificateOfCompletion field empty — certificate workflow not yet deployed (3406f390 returns 404).';
 
         // Stage files
-        $items[] = 'Stage checklist (previousProgressImages/currentProgressImages) shows empty on dashboard — confirm stage file attachment API.';
+        $stageFiles = $phases['stage_files'] ?? null;
+        if ($stageFiles && ($stageFiles['success'] ?? false)) {
+            $items[] = 'Stage file attachment API integrated via /process/updateFiles — verify files appear correctly in Saras dashboard.';
+        } else {
+            $items[] = 'Stage file attachment via /process/updateFiles failed or not executed — check processId, stageKey, and file UUIDs.';
+        }
 
         // Certificate workflow
         $items[] = 'Certificate workflow 3406f390-ce85-4b32-8531-8b90c837dcb4 returns 404 — confirm deployment for DPWH tenant.';

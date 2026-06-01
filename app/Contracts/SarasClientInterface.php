@@ -67,4 +67,14 @@ interface SarasClientInterface
      * @throws \App\Exceptions\SarasApiException
      */
     public function getWorkflowRuns(int $page = 1, int $perPage = 10, array $filters = []): WorkflowRunsResponse;
+
+    /**
+     * Attach files to a workflow stage checklist.
+     *
+     * @param  array<string, array{fileIds: array<string>}>  $files
+     * @return array<string, mixed>
+     *
+     * @throws \App\Exceptions\SarasApiException
+     */
+    public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array;
 }

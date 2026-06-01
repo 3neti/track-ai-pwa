@@ -134,6 +134,14 @@ class SarasStubClient implements SarasClientInterface
         ]);
     }
 
+    public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array
+    {
+        return [
+            'success' => true,
+            'message' => 'Files attached to stage (stub)',
+        ];
+    }
+
     public function getWorkflowRuns(int $page = 1, int $perPage = 10, array $filters = []): WorkflowRunsResponse
     {
         return WorkflowRunsResponse::fromArray([

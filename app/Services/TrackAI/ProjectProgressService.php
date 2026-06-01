@@ -105,6 +105,65 @@ class ProjectProgressService
     }
 
     /**
+     * Attach files to the workflow stage checklist via /process/updateFiles.
+     *
+     * @return array<string, mixed>
+     */
+    public function attachStageFiles(ProjectProgressReport $report): array
+    {
+        if (! $report->saras_process_id) {
+            return ['success' => false, 'message' => 'No Saras process ID'];
+        }
+
+        $previousIds = $report->previous_progress_file_ids ?? [];
+        $currentIds = $report->current_progress_file_ids ?? [];
+
+        if (empty($previousIds) && empty($currentIds)) {
+            return ['success' => true, 'message' => 'No files to attach', 'previous' => 0, 'current' => 0];
+        }
+
+        $files = [];
+
+        if (! empty($previousIds)) {
+            $files['previousProgressImages'] = ['fileIds' => $previousIds];
+        }
+
+        if (! empty($currentIds)) {
+            $files['currentProgressImages'] = ['fileIds' => $currentIds];
+        }
+
+        try {
+            $response = $this->sarasClient->updateFiles(
+                processId: $report->saras_process_id,
+                stageKey: config('saras.workflows.completion_stage_key'),
+                subProjectId: config('saras.subproject_ids.project_progress'),
+                files: $files,
+            );
+
+            AuditLog::log($report->user_id, 'project_progress_stage_files_attached', $report->contract_id, [
+                'report_id' => $report->id,
+                'saras_process_id' => $report->saras_process_id,
+                'previous_count' => count($previousIds),
+                'current_count' => count($currentIds),
+            ]);
+
+            return [
+                'success' => true,
+                'previous' => count($previousIds),
+                'current' => count($currentIds),
+                'response' => $response,
+            ];
+        } catch (SarasApiException $e) {
+            Log::error('ProjectProgress: Failed to attach stage files', [
+                'report_id' => $report->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Trigger the completion workflow for a progress report.
      */
     public function triggerWorkflow(ProjectProgressReport $report): ProjectProgressReport

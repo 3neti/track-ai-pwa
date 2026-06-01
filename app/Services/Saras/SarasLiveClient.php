@@ -234,6 +234,30 @@ class SarasLiveClient implements SarasClientInterface
         return WorkflowRunsResponse::fromArray($response);
     }
 
+    public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array
+    {
+        $requestId = Str::uuid()->toString();
+
+        Log::info('Saras API: updateFiles', [
+            'request_id' => $requestId,
+            'endpoint' => '/process/updateFiles',
+            'process_id' => $processId,
+            'stage_key' => $stageKey,
+        ]);
+
+        return $this->makeRequest(
+            method: 'POST',
+            endpoint: '/process/updateFiles',
+            requestId: $requestId,
+            data: [
+                'processId' => $processId,
+                'stageKey' => $stageKey,
+                'subProjectId' => $subProjectId,
+                'files' => $files,
+            ],
+        );
+    }
+
     /**
      * Make an authenticated request to Saras API.
      *
