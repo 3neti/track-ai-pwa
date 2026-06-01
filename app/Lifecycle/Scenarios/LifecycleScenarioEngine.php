@@ -96,6 +96,7 @@ final class LifecycleScenarioEngine
             timeout: $bootstrap->timeout,
             poll: $bootstrap->poll,
             maxPolls: $bootstrap->maxPolls,
+            bucket: $options->bucket,
         );
 
         $result = $resolution->runner->run($context);

@@ -23,6 +23,7 @@ final readonly class ScenarioRunContext
         public int $timeout,
         public int $poll,
         public int $maxPolls,
+        public ?string $bucket = null,
     ) {}
 
     public function mode(): string

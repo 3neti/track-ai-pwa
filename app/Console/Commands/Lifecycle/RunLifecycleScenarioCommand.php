@@ -22,7 +22,8 @@ class RunLifecycleScenarioCommand extends Command
         {--timeout= : Poll timeout in seconds}
         {--poll= : Poll interval in seconds}
         {--json : Output JSON}
-        {--trace : Show API call traces}';
+        {--trace : Show API call traces}
+        {--bucket= : Path to folder with previous/ and current/ subfolders for file uploads}';
 
     protected $description = 'Run a named lifecycle scenario.';
 
