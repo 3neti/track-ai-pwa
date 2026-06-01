@@ -350,6 +350,24 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             if (! $context->output->isJson()) {
                 $state = $run ? $run->state : 'unknown';
                 $context->output->line("  Poll {$pollCount}/{$context->maxPolls}: {$state}");
+
+                // Enhanced failure diagnostics
+                if ($run && $run->isFailed()) {
+                    $context->output->line("    Workflow run: {$run->id}");
+                    $context->output->line("    Flow state: {$run->flowState}");
+
+                    $diagnostics = $run->diagnosticFields();
+                    if (! empty($diagnostics)) {
+                        foreach ($diagnostics as $key => $value) {
+                            $display = is_array($value) ? json_encode($value, JSON_UNESCAPED_SLASHES) : (string) $value;
+                            $context->output->line("    {$key}: {$display}");
+                        }
+                    } else {
+                        $context->output->line('    Failure details: not exposed by getWorkflowRuns response');
+                    }
+
+                    $context->output->line('    Next step: request full workflow run diagnostics from Saras');
+                }
             }
 
             if ($report->isTerminal()) {

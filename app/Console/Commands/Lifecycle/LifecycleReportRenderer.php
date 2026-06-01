@@ -22,6 +22,7 @@ final class LifecycleReportRenderer
         $this->renderSarasActionItems($command, $phases);
         $this->renderFullPayloads($command, $tracer);
         $this->renderFullResponses($command, $tracer);
+        $this->renderDeveloperInterpretation($command, $phases);
     }
 
     /**
@@ -204,6 +205,9 @@ final class LifecycleReportRenderer
         // Certificate workflow
         $items[] = 'Certificate workflow 3406f390-ce85-4b32-8531-8b90c837dcb4 returns 404 — confirm deployment for DPWH tenant.';
 
+        // Workflow diagnostics
+        $items[] = 'getWorkflowRuns currently returns only id/state/flowState — confirm endpoint, query option, or response expansion needed to retrieve full workflow error/output details.';
+
         foreach ($items as $i => $item) {
             $num = $i + 1;
             $command->line("  {$num}. {$item}");
@@ -323,6 +327,68 @@ final class LifecycleReportRenderer
         }
 
         return $compact ?: $data;
+    }
+
+    private function renderDeveloperInterpretation(Command $command, array $phases): void
+    {
+        $command->line('════════ Developer Interpretation ════════');
+        $command->newLine();
+
+        // Track AI side
+        $command->line('Track AI side:');
+
+        $checkIn = $phases['check_in'] ?? null;
+        $upload = $phases['upload'] ?? null;
+        $progress = $phases['progress'] ?? null;
+        $workflow = $phases['workflow'] ?? null;
+        $checkOut = $phases['check_out'] ?? null;
+
+        $this->interpretLine($command, $checkIn && ($checkIn['success'] ?? false), 'Attendance check-in/check-out works');
+        $this->interpretLine($command, $upload && ($upload['success'] ?? false), 'File upload to Saras storage works');
+        $this->interpretLine($command, $upload && ($upload['success'] ?? false), 'TrackData process creation works');
+        $this->interpretLine($command, $progress && ($progress['success'] ?? false), 'ProjectProgress process creation works');
+        $this->interpretLine($command, $progress && ! empty($progress['saras_process_id']), 'Previous/current progress file UUID mapping works');
+        $this->interpretLine($command, $workflow && ! empty($workflow['workflow_run_id']), 'Workflow trigger works');
+        $this->interpretLine($command, $workflow !== null, 'Workflow polling works');
+
+        $command->newLine();
+        $command->line('Saras side:');
+
+        $outcome = $workflow['outcome'] ?? null;
+
+        if ($outcome === 'failed') {
+            $command->line('  ✗ Workflow run failed after initialization');
+            $command->line('  ? Failure reason is not exposed in getWorkflowRuns response');
+        } elseif ($outcome === 'evaluated') {
+            $command->line('  ✓ Workflow completed successfully');
+        } elseif ($outcome === 'processing') {
+            $command->line('  ⏳ Workflow still processing (timeout reached)');
+        } else {
+            $command->line('  ? Workflow status unknown');
+        }
+
+        $command->line('  ? Workflow output/result payload is not exposed in getWorkflowRuns response');
+        $command->line('  ? Certificate artifact is not produced or not exposed yet');
+        $command->line('  ? Stage checklist attachment behavior remains unresolved');
+
+        $command->newLine();
+        $command->line('Conclusion:');
+        $command->line('  Track AI integration path is operational up to Saras workflow execution.');
+        $command->line('  The remaining blocker is Saras workflow debugging and certificate artifact exposure.');
+
+        $command->newLine();
+        $command->line('Recommended next request to Saras:');
+        $command->line('  Please provide the endpoint, response expansion option, dashboard path, or API method');
+        $command->line('  that exposes full workflow run details, including failure reason, node-level error,');
+        $command->line('  workflow output, generated task, and certificate artifact if available.');
+
+        $command->newLine();
+    }
+
+    private function interpretLine(Command $command, bool $success, string $label): void
+    {
+        $icon = $success ? '✓' : '✗';
+        $command->line("  {$icon} {$label}");
     }
 
     private function short(?string $id): string

@@ -11,6 +11,7 @@ readonly class WorkflowRunDTO
         public ?string $createdTs,
         public ?string $updatedTs,
         public ?string $userId = null,
+        public array $rawData = [],
     ) {}
 
     /**
@@ -25,7 +26,33 @@ readonly class WorkflowRunDTO
             createdTs: $data['createdTs'] ?? $data['created_ts'] ?? null,
             updatedTs: $data['updatedTs'] ?? $data['updated_ts'] ?? null,
             userId: $data['userId']['id'] ?? $data['user_id'] ?? null,
+            rawData: $data,
         );
+    }
+
+    /**
+     * Scan raw response for diagnostic fields that might contain failure details.
+     *
+     * @return array<string, mixed>
+     */
+    public function diagnosticFields(): array
+    {
+        $candidates = [
+            'error', 'errors', 'message', 'errorMessage', 'failureReason', 'reason',
+            'result', 'results', 'output', 'outputs', 'payload', 'logs',
+            'nodeResults', 'steps', 'tasks', 'artifacts', 'files',
+            'certificate', 'certificateOfCompletion',
+        ];
+
+        $found = [];
+
+        foreach ($candidates as $key) {
+            if (array_key_exists($key, $this->rawData) && $this->rawData[$key] !== null) {
+                $found[$key] = $this->rawData[$key];
+            }
+        }
+
+        return $found;
     }
 
     public function isSuccess(): bool
