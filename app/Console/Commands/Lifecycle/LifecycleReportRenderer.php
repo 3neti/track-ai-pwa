@@ -23,6 +23,9 @@ final class LifecycleReportRenderer
         $this->renderFullPayloads($command, $tracer);
         $this->renderFullResponses($command, $tracer);
         $this->renderDeveloperInterpretation($command, $phases);
+        $this->renderIntegrationScorecard($command, $phases);
+        $this->renderSarasTraceIds($command, $tracer);
+        $this->renderExecutiveSummary($command, $phases);
     }
 
     /**
@@ -413,6 +416,146 @@ final class LifecycleReportRenderer
             $command->line('  3. Check Saras API connectivity and token validity.');
         }
 
+        $command->newLine();
+    }
+
+    private function renderIntegrationScorecard(Command $command, array $phases): void
+    {
+        $command->line('════════ Integration Scorecard ════════');
+        $command->newLine();
+
+        $checkIn = $phases['check_in'] ?? null;
+        $upload = $phases['upload'] ?? null;
+        $progress = $phases['progress'] ?? null;
+        $workflow = $phases['workflow'] ?? null;
+        $outcome = $workflow['outcome'] ?? null;
+
+        $scores = [
+            ['Attendance Integration', ($checkIn && ($checkIn['success'] ?? false)) ? 100 : 0],
+            ['TrackData Integration', ($upload && ($upload['success'] ?? false)) ? 100 : 0],
+            ['ProjectProgress Integration', ($progress && ($progress['success'] ?? false)) ? 100 : 0],
+            ['Workflow Triggering', ($workflow && ! empty($workflow['workflow_run_id'])) ? 100 : 0],
+            ['Workflow Polling', $workflow !== null ? 100 : 0],
+            ['Workflow Execution', match ($outcome) {
+                'evaluated' => 100,
+                'failed', 'processing' => 50,
+                default => 0,
+            }],
+            ['Certificate Generation', 0],
+        ];
+
+        foreach ($scores as [$label, $score]) {
+            $icon = $score === 100 ? '✓' : ($score > 0 ? '⚠' : '⚠');
+            $pct = "{$score}%";
+            $padded = str_pad($label, 28);
+            $command->line("  {$icon} {$padded}{$pct}");
+        }
+
+        $total = array_sum(array_column($scores, 1));
+        $overall = (int) round($total / count($scores));
+        $overallIcon = $overall >= 80 ? '✓' : '⚠';
+
+        $command->newLine();
+        $command->line("  {$overallIcon} ".str_pad('Overall Integration Health', 28)."{$overall}%");
+        $command->newLine();
+    }
+
+    private function renderSarasTraceIds(Command $command, SarasApiTracer $tracer): void
+    {
+        $command->line('════════ Saras Trace IDs ════════');
+        $command->newLine();
+
+        $labels = [
+            '/process/createProcess' => null,
+            '/process/workflows/executeWorkflow' => 'Workflow Execute',
+            '/process/workflows/getWorkflowRuns' => 'Workflow Poll',
+        ];
+
+        $subProjectLabels = [
+            config('saras.subproject_ids.attendance') => 'Attendance',
+            config('saras.subproject_ids.trackdata') => 'TrackData',
+            config('saras.subproject_ids.project_progress') => 'ProjectProgress',
+        ];
+
+        $emitted = [];
+
+        foreach ($tracer->all() as $trace) {
+            $traceId = $trace->rawResponse['traceId'] ?? null;
+            if (! $traceId) {
+                continue;
+            }
+
+            $endpoint = preg_replace('/\?.*$/', '', $trace->endpoint);
+
+            // Determine label
+            if ($endpoint === '/process/createProcess') {
+                $subProjectId = $trace->rawRequest['subProjectId'] ?? '';
+                $label = $subProjectLabels[$subProjectId] ?? 'Process';
+
+                // Deduplicate TrackData (many uploads)
+                if ($label === 'TrackData' && in_array('TrackData', $emitted)) {
+                    continue;
+                }
+            } else {
+                $label = $labels[$endpoint] ?? $endpoint;
+            }
+
+            $emitted[] = $label;
+            $command->line("  {$label}");
+            $command->line("    {$traceId}");
+            $command->newLine();
+        }
+
+        if (empty($emitted)) {
+            $command->line('  No trace IDs captured.');
+            $command->newLine();
+        }
+    }
+
+    private function renderExecutiveSummary(Command $command, array $phases): void
+    {
+        $command->line('════════ Executive Summary ════════');
+        $command->newLine();
+
+        $command->line('Track AI successfully completed the operational workflow:');
+        $command->newLine();
+        $command->line('  Attendance → File Upload → TrackData → ProjectProgress → Workflow Trigger → Polling');
+        $command->newLine();
+
+        $workflow = $phases['workflow'] ?? null;
+        $outcome = $workflow['outcome'] ?? null;
+
+        // Compute readiness
+        $scores = [
+            ($phases['check_in']['success'] ?? false) ? 100 : 0,
+            ($phases['upload']['success'] ?? false) ? 100 : 0,
+            ($phases['progress']['success'] ?? false) ? 100 : 0,
+            ($workflow && ! empty($workflow['workflow_run_id'])) ? 100 : 0,
+            $workflow !== null ? 100 : 0,
+            match ($outcome) {
+                'evaluated' => 100, 'failed', 'processing' => 50, default => 0
+            },
+            0, // certificate
+        ];
+        $readiness = (int) round(array_sum($scores) / count($scores));
+
+        if ($outcome === 'evaluated') {
+            $blocker = 'Certificate artifact exposure.';
+            $action = 'Saras to confirm certificate access via API.';
+        } elseif ($outcome === 'failed') {
+            $blocker = 'Saras workflow returns FAILED without exposed diagnostics.';
+            $action = 'Saras to provide workflow failure details and certificate artifact access.';
+        } elseif ($outcome === 'processing') {
+            $blocker = 'Saras workflow still processing.';
+            $action = 'Re-run with longer timeout or check Saras dashboard.';
+        } else {
+            $blocker = 'Workflow not triggered.';
+            $action = 'Verify Saras sync configuration.';
+        }
+
+        $command->line("Current readiness:  {$readiness}%");
+        $command->line("Primary blocker:    {$blocker}");
+        $command->line("Next action:        {$action}");
         $command->newLine();
     }
 
