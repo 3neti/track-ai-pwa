@@ -652,7 +652,11 @@ All questions from Section 14 were resolved via live API probing (`saras:probe-p
 | Certificate field | `certificateOfCompletion` (file type) |
 | Workflow slot | `engineersRemarks` (STRING) → maps to field `remarks` via `slotsToFieldsMapper` |
 
-Key finding: `GET /process/getProcesses` returns 417 (not licensed). Local DB tracking is required.
+Key findings:
+- `GET /process/getProcesses` returns 417 (not licensed). Local DB tracking is required.
+- `getWorkflowRuns` supports server-side filtering via `filters` JSON query param with `__` notation for nested fields (e.g., `otherDetails__processId`).
+- `oldImage`/`newImage` in `executeWorkflow` payload must be comma-separated file UUIDs.
+- Certificate workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404 — not yet deployed to our tenant.
 
 API probe fixtures saved in `tests/fixtures/saras/`.
 
@@ -665,7 +669,7 @@ API probe fixtures saved in `tests/fixtures/saras/`.
 | `WorkflowRunDTO`, `WorkflowRunsResponse` DTOs | ✅ |
 | `project_progress_reports` migration + `ProjectProgressReport` model + factory | ✅ |
 | `ProjectProgressService` (create, trigger workflow, poll, list) | ✅ |
-| `ProjectProgressWorkflowPayloadMapper` | ✅ |
+| `ProjectProgressWorkflowPayloadMapper` (with `oldImage`/`newImage` comma-separated UUIDs) | ✅ |
 | `ProjectProgressController` + API routes + Inertia page route | ✅ |
 | `ProjectProgress.vue` frontend page | ✅ |
 | `WorkflowResponse` DTO fix for live `runId.id` extraction | ✅ |
@@ -688,6 +692,8 @@ Adapted from x-change's lifecycle runtime pattern:
 | `--trace` flag for verbose API debug output | ✅ |
 | `SarasApiTracer` singleton + `TracingLifecycleOutput` decorator | ✅ |
 | API Call Summary in result renderer | ✅ |
+| File bucket (`storage/app/lifecycle/progress/{previous,current}/`) + `--bucket=` CLI option | ✅ |
+| Server-side `getWorkflowRuns` filtering via `filters` JSON query param | ✅ |
 | 12 lifecycle tests (24 assertions) | ✅ |
 
 ### Live Saras Verification — COMPLETED
@@ -695,9 +701,9 @@ Adapted from x-change's lifecycle runtime pattern:
 The `dpwh_field_day` scenario has been run successfully against live Saras (`ind-prod.sarasfinance.com`). All 6 phases produced entries visible on the Saras dashboard:
 
 - **Attendance**: Check-in and check-out entries created
-- **TrackData**: Previous and current progress images uploaded and tagged
+- **TrackData**: 5 real construction photos uploaded (2 previous at ~90KB, 3 current at ~50-103KB)
 - **ProjectProgress**: Process created with file UUIDs, milestone, and engineer remarks
-- **Workflow**: "Construction Progress Comparison" triggered and polled
+- **Workflow**: "Construction Progress Comparison" triggered with `oldImage`/`newImage` UUIDs, polled via filtered query (`totalCount: 1`)
 - **Dashboard verification**: Metadetails, Progress, and Certificate sections populated
 
 ### POC Success Criteria (Section 15) — Status
@@ -708,14 +714,15 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 | Attach old/new image UUIDs | ✅ `previousProgressFiles` / `currentProgressFiles` |
 | Include engineer manual progress input | ✅ `remarks` field → `engineersRemarks` workflow slot |
 | Trigger Saras workflow using processId | ✅ `executeWorkflow` with correct workflowId + stageKey |
-| Poll workflow runs | ✅ `getWorkflowRuns` with client-side ID matching |
+| Poll workflow runs | ✅ `getWorkflowRuns` with server-side `filters` param (returns `totalCount: 1` directly) |
 | Display normalized status | ✅ INITIALISED → WAITING → SUCCESS/FAILED |
 | Display certificate | ⏳ Pending (field exists in schema but AI workflow returns FAILED with test images) |
 
 ### Pending / Next Steps
 
 1. **Milestone concept** — Saras developers will introduce per-project milestones (e.g., 10 milestones at 10% each). Schema update expected.
-2. **Real construction images** — Replace 100x100 test PNGs with actual site photos for meaningful AI evaluation.
+2. **Certificate workflow deployment** — Workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404. Confirm with Saras devs it's deployed for tenant `681e0d5e-fcd9-46e6-b2e8-405b0d177558` (DPWH Philippines).
 3. **Certificate display** — Show `certificateOfCompletion` when workflow produces it.
-4. **Stage file attachment** — The "Required Checklist" in Stages & Files shows `previousProgressImages` and `currentProgressImages` as empty. May need to use a different API to attach files to stages.
+4. **Stage file attachment** — The "Required Checklist" in Stages & Files shows `previousProgressImages`/`currentProgressImages` as empty. Files are passed as process fields and as `oldImage`/`newImage` in workflow payload, but the stage checklist may need a separate attachment API.
 5. **Webhook/notification** — For long-running AI evaluation, implement webhook or polling notification instead of blocking poll loop.
+6. **Real site photos** — Current bucket has Unsplash stock construction photos. Replace with actual DPWH site images for meaningful AI evaluation.
