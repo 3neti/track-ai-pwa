@@ -33,7 +33,9 @@ const props = defineProps<{ projects: Project[]; contracts: Contract[]; }>();
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 const { getActiveProjectId } = useActiveProject();
 
-const selectedProjectId = ref(getActiveProjectId(props.projects) || props.projects[0]?.external_id || '');
+// Default to Track AI module
+const trackAi = props.projects.find(p => p.name === 'Track AI');
+const selectedProjectId = ref(getActiveProjectId(props.projects) || trackAi?.external_id || props.projects[0]?.external_id || '');
 const selectedProject = computed(() => props.projects.find(p => p.external_id === selectedProjectId.value));
 const selectedContractId = ref('');
 const selectedContract = computed(() => props.contracts.find(c => c.id === selectedContractId.value));
