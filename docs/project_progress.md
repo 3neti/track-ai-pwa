@@ -653,10 +653,11 @@ All questions from Section 14 were resolved via live API probing (`saras:probe-p
 | Workflow slot | `engineersRemarks` (STRING) → maps to field `remarks` via `slotsToFieldsMapper` |
 
 Key findings:
-- `GET /process/getProcesses` returns 417 (not licensed). Local DB tracking is required.
+- `GET /process/getProcess` (singular) with `filters` JSON query param is the correct endpoint for listing processes. `getProcesses` (plural) returns 417.
 - `getWorkflowRuns` supports server-side filtering via `filters` JSON query param with `__` notation for nested fields (e.g., `otherDetails__processId`).
 - `oldImage`/`newImage` in `executeWorkflow` payload must be comma-separated file UUIDs.
 - Certificate workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404 — not yet deployed to our tenant.
+- Contract AI subproject (`acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99`) contains 5 contracts with milestone definitions.
 
 API probe fixtures saved in `tests/fixtures/saras/`.
 
@@ -690,8 +691,8 @@ Adapted from x-change's lifecycle runtime pattern:
 | `DefaultProgressScenarioRunner` (submit progress) | ✅ |
 | `FullLifecycleScenarioRunner` (submit → workflow → poll) | ✅ |
 | `FieldDayScenarioRunner` (fetch contracts → check-in → upload → progress → stage files → workflow → poll → check-out) | ✅ |
-| Phase 0: fetch modules via `getProjectsForUser` + attempt contract listing via `getProcesses` | ✅ |
-| `getProcesses()` in SarasClientInterface + Live/Stub | ✅ |
+| Phase 0: fetch modules via `getProjectsForUser` + contracts via `getProcess` with filters | ✅ |
+| `getProcesses()` in SarasClientInterface + Live/Stub (`GET /process/getProcess?filters=...`) | ✅ |
 | `send_image_payload` config toggle for `oldImage`/`newImage` in workflow payload | ✅ |
 | CLI auth fix (`Auth::login` + Saras token refresh for artisan context) | ✅ |
 | `--trace` flag for verbose API debug output | ✅ |
@@ -708,7 +709,7 @@ Adapted from x-change's lifecycle runtime pattern:
 |---------|-------------|
 | Lifecycle Flow | Vertical diagram with ✓/✗/⏳ markers and Saras IDs per phase |
 | Run Artifacts | All process IDs, file counts, workflow run ID at a glance |
-| Modules & Contracts | Available Saras modules + contract listing status (417 if unlicensed) |
+| Modules & Contracts | Available Saras modules + contracts with milestones from Contract AI |
 | Workflow Trigger | Dedicated block: workflowId, processId, stageKey, runId, state, payload keys |
 | Saras Action Items | Numbered list of open items for Saras team |
 | Full Payloads | Complete JSON for every POST call |
@@ -733,7 +734,7 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 
 | Criterion | Status |
 |-----------|--------|
-| Create/fetch a ProjectProgress record | ✅ Created (fetch via local DB — `getProcesses` not available) |
+| Create/fetch a ProjectProgress record | ✅ Created + listed via `getProcess` with filters |
 | Attach old/new image UUIDs | ✅ `previousProgressFiles` / `currentProgressFiles` |
 | Include engineer manual progress input | ✅ `remarks` field → `engineersRemarks` workflow slot |
 | Trigger Saras workflow using processId | ✅ `executeWorkflow` with correct workflowId + stageKey |
@@ -743,7 +744,7 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 
 ### Pending / Next Steps
 
-1. **Milestone concept** — Saras developers will introduce per-project milestones (e.g., 10 milestones at 10% each). Schema update expected.
+1. **Milestone concept** — ✅ Milestones now available per contract via `getProcess`. 5 contracts found with milestone arrays (e.g., Foundation Work, Floor1–Floor4, Terrace, Interior, Painting). Next: integrate milestone selection into lifecycle scenario and frontend.
 2. **Certificate workflow deployment** — Workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404. Confirm with Saras devs it's deployed for tenant `681e0d5e-fcd9-46e6-b2e8-405b0d177558` (DPWH Philippines).
 3. **Certificate display** — Show `certificateOfCompletion` when workflow produces it.
 4. **Stage file attachment** — ✅ Implemented via `POST /process/updateFiles`. Files now attached to stage checklist with correct `processId`, `stageKey`, and `subProjectId`. Verify on Saras dashboard that `previousProgressImages`/`currentProgressImages` appear populated.
@@ -751,4 +752,4 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 6. **Real site photos** — Current bucket has Unsplash stock construction photos. Replace with actual DPWH site images for meaningful AI evaluation.
 7. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState. Need Saras to expose failure reason, node errors, workflow output, and certificate artifacts.
 8. **Lifecycle report Phase 2** — Timeline view, debug package export, Saras escalation pack, demo mode (per original enhancement spec).
-9. **Contract listing (getProcesses)** — ⚠ `GET /process/getProcesses?subProjectId=acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99` returns 417 (PERMISSION_DENIED). Request sent to Saras to enable for DPWH tenant `681e0d5e-fcd9-46e6-b2e8-405b0d177558`. Once enabled, Track AI can list available DPWH contracts (bids) for the engineer to select before submitting progress.
+9. **Contract listing** — ✅ Resolved. Correct endpoint is `GET /process/getProcess` (singular) with `filters={"subProjectId_id": "acfdb45a-..."}`. Returns 5 contracts with milestone arrays. Phase 0 now displays contracts and milestones in lifecycle report.
