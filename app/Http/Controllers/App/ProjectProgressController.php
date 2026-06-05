@@ -29,7 +29,7 @@ class ProjectProgressController extends Controller
         $contracts = [];
 
         try {
-            $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
+            $contractAiId = config('saras.subproject_ids.contract_ai');
             $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
 
             foreach ($response['processes'] ?? [] as $c) {
@@ -47,6 +47,7 @@ class ProjectProgressController extends Controller
         return Inertia::render('app/ProjectProgress', [
             'projects' => $projects,
             'contracts' => $contracts,
+            'defaultProjectId' => config('saras.project_id'),
         ]);
     }
 
@@ -139,8 +140,9 @@ class ProjectProgressController extends Controller
     public function contracts(): JsonResponse
     {
         try {
-            $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
-            $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
+            $response = $this->sarasClient->getProcesses(
+                config('saras.subproject_ids.contract_ai'), 1, 50
+            );
 
             $contracts = [];
 

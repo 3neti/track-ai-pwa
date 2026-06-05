@@ -28,14 +28,16 @@ interface ProgressReport {
 }
 interface UploadedFile { id: number; remote_file_id: string | null; title: string; status: string; }
 
-const props = defineProps<{ projects: Project[]; contracts: Contract[]; }>();
+const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 const { getActiveProjectId } = useActiveProject();
 
-// Always use Track AI module for this page
-const trackAi = props.projects.find(p => p.name === 'Track AI');
-const selectedProjectId = ref(trackAi?.external_id || props.projects[0]?.external_id || '');
+// Use Track AI module from config-provided project ID
+const defaultProject = props.defaultProjectId
+    ? props.projects.find(p => p.external_id === props.defaultProjectId)
+    : null;
+const selectedProjectId = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
 const selectedProject = computed(() => props.projects.find(p => p.external_id === selectedProjectId.value));
 const selectedContractId = ref('');
 const selectedContract = computed(() => props.contracts.find(c => c.id === selectedContractId.value));

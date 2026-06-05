@@ -49,6 +49,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Track AI Project ID
+    |--------------------------------------------------------------------------
+    |
+    | The Saras project ID for the Track AI module.
+    |
+    */
+
+    'project_id' => env('SARAS_PROJECT_ID', 'd3999d8f-c367-4213-a630-a528cfdd7eb6'),
+
+    /*
+    |--------------------------------------------------------------------------
     | SubProject IDs
     |--------------------------------------------------------------------------
     |
@@ -61,6 +72,7 @@ return [
         'trackdata' => env('SARAS_SUBPROJECT_TRACKDATA', 'efb3b7c8-f6af-479f-95e3-bd623add7c56'),
         'progress' => env('SARAS_SUBPROJECT_PROGRESS', ''),
         'project_progress' => env('SARAS_SUBPROJECT_PROJECT_PROGRESS', '794a98cf-afea-49f9-aa02-c3a430ba714f'),
+        'contract_ai' => env('SARAS_SUBPROJECT_CONTRACT_AI', 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99'),
     ],
 
     /*
