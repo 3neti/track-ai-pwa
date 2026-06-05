@@ -122,29 +122,40 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 }
             }
 
-            // Try to fetch contracts from Contract AI subproject
-            $contracts = [];
+            // Fetch contracts from Contract AI subproject via getProcess (singular) + filters
+            $contractEntries = [];
             $contractsAvailable = false;
 
             try {
                 $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
-                $contractResponse = $this->sarasClient->getProcesses($contractAiId, 1, 10);
-                $contracts = $contractResponse;
+                $contractResponse = $this->sarasClient->getProcesses($contractAiId, 1, 20);
                 $contractsAvailable = true;
 
-                if (! $context->output->isJson()) {
-                    $count = $contractResponse['meta']['totalCount'] ?? count($contractResponse['processes'] ?? []);
-                    $context->output->info("  ✓ {$count} contract(s) available");
+                foreach (($contractResponse['processes'] ?? []) as $c) {
+                    $name = $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?');
+                    $milestones = $c['fields']['milestone'] ?? [];
 
-                    foreach (($contractResponse['processes'] ?? []) as $c) {
-                        $name = $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? $c['metaDetails']['displayNumber'] ?? 'unnamed';
-                        $cId = substr($c['id'] ?? '', 0, 8);
-                        $context->output->line("    {$name} ({$cId}...)");
+                    $contractEntries[] = [
+                        'id' => $c['id'] ?? '',
+                        'name' => $name,
+                        'milestones' => $milestones,
+                        'display_number' => $c['metaDetails']['displayNumber'] ?? '',
+                    ];
+                }
+
+                if (! $context->output->isJson()) {
+                    $context->output->info('  ✓ '.count($contractEntries).' contract(s) available');
+
+                    foreach ($contractEntries as $c) {
+                        $cId = substr($c['id'], 0, 8);
+                        $milestoneStr = ! empty($c['milestones']) ? implode(', ', $c['milestones']) : 'no milestones';
+                        $context->output->line("    {$c['name']} ({$cId}...)");
+                        $context->output->line("      Milestones: {$milestoneStr}");
                     }
                 }
             } catch (\Exception $e) {
                 if (! $context->output->isJson()) {
-                    $context->output->warn('  ⚠ Contracts: getProcesses not available (417 — license required)');
+                    $context->output->warn('  ⚠ Contracts: '.$e->getMessage());
                 }
             }
 
@@ -154,7 +165,8 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 'modules' => $modules,
                 'selected' => $selectedModule?->name,
                 'contracts_available' => $contractsAvailable,
-                'contract_count' => count($contracts['processes'] ?? []),
+                'contract_count' => count($contractEntries),
+                'contracts' => $contractEntries,
             ];
         } catch (\Exception $e) {
             if (! $context->output->isJson()) {

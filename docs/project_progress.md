@@ -689,7 +689,10 @@ Adapted from x-change's lifecycle runtime pattern:
 | Repository with config-driven scenario definitions | ✅ |
 | `DefaultProgressScenarioRunner` (submit progress) | ✅ |
 | `FullLifecycleScenarioRunner` (submit → workflow → poll) | ✅ |
-| `FieldDayScenarioRunner` (check-in → upload → progress → stage files → workflow → poll → check-out) | ✅ |
+| `FieldDayScenarioRunner` (fetch contracts → check-in → upload → progress → stage files → workflow → poll → check-out) | ✅ |
+| Phase 0: fetch modules via `getProjectsForUser` + attempt contract listing via `getProcesses` | ✅ |
+| `getProcesses()` in SarasClientInterface + Live/Stub | ✅ |
+| `send_image_payload` config toggle for `oldImage`/`newImage` in workflow payload | ✅ |
 | CLI auth fix (`Auth::login` + Saras token refresh for artisan context) | ✅ |
 | `--trace` flag for verbose API debug output | ✅ |
 | `SarasApiTracer` singleton + `TracingLifecycleOutput` decorator | ✅ |
@@ -705,7 +708,9 @@ Adapted from x-change's lifecycle runtime pattern:
 |---------|-------------|
 | Lifecycle Flow | Vertical diagram with ✓/✗/⏳ markers and Saras IDs per phase |
 | Run Artifacts | All process IDs, file counts, workflow run ID at a glance |
-| Saras Action Items | Numbered list of open items for Saras team (5 items) |
+| Modules & Contracts | Available Saras modules + contract listing status (417 if unlicensed) |
+| Workflow Trigger | Dedicated block: workflowId, processId, stageKey, runId, state, payload keys |
+| Saras Action Items | Numbered list of open items for Saras team |
 | Full Payloads | Complete JSON for every POST call |
 | Full Responses | Compact Saras responses (stripped of verbose user/tenant data) |
 | Developer Interpretation | Track AI ✓ vs Saras ✗/? status, dynamic conclusion + next steps |
@@ -746,3 +751,4 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 6. **Real site photos** — Current bucket has Unsplash stock construction photos. Replace with actual DPWH site images for meaningful AI evaluation.
 7. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState. Need Saras to expose failure reason, node errors, workflow output, and certificate artifacts.
 8. **Lifecycle report Phase 2** — Timeline view, debug package export, Saras escalation pack, demo mode (per original enhancement spec).
+9. **Contract listing (getProcesses)** — ⚠ `GET /process/getProcesses?subProjectId=acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99` returns 417 (PERMISSION_DENIED). Request sent to Saras to enable for DPWH tenant `681e0d5e-fcd9-46e6-b2e8-405b0d177558`. Once enabled, Track AI can list available DPWH contracts (bids) for the engineer to select before submitting progress.

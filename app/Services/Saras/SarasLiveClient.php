@@ -238,20 +238,20 @@ class SarasLiveClient implements SarasClientInterface
     {
         $requestId = Str::uuid()->toString();
 
-        Log::info('Saras API: getProcesses', [
+        Log::info('Saras API: getProcess', [
             'request_id' => $requestId,
-            'endpoint' => '/process/getProcesses',
+            'endpoint' => '/process/getProcess',
             'sub_project_id' => $subProjectId,
         ]);
 
         return $this->makeRequest(
             method: 'GET',
-            endpoint: '/process/getProcesses',
+            endpoint: '/process/getProcess',
             requestId: $requestId,
             query: [
-                'subProjectId' => $subProjectId,
                 'page' => $page,
                 'perPageCount' => $perPage,
+                'filters' => json_encode(['subProjectId_id' => $subProjectId]),
             ],
         );
     }

@@ -215,11 +215,20 @@ final class LifecycleReportRenderer
 
         if ($contracts['contracts_available'] ?? false) {
             $count = $contracts['contract_count'] ?? 0;
-            $command->line("  Contracts: {$count} available");
+            $command->line("  Contracts ({$count}):");
+
+            foreach ($contracts['contracts'] ?? [] as $c) {
+                $cId = substr($c['id'] ?? '', 0, 8);
+                $name = $c['name'] ?? 'unnamed';
+                $milestones = $c['milestones'] ?? [];
+                $command->line("    {$name} ({$cId}...)");
+
+                if (! empty($milestones)) {
+                    $command->line('      Milestones: '.implode(', ', $milestones));
+                }
+            }
         } else {
-            $command->line('  Contracts: ⚠ getProcesses returns 417 (license required)');
-            $command->line('    Endpoint: GET /process/getProcesses?subProjectId=acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99');
-            $command->line('    Action: Request Saras to enable getProcesses for DPWH tenant');
+            $command->line('  Contracts: ⚠ getProcess not available');
         }
 
         $command->newLine();
