@@ -33,7 +33,7 @@ const props = defineProps<{ projects: Project[]; contracts: Contract[]; }>();
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 const { getActiveProjectId } = useActiveProject();
 
-const selectedProjectId = ref(getActiveProjectId(props.projects));
+const selectedProjectId = ref(getActiveProjectId(props.projects) || props.projects[0]?.external_id || '');
 const selectedProject = computed(() => props.projects.find(p => p.external_id === selectedProjectId.value));
 const selectedContractId = ref('');
 const selectedContract = computed(() => props.contracts.find(c => c.id === selectedContractId.value));
@@ -179,7 +179,10 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
                     <CardDescription>Upload photos and submit for AI evaluation</CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
-                    <ProjectSelector v-model="selectedProjectId" :projects="projects" label="Project" />
+                    <!-- Project auto-selected (Track AI module) -->
+                    <div v-if="selectedProject" class="text-sm text-muted-foreground">
+                        Module: <span class="font-medium text-foreground">{{ selectedProject.name }}</span>
+                    </div>
 
                     <!-- Contract -->
                     <div class="grid gap-2" v-if="contracts.length > 0">

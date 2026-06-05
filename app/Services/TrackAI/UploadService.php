@@ -184,7 +184,7 @@ class UploadService
                     'name' => $upload->title,
                     'documentType' => $upload->document_type,
                     'tags' => $upload->tags ?? [],
-                    'remarks' => $upload->remarks,
+                    'remarks' => $upload->remarks ?? '',
                     'ipAddress' => $ipAddress,
                     'geoLocation' => "{$latitude},{$longitude}",
                     'date' => now()->toDateString(),

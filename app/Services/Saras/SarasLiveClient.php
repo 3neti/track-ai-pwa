@@ -372,7 +372,7 @@ class SarasLiveClient implements SarasClientInterface
             throw SarasApiException::authFailed($message);
         }
 
-        if ($status === 422) {
+        if ($status === 400 || $status === 422) {
             throw SarasApiException::validationError($endpoint, $message, $data['errors'] ?? null);
         }
 
