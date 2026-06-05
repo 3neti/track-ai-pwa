@@ -5,10 +5,13 @@
 Track AI integrates with Saras AI for:
 - **Attendance** - Check-in/check-out entries
 - **Uploads** - File storage and tagging (TrackData)
-- **Projects** - Fetching assigned projects
-- **Progress** - Progress updates (feature-flagged, pending Saras API)
+- **Projects** - Fetching assigned modules and contracts
+- **Progress** - ProjectProgress creation, stage file attachment, AI workflow execution
+- **Contracts** - Listing DPWH contracts with milestones from Contract AI
 
 All Saras API calls are server-side only. Tokens are never exposed to the browser.
+
+**Official Saras API Documentation**: https://docs.sarasfinance.com/v1.0.0/api-reference/introduction
 
 ---
 
@@ -27,11 +30,16 @@ SARAS_MODE=live                    # stub | live (default: live)
 
 **Optional overrides** (all have defaults):
 ```env
+SARAS_PROJECT_ID=d3999d8f-c367-4213-a630-a528cfdd7eb6
 SARAS_SUBPROJECT_ATTENDANCE=78053120-7685-42a2-b802-ca144b6ed010
 SARAS_SUBPROJECT_TRACKDATA=efb3b7c8-f6af-479f-95e3-bd623add7c56
+SARAS_SUBPROJECT_PROJECT_PROGRESS=794a98cf-afea-49f9-aa02-c3a430ba714f
+SARAS_SUBPROJECT_CONTRACT_AI=acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99
+SARAS_WORKFLOW_COMPLETION_ID=d702fb25-51ae-4d7f-88fc-132d555b2f00
+SARAS_WORKFLOW_COMPLETION_STAGE_KEY=stage_1779863565116_eqt6
 SARAS_PLUGIN_NAME=knowledgeRepo
 SARAS_ENABLED=true
-SARAS_PROGRESS_ENABLED=false
+SARAS_PROGRESS_ENABLED=true
 ```
 
 ### Switching Modes
@@ -288,15 +296,25 @@ The new Saras flow requires uploading the file first, then creating a process en
 
 ## API Endpoints Mapping
 
-| Track AI Service Method | Saras API Endpoint | HTTP Method |
-|------------------------|-------------------|-------------|
-| `TokenManager.getAccessToken()` | `/users/userLogin` | POST |
-| `SarasClient.getUserDetails()` | `/users/getUserDetails` | GET |
-| `SarasClient.getProjectsForUser()` | `/process/projects/getProjectsForUser` | GET |
-| `SarasClient.createProcess()` | `/process/createProcess` | POST |
-| `SarasClient.uploadFiles()` | `/process/knowledges/createStorage` | POST (multipart) |
-| `SarasClient.executeWorkflow()` | `/process/workflows/executeWorkflow` | POST |
-| `SarasClient.getWorkflowRuns()` | `/process/workflows/getWorkflowRuns` | GET |
+| Track AI Method | Saras API Endpoint | Method | Docs |
+|----------------|-------------------|--------|------|
+| `TokenManager.getAccessToken()` | `/users/userLogin` | POST | [Introduction](https://docs.sarasfinance.com/v1.0.0/api-reference/introduction) |
+| `SarasClient.getUserDetails()` | `/users/getUserDetails` | GET | |
+| `SarasClient.getProjectsForUser()` | `/process/projects/getProjectsForUser` | GET | |
+| `SarasClient.createProcess()` | `/process/createProcess` | POST | [Create Process](https://docs.sarasfinance.com/v1.0.0/api-reference/process/create) |
+| `SarasClient.getProcesses()` | `/process/getProcess` | GET | [Get Process](https://docs.sarasfinance.com/v1.0.0/api-reference/process/get) |
+| `SarasClient.uploadFiles()` | `/process/knowledges/createStorage` | POST | |
+| `SarasClient.updateFiles()` | `/process/updateFiles` | POST | Stage file attachment |
+| `SarasClient.executeWorkflow()` | `/process/workflows/executeWorkflow` | POST | |
+| `SarasClient.getWorkflowRuns()` | `/process/workflows/getWorkflowRuns` | GET | |
+| — (not yet used) | `/process/updateProcessField` | POST | [Update Process](https://docs.sarasfinance.com/v1.0.0/api-reference/process/update) |
+
+**Naming note**: Our method `getProcesses()` calls the Saras endpoint `/process/getProcess` (singular). The `getProcesses` (plural) endpoint returns 417 and is not used.
+
+**Standard patterns** (per [Saras docs](https://docs.sarasfinance.com/v1.0.0/api-reference/introduction)):
+- **Pagination**: `page` + `perPageCount` query params on all GET endpoints
+- **Filters**: `filters` query param as stringified JSON, e.g. `{"subProjectId_id": "..."}`
+- **Tracing**: Each response includes `traceId` in body and `x-saras-traceid` in headers
 
 ---
 
@@ -308,9 +326,18 @@ The new Saras flow requires uploading the file first, then creating a process en
 |------|-------------|----------|
 | `saras_unavailable` | Connection failed, 5xx errors | Retry with backoff |
 | `saras_auth_failed` | 401/403 responses | Invalidate token, retry once |
-| `saras_validation_error` | 422 responses | Do not retry, fix payload |
+| `saras_validation_error` | 400/422 responses | Do not retry, fix payload |
 | `saras_timeout` | Request timeout | Retry with backoff |
 | `upload_failed` | File upload failed | Check file, retry |
+
+**Saras error codes** (from [official docs](https://docs.sarasfinance.com/v1.0.0/api-reference/process/create)):
+
+| Code | ID | Description |
+|------|-----|-------------|
+| `ERROR_PROCESS_INVALID_FIELD_VALUE` | 1232 | Invalid value for field (e.g. null instead of string) |
+| `ERROR_PROCESS_UNKNOWN_FIELD_IN_REQUEST` | 1231 | Unknown field name in request |
+| `ERROR_NOT_ALLOWED_TO_CREATE` | 1206 | User unauthorized |
+| `ERROR_SUBPROCESS_META_NOT_FOUND` | 1202 | SubProject not found |
 
 ### Retry Policy
 
@@ -505,10 +532,10 @@ Workflow run states: `INITIALISED` → `WAITING` → `SUCCESS` / `FAILED`
 ### Polling Workflow Runs
 
 ```
-GET /process/workflows/getWorkflowRuns?page=1&perPageCount=20
+GET /process/workflows/getWorkflowRuns?page=1&perPageCount=5&filters={"otherDetails__processId":"<id>","workflowId_id":"<id>"}
 ```
 
-No server-side filtering. Client paginates and matches by `runId`.
+Server-side filtering via `filters` JSON query param. Returns only matching runs (`totalCount: 1`).
 
 ---
 
@@ -518,22 +545,28 @@ No server-side filtering. Client paginates and matches by `runId`.
 |----------|------|-------------|
 | `basic_progress` | `default` | Submit a progress report to Saras |
 | `full_lifecycle` | `full_lifecycle` | Submit → trigger workflow → poll |
-| `dpwh_field_day` | `field_day` | Check-in → upload → progress → workflow → poll → check-out |
+| `dpwh_field_day` | `field_day` | Fetch contracts → check-in → upload → progress → stage files → workflow → poll → check-out |
 
 ```bash
 php artisan trackai:lifecycle:run --list
 php artisan trackai:lifecycle:run dpwh_field_day
-php artisan trackai:lifecycle:run dpwh_field_day --json
 php artisan trackai:lifecycle:run dpwh_field_day --trace
+php artisan trackai:lifecycle:run dpwh_field_day --report
 ```
 
-The `--trace` flag shows inline API call details (endpoint, payload fields, response time, Saras IDs) and an API Call Summary at the end. Useful for debugging and presenting to Saras developers.
+| Flag | Purpose |
+|------|--------|
+| `--trace` | Inline API call details (endpoint, payload, timing, Saras IDs) |
+| `--report` | Full diagnostic report (flow diagram, artifacts, payloads, responses, scorecard, action items) |
+| `--json` | Machine-readable JSON output |
+| `--bucket=` | Custom path for progress photo uploads |
 
 ---
 
 ## Future Enhancements
 
-1. **Certificate Display** - Show `certificateOfCompletion` when workflow produces it
-2. **Real Construction Images** - Replace test fixtures with actual site photos
-3. **Stage Files** - API for attaching checklist files to workflow stages
-4. **Real Contract IDs** - Replace hardcoded default with actual DPWH contracts
+1. **Certificate display** — Show `certificateOfCompletion` when workflow produces it
+2. **Certificate workflow** — `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404; pending deployment
+3. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState; need failure reason exposure
+4. **`updateProcessField`** — Official Saras endpoint for updating process fields post-creation; not yet used
+5. **Lifecycle report Phase 2** — Timeline view, debug package export, demo mode
