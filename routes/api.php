@@ -47,6 +47,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
     Route::post('/progress-reports/{progressReport}/workflow', [ProjectProgressController::class, 'triggerWorkflow'])->name('api.progress-reports.workflow');
     Route::get('/progress-reports/{progressReport}/workflow', [ProjectProgressController::class, 'workflowStatus'])->name('api.progress-reports.workflow-status');
+    Route::post('/progress-reports/{progressReport}/stage-files', [ProjectProgressController::class, 'attachStageFiles'])->name('api.progress-reports.stage-files');
+    Route::get('/contracts', [ProjectProgressController::class, 'contracts'])->name('api.contracts');
 
     // Offline Sync
     Route::post('/sync/batch', [SyncController::class, 'batch'])->name('api.sync.batch');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Contracts\SarasClientInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\App\ProjectProgressRequest;
 use App\Models\Project;
@@ -15,6 +16,7 @@ class ProjectProgressController extends Controller
 {
     public function __construct(
         protected ProjectProgressService $progressService,
+        protected SarasClientInterface $sarasClient,
     ) {}
 
     /**
@@ -24,8 +26,27 @@ class ProjectProgressController extends Controller
     {
         $projects = Project::orderBy('name')->get();
 
+        $contracts = [];
+
+        try {
+            $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
+            $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
+
+            foreach ($response['processes'] ?? [] as $c) {
+                $contracts[] = [
+                    'id' => $c['id'] ?? '',
+                    'name' => $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?'),
+                    'milestones' => $c['fields']['milestone'] ?? [],
+                    'display_number' => $c['metaDetails']['displayNumber'] ?? '',
+                ];
+            }
+        } catch (\Exception $e) {
+            // Contracts not available — page still renders
+        }
+
         return Inertia::render('app/ProjectProgress', [
             'projects' => $projects,
+            'contracts' => $contracts,
         ]);
     }
 
@@ -100,5 +121,41 @@ class ProjectProgressController extends Controller
                 'updated_at' => $run->updatedTs,
             ] : null,
         ]);
+    }
+
+    /**
+     * Attach stage files to a progress report.
+     */
+    public function attachStageFiles(ProjectProgressReport $progressReport): JsonResponse
+    {
+        $result = $this->progressService->attachStageFiles($progressReport);
+
+        return response()->json($result);
+    }
+
+    /**
+     * List available contracts with milestones.
+     */
+    public function contracts(): JsonResponse
+    {
+        try {
+            $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
+            $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
+
+            $contracts = [];
+
+            foreach ($response['processes'] ?? [] as $c) {
+                $contracts[] = [
+                    'id' => $c['id'] ?? '',
+                    'name' => $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?'),
+                    'milestones' => $c['fields']['milestone'] ?? [],
+                    'display_number' => $c['metaDetails']['displayNumber'] ?? '',
+                ];
+            }
+
+            return response()->json(['success' => true, 'contracts' => $contracts]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'contracts' => [], 'message' => $e->getMessage()]);
+        }
     }
 }
