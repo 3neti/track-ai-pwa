@@ -20,6 +20,8 @@ class ProjectProgressRequest extends FormRequest
             'contract_id' => ['nullable', 'string', 'max:255'],
             'current_milestone' => ['nullable', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
+            'tags' => ['nullable', 'array'],
+            'tags.*' => ['string', 'max:50'],
             'previous_progress_file_ids' => ['nullable', 'array'],
             'previous_progress_file_ids.*' => ['string', 'max:255'],
             'current_progress_file_ids' => ['nullable', 'array'],

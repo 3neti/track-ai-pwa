@@ -72,7 +72,10 @@ class ProjectProgressService
                     'date' => now()->toDateString(),
                     'time' => now()->toIso8601String(),
                     'name' => 'Progress Report - '.now()->toDateString(),
-                    'tags' => ['progress', 'track-ai'],
+                    'tags' => array_values(array_unique(array_merge(
+                        ['progress', 'track-ai'],
+                        $input['tags'] ?? [],
+                    ))),
                 ],
             );
 

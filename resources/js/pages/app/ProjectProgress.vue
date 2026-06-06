@@ -49,6 +49,8 @@ const selectedContract = computed(() => props.contracts.find(c => c.id === selec
 watch(selectedContractId, (id) => { if (id) setActiveContract(id); });
 const selectedMilestone = ref('');
 const remarks = ref('');
+const tags = ref<string[]>(['progress', 'track-ai']);
+const tagInput = ref('');
 const isSubmitting = ref(false);
 const isPolling = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -130,6 +132,7 @@ async function handleSubmit() {
             contract_id: selectedContractId.value || null,
             current_milestone: selectedMilestone.value || null,
             remarks: remarks.value || null,
+            tags: tags.value,
             previous_progress_file_ids: prevIds, current_progress_file_ids: currIds,
         });
         if (!r.data.success) throw new Error(r.data.message);
@@ -262,6 +265,44 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
                     </div>
 
                     <Separator />
+
+                    <!-- Tags -->
+                    <div class="grid gap-2">
+                        <Label>Tags</Label>
+                        <div class="flex flex-wrap gap-1.5 min-h-[2rem]">
+                            <span
+                                v-for="(tag, i) in tags"
+                                :key="tag"
+                                class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+                            >
+                                {{ tag }}
+                                <button
+                                    @click="tags.splice(i, 1)"
+                                    class="ml-0.5 rounded-full hover:bg-primary/20 p-0.5"
+                                    type="button"
+                                >
+                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </span>
+                        </div>
+                        <div class="flex gap-2">
+                            <Input
+                                v-model="tagInput"
+                                placeholder="Add a tag..."
+                                class="flex-1"
+                                @keydown.enter.prevent="() => { const t = tagInput.trim().toLowerCase(); if (t && !tags.includes(t)) { tags.push(t); } tagInput = ''; }"
+                            />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                type="button"
+                                @click="() => { const t = tagInput.trim().toLowerCase(); if (t && !tags.includes(t)) { tags.push(t); } tagInput = ''; }"
+                                :disabled="!tagInput.trim()"
+                            >
+                                Add
+                            </Button>
+                        </div>
+                    </div>
 
                     <div class="grid gap-2">
                         <Label for="remarks">Engineer's Remarks</Label>
