@@ -13,8 +13,10 @@ import { Separator } from '@/components/ui/separator';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
 import ProjectSelector from '@/components/app/ProjectSelector.vue';
+import ContractSelector from '@/components/app/ContractSelector.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveProject } from '@/composables/useActiveProject';
+import { useActiveContract } from '@/composables/useActiveContract';
 import axios from 'axios';
 
 interface Project { id: number; external_id: string; name: string; }
@@ -32,6 +34,7 @@ const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultP
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 const { getActiveProjectId } = useActiveProject();
+const { getActiveContractId, setActiveContract } = useActiveContract();
 
 // Use Track AI module from config-provided project ID
 const defaultProject = props.defaultProjectId
@@ -39,8 +42,11 @@ const defaultProject = props.defaultProjectId
     : null;
 const selectedProjectId = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
 const selectedProject = computed(() => props.projects.find(p => p.external_id === selectedProjectId.value));
-const selectedContractId = ref('');
+const selectedContractId = ref(getActiveContractId(props.contracts));
 const selectedContract = computed(() => props.contracts.find(c => c.id === selectedContractId.value));
+
+// Persist contract selection
+watch(selectedContractId, (id) => { if (id) setActiveContract(id); });
 const selectedMilestone = ref('');
 const remarks = ref('');
 const isSubmitting = ref(false);
@@ -55,7 +61,9 @@ const reports = ref<ProgressReport[]>([]);
 const isLoadingReports = ref(false);
 
 watch(() => props.contracts, (c) => {
-    if (c.length > 0 && !selectedContractId.value) selectedContractId.value = c[0].id;
+    if (c.length > 0 && !selectedContractId.value) {
+        selectedContractId.value = getActiveContractId(c);
+    }
 }, { immediate: true });
 
 watch(selectedContractId, () => {
@@ -191,18 +199,12 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
                     </div>
 
                     <!-- Contract -->
-                    <div class="grid gap-2" v-if="contracts.length > 0">
-                        <Label>Contract</Label>
-                        <Select v-model="selectedContractId">
-                            <SelectTrigger><SelectValue placeholder="Select a contract" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem v-for="c in contracts" :key="c.id" :value="c.id">
-                                    {{ c.name || `Contract #${c.display_number}` }}
-                                    <span class="text-muted-foreground ml-1">({{ c.milestones.length }} milestones)</span>
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    <ContractSelector
+                        v-if="contracts.length > 0"
+                        v-model="selectedContractId"
+                        :contracts="contracts"
+                        label="Contract"
+                    />
 
                     <!-- Milestone -->
                     <div class="grid gap-2" v-if="selectedContract?.milestones.length">

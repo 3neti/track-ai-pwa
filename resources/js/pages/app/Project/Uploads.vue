@@ -14,12 +14,14 @@ import {
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
 import ProjectSelector from '@/components/app/ProjectSelector.vue';
+import ContractSelector from '@/components/app/ContractSelector.vue';
 import UploadListItem from '@/components/app/UploadListItem.vue';
 import UploadEditSheet from '@/components/app/UploadEditSheet.vue';
 import UploadDeleteDialog from '@/components/app/UploadDeleteDialog.vue';
 import UploadPreviewDrawer from '@/components/app/UploadPreviewDrawer.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveProject } from '@/composables/useActiveProject';
+import { useActiveContract } from '@/composables/useActiveContract';
 import type { Upload as UploadType } from '@/composables/useProjectUploads';
 import axios from 'axios';
 
@@ -31,15 +33,33 @@ interface Project {
     status?: string;
 }
 
+interface Contract {
+    id: string;
+    name: string;
+    milestones: string[];
+    display_number: string;
+}
+
 const props = defineProps<{
     projects: Project[];
+    contracts?: Contract[];
+    defaultProjectId?: string;
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 const { getActiveProjectId } = useActiveProject();
+const { getActiveContractId, setActiveContract } = useActiveContract();
 
-// Selected project
-const selectedProjectId = ref<string>(getActiveProjectId(props.projects));
+// Selected project (default to Track AI)
+const defaultProject = props.defaultProjectId
+    ? props.projects.find(p => p.external_id === props.defaultProjectId)
+    : null;
+const selectedProjectId = ref<string>(defaultProject?.external_id || getActiveProjectId(props.projects));
+
+// Selected contract
+const contractList = computed(() => props.contracts ?? []);
+const selectedContractId = ref(getActiveContractId(contractList.value));
+watch(selectedContractId, (id) => { if (id) setActiveContract(id); });
 const selectedProject = computed(() =>
     props.projects.find(p => p.external_id === selectedProjectId.value)
 );
@@ -274,12 +294,12 @@ const statusOptions = [
 
         <!-- Content -->
         <main class="p-4">
-            <!-- Project Selector -->
-            <div class="mb-4">
-                <ProjectSelector
-                    v-model="selectedProjectId"
-                    :projects="projects"
-                    label="Select Project"
+            <!-- Contract Selector -->
+            <div class="mb-4" v-if="contractList.length > 0">
+                <ContractSelector
+                    v-model="selectedContractId"
+                    :contracts="contractList"
+                    label="Contract"
                 />
             </div>
 

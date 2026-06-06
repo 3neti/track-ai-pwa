@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Contracts\SarasClientInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\App\StoreUploadRequest;
 use App\Http\Requests\App\UpdateUploadRequest;
@@ -17,6 +18,7 @@ class ProjectUploadController extends Controller
 {
     public function __construct(
         protected UploadService $uploadService,
+        protected SarasClientInterface $sarasClient,
     ) {}
 
     /**
@@ -26,8 +28,29 @@ class ProjectUploadController extends Controller
     {
         $projects = Project::orderBy('name')->get();
 
+        $contracts = [];
+
+        try {
+            $response = $this->sarasClient->getProcesses(
+                config('saras.subproject_ids.contract_ai'), 1, 50
+            );
+
+            foreach ($response['processes'] ?? [] as $c) {
+                $contracts[] = [
+                    'id' => $c['id'] ?? '',
+                    'name' => $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?'),
+                    'milestones' => $c['fields']['milestone'] ?? [],
+                    'display_number' => $c['metaDetails']['displayNumber'] ?? '',
+                ];
+            }
+        } catch (\Exception $e) {
+            // Contracts not available — page still renders
+        }
+
         return Inertia::render('app/Project/Uploads', [
             'projects' => $projects,
+            'contracts' => $contracts,
+            'defaultProjectId' => config('saras.project_id'),
         ]);
     }
 
