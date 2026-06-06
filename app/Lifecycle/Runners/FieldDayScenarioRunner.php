@@ -33,12 +33,15 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             'project' => ['id' => $context->project->id, 'name' => $context->project->name],
         ];
 
-        // Phase 0: Fetch contracts & milestones
+        // Phase 0: Fetch contracts & milestones, resolve active contract ID
         $contractsResult = $this->phaseFetchContracts($context);
         $payload['phases']['contracts'] = $contractsResult;
 
+        // Use the selected contract ID for all subsequent phases
+        $activeContractId = $contractsResult['selected_contract_id'] ?? $context->contractId;
+
         // Phase 1: Attendance Check-In
-        $checkInResult = $this->phaseCheckIn($context);
+        $checkInResult = $this->phaseCheckIn($context, $activeContractId);
         $payload['phases']['check_in'] = $checkInResult;
 
         if (! $checkInResult['success']) {
@@ -46,11 +49,11 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         }
 
         // Phase 2: Upload Files
-        $uploadResult = $this->phaseUploadFiles($context);
+        $uploadResult = $this->phaseUploadFiles($context, $activeContractId);
         $payload['phases']['upload'] = $uploadResult;
 
         // Phase 3: Submit Progress with file UUIDs
-        $progressResult = $this->phaseSubmitProgress($context, $uploadResult);
+        $progressResult = $this->phaseSubmitProgress($context, $uploadResult, $activeContractId);
         $payload['phases']['progress'] = $progressResult;
 
         if (! $progressResult['success']) {
@@ -78,7 +81,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         }
 
         // Phase 6: Attendance Check-Out
-        $checkOutResult = $this->phaseCheckOut($context, $payload);
+        $checkOutResult = $this->phaseCheckOut($context, $payload, $activeContractId);
         $payload['phases']['check_out'] = $checkOutResult;
 
         $payload['success'] = true;
@@ -159,6 +162,29 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 }
             }
 
+            // Select the first contract (or from scenario config)
+            $selectedContractId = null;
+            $selectedContractName = null;
+
+            if (! empty($contractEntries)) {
+                $scenarioContract = $context->scenario['contract_id'] ?? null;
+
+                if ($scenarioContract) {
+                    $match = collect($contractEntries)->firstWhere('id', $scenarioContract);
+                } else {
+                    $match = $contractEntries[0];
+                }
+
+                if ($match) {
+                    $selectedContractId = $match['id'];
+                    $selectedContractName = $match['name'];
+
+                    if (! $context->output->isJson()) {
+                        $context->output->info("  → Selected: {$selectedContractName} ({$selectedContractId})");
+                    }
+                }
+            }
+
             return [
                 'success' => true,
                 'module_count' => count($modules),
@@ -167,6 +193,8 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 'contracts_available' => $contractsAvailable,
                 'contract_count' => count($contractEntries),
                 'contracts' => $contractEntries,
+                'selected_contract_id' => $selectedContractId,
+                'selected_contract_name' => $selectedContractName,
             ];
         } catch (\Exception $e) {
             if (! $context->output->isJson()) {
@@ -180,7 +208,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     /**
      * @return array<string, mixed>
      */
-    private function phaseCheckIn(ScenarioRunContext $context): array
+    private function phaseCheckIn(ScenarioRunContext $context, string $contractId): array
     {
         if (! $context->output->isJson()) {
             $context->output->line('Phase 1: Attendance check-in...');
@@ -188,7 +216,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
 
         $result = $this->attendanceService->checkIn(
             user: $context->user,
-            contractId: $context->contractId,
+            contractId: $contractId,
             latitude: 14.5995,
             longitude: 120.9842,
             remarks: 'Lifecycle scenario check-in',
@@ -220,7 +248,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     /**
      * @return array<string, mixed>
      */
-    private function phaseUploadFiles(ScenarioRunContext $context): array
+    private function phaseUploadFiles(ScenarioRunContext $context, string $contractId): array
     {
         if (! $context->output->isJson()) {
             $context->output->line('Phase 2: Uploading files to Saras...');
@@ -253,7 +281,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         $uploads = [];
 
         foreach ($previousFiles as $path) {
-            $result = $this->uploadSingleFile($context, $path, 'previous_progress');
+            $result = $this->uploadSingleFile($context, $path, 'previous_progress', $contractId);
             $uploads[] = $result;
 
             if ($result['remote_file_id']) {
@@ -262,7 +290,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         }
 
         foreach ($currentFiles as $path) {
-            $result = $this->uploadSingleFile($context, $path, 'current_progress');
+            $result = $this->uploadSingleFile($context, $path, 'current_progress', $contractId);
             $uploads[] = $result;
 
             if ($result['remote_file_id']) {
@@ -317,14 +345,14 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     /**
      * @return array<string, mixed>
      */
-    private function uploadSingleFile(ScenarioRunContext $context, string $path, string $documentType): array
+    private function uploadSingleFile(ScenarioRunContext $context, string $path, string $documentType, string $contractId): array
     {
         $filename = basename($path);
         $mime = mime_content_type($path) ?: 'application/octet-stream';
 
         $upload = $this->uploadService->createUploadRecord(
             userId: $context->user->id,
-            contractId: $context->contractId,
+            contractId: $contractId,
             title: $filename,
             documentType: $documentType,
             clientRequestId: (string) str()->uuid(),
@@ -383,7 +411,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
      * @param  array<string, mixed>  $uploadResult
      * @return array<string, mixed>
      */
-    private function phaseSubmitProgress(ScenarioRunContext $context, array $uploadResult): array
+    private function phaseSubmitProgress(ScenarioRunContext $context, array $uploadResult, string $contractId): array
     {
         if (! $context->output->isJson()) {
             $context->output->line('Phase 3: Submitting progress report...');
@@ -395,6 +423,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             user: $context->user,
             project: $context->project,
             input: [
+                'contract_id' => $contractId,
                 'current_milestone' => $context->currentMilestone(),
                 'remarks' => $context->remarks(),
                 'previous_progress_file_ids' => $fileIds['previous'] ?? [],
@@ -545,7 +574,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     /**
      * @return array<string, mixed>
      */
-    private function phaseCheckOut(ScenarioRunContext $context, array &$payload): array
+    private function phaseCheckOut(ScenarioRunContext $context, array &$payload, string $contractId = ''): array
     {
         if (! $context->output->isJson()) {
             $context->output->line('Phase 6: Attendance check-out...');
@@ -553,7 +582,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
 
         $result = $this->attendanceService->checkOut(
             user: $context->user,
-            contractId: $context->contractId,
+            contractId: $contractId ?: $context->contractId,
             latitude: 14.5995,
             longitude: 120.9842,
             remarks: 'Lifecycle scenario check-out',
