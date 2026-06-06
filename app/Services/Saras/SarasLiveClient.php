@@ -7,6 +7,7 @@ use App\Contracts\SarasTokenManagerInterface;
 use App\Exceptions\SarasApiException;
 use App\Lifecycle\Output\SarasApiTrace;
 use App\Lifecycle\Output\SarasApiTracer;
+use App\Services\ApiXray\ApiTraceRecorder;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\ProjectsResponse;
@@ -389,7 +390,8 @@ class SarasLiveClient implements SarasClientInterface
     }
 
     /**
-     * Record an API trace entry if the tracer is active.
+     * Record an API trace entry.
+     * Always persists to DB for X-Ray. In-memory tracer is optional (for --trace/--report).
      */
     protected function recordTrace(
         string $method,
@@ -401,6 +403,23 @@ class SarasLiveClient implements SarasClientInterface
         ?string $error = null,
         ?array $requestSummaryOverride = null,
     ): void {
+        // Always persist to database for X-Ray
+        try {
+            app(ApiTraceRecorder::class)->record(
+                method: strtoupper($method),
+                endpoint: $endpoint,
+                requestData: $requestData,
+                responseData: $responseData,
+                status: $status,
+                durationMs: $durationMs,
+                error: $error,
+            );
+        } catch (\Throwable $e) {
+            // Don't let trace recording break API calls
+            Log::debug('ApiTraceRecorder failed: '.$e->getMessage());
+        }
+
+        // In-memory tracer for lifecycle --trace/--report
         $tracer = app(SarasApiTracer::class);
 
         if (! $tracer->isEnabled()) {

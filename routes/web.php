@@ -57,4 +57,16 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
     Route::get('/sync', [SyncController::class, 'index'])->name('app.sync');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Developer Tools
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth'])->prefix('developer')->group(function () {
+    Route::get('/saras-api-xray', [App\Http\Controllers\Developer\SarasApiXrayController::class, 'index'])->name('developer.saras-api-xray');
+    Route::get('/api/traces', [App\Http\Controllers\Developer\SarasApiXrayController::class, 'traces'])->name('developer.api.traces');
+    Route::get('/api/traces/{apiTrace}', [App\Http\Controllers\Developer\SarasApiXrayController::class, 'show'])->name('developer.api.traces.show');
+});
+
 require __DIR__.'/settings.php';
