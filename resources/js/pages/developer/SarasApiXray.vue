@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import axios from 'axios';
 
 interface Trace {
@@ -96,7 +97,7 @@ function formatJson(data: any): string {
 </script>
 
 <template>
-    <div class="min-h-screen bg-background">
+    <div class="min-h-screen bg-background pb-20">
         <Head title="Saras API X-Ray" />
 
         <header class="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
@@ -260,5 +261,7 @@ function formatJson(data: any): string {
                 </div>
             </SheetContent>
         </Sheet>
+
+        <AppBottomNav />
     </div>
 </template>
