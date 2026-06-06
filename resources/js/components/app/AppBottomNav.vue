@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { FolderKanban, Clock, Upload, TrendingUp, RefreshCw } from 'lucide-vue-next';
+import { ClipboardCheck, Clock, Upload, RefreshCw } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -8,10 +8,9 @@ const page = usePage();
 const currentRoute = computed(() => page.url);
 
 const navItems = [
-    { name: 'Projects', href: '/app/projects', icon: FolderKanban },
+    { name: 'Progress', href: '/app/project-progress', icon: ClipboardCheck },
     { name: 'Attendance', href: '/app/attendance', icon: Clock },
     { name: 'Uploads', href: '/app/project-uploads', icon: Upload },
-    { name: 'Progress', href: '/app/progress', icon: TrendingUp },
     { name: 'Sync', href: '/app/sync', icon: RefreshCw },
 ];
 

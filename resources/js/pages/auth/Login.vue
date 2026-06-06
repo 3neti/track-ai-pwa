@@ -17,7 +17,7 @@ defineProps<{
     canResetPassword: boolean;
 }>();
 
-const username = ref('');
+const username = ref('lester@hurtado.ph');
 
 function goToFaceLogin() {
     if (username.value.trim()) {

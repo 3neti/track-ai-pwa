@@ -73,7 +73,7 @@ return [
     |
     */
 
-    'home' => '/app/projects',
+    'home' => '/app/project-progress',
 
     /*
     |--------------------------------------------------------------------------
@@ -144,7 +144,7 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Features::registration(), // Disabled for POC — Saras credentials only
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([

@@ -85,7 +85,8 @@ async function handleFileUpload(event: Event, type: 'previous' | 'current') {
     for (const file of files) {
         try {
             const cr = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {
-                contract_id: selectedProjectId.value, client_request_id: crypto.randomUUID(),
+                contract_id: selectedContractId.value || selectedProjectId.value,
+                client_request_id: crypto.randomUUID(),
                 title: file.name, document_type: docType, tags: ['progress', docType],
             });
             if (!cr.data.success) continue;
@@ -118,6 +119,7 @@ async function handleSubmit() {
     try {
         submitStep.value = 'Creating progress report...';
         const r = await axios.post(`/api/projects/${selectedProject.value.id}/progress-reports`, {
+            contract_id: selectedContractId.value || null,
             current_milestone: selectedMilestone.value || null,
             remarks: remarks.value || null,
             previous_progress_file_ids: prevIds, current_progress_file_ids: currIds,

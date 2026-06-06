@@ -17,6 +17,7 @@ class ProjectProgressRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'contract_id' => ['nullable', 'string', 'max:255'],
             'current_milestone' => ['nullable', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'previous_progress_file_ids' => ['nullable', 'array'],

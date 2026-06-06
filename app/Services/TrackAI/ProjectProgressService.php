@@ -36,7 +36,7 @@ class ProjectProgressService
      */
     public function createProgress(User $user, Project $project, array $input): ProjectProgressReport
     {
-        $contractId = $project->contract_id ?: config('saras.default_contract_id');
+        $contractId = $input['contract_id'] ?? $project->contract_id ?: config('saras.default_contract_id');
 
         $report = ProjectProgressReport::create([
             'project_id' => $project->id,

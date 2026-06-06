@@ -2,7 +2,7 @@
     "name": "Track AI - DPWH Field Engineering",
     "short_name": "Track AI",
     "description": "Progressive Web App for DPWH field engineers to log attendance, upload documents, and submit progress updates with AI analysis.",
-    "start_url": "/app/projects",
+"start_url": "/app/project-progress",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#1e40af",
