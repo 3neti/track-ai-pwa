@@ -50,7 +50,7 @@ const selectedContract = computed(() => props.contracts.find(c => c.id === selec
 watch(selectedContractId, (id) => { if (id) setActiveContract(id); });
 const selectedMilestone = ref('');
 const remarks = ref('');
-const tags = ref<string[]>(['progress', 'track-ai']);
+const tags = ref<string[]>([]);
 const tagInput = ref('');
 const isSubmitting = ref(false);
 const isPolling = ref(false);
