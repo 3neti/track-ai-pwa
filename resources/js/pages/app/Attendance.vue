@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
 import { Clock, MapPin, LogIn, LogOut, AlertCircle, Timer, AlertTriangle } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
@@ -10,13 +10,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
-import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useGeolocation } from '@/composables/useGeolocation';
-import { useActiveProject } from '@/composables/useActiveProject';
 import axios from 'axios';
-
-const page = usePage();
 
 interface Project {
     id: number;
@@ -36,13 +32,21 @@ interface AttendanceSession {
 
 const props = defineProps<{
     projects: Project[];
+    defaultProjectId?: string;
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync, queueRequest } = useOfflineQueue();
 const { state: geoState, getCurrentPosition } = useGeolocation();
-const { getActiveProjectId } = useActiveProject();
 
-const selectedProject = ref(getActiveProjectId(props.projects));
+// Use Track AI module from config — same as Progress page
+const defaultProject = props.defaultProjectId
+    ? props.projects.find(p => p.external_id === props.defaultProjectId)
+    : null;
+const selectedProject = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
+const selectedProjectName = computed(() => {
+    const p = props.projects.find(p => p.external_id === selectedProject.value);
+    return p?.name || 'Track AI';
+});
 const remarks = ref('');
 const isSubmitting = ref(false);
 const isLoadingStatus = ref(false);
@@ -294,13 +298,10 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Project Selection -->
-                    <ProjectSelector
-                        v-model="selectedProject"
-                        :projects="projects"
-                        label="Project"
-                        placeholder="Select your project"
-                    />
+                    <!-- Module (static — always Track AI) -->
+                    <div class="text-sm text-muted-foreground">
+                        Module: <span class="font-medium text-foreground">{{ selectedProjectName }}</span>
+                    </div>
 
                     <!-- Location Status -->
                     <div class="rounded-lg border p-3">

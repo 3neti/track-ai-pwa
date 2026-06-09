@@ -28,6 +28,7 @@ class AttendanceController extends Controller
 
         return Inertia::render('app/Attendance', [
             'projects' => $projects,
+            'defaultProjectId' => config('saras.project_id'),
         ]);
     }
 
