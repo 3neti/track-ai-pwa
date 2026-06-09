@@ -257,6 +257,28 @@ class SarasLiveClient implements SarasClientInterface
         );
     }
 
+    public function updateProcessField(string $processId, string $subProjectId, array $updates): array
+    {
+        $requestId = Str::uuid()->toString();
+
+        Log::info('Saras API: updateProcessField', [
+            'request_id' => $requestId,
+            'endpoint' => '/process/updateProcessField',
+            'process_id' => $processId,
+        ]);
+
+        return $this->makeRequest(
+            method: 'POST',
+            endpoint: '/process/updateProcessField',
+            requestId: $requestId,
+            data: [
+                'processId' => $processId,
+                'subProjectId' => $subProjectId,
+                'updates' => $updates,
+            ],
+        );
+    }
+
     public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array
     {
         $requestId = Str::uuid()->toString();

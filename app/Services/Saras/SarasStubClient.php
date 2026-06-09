@@ -142,6 +142,14 @@ class SarasStubClient implements SarasClientInterface
         ];
     }
 
+    public function updateProcessField(string $processId, string $subProjectId, array $updates): array
+    {
+        return [
+            'status' => 'success',
+            'message' => 'Process field updated successfully (stub)',
+        ];
+    }
+
     public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array
     {
         return [

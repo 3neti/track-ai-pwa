@@ -84,17 +84,19 @@ class AttendanceService
         $session = null;
 
         if ($response->success) {
-            // Create local session
+            // Create local session with Saras process ID
             $session = $this->sessionService->openSession(
                 $userId,
                 $contractId,
                 $latitude,
                 $longitude,
-                $remarks
+                $remarks,
+                $response->processId,
             );
 
             AuditLog::log($userId, 'attendance_check_in', $contractId, [
                 'entry_id' => $response->entryId,
+                'saras_process_id' => $response->processId,
                 'idempotency_key' => $idempotencyKey,
                 'session_id' => $session->id,
                 'latitude' => $latitude,
@@ -148,19 +150,41 @@ class AttendanceService
         $resolvedContractId = $contractId ?: config('saras.default_contract_id');
 
         try {
-            $response = $this->sarasClient->createProcess(
-                subProjectId: config('saras.subproject_ids.attendance'),
-                fields: [
-                    'userId' => $user->saras_user_id,
-                    'contractId' => $resolvedContractId,
-                    'ipAddressCheckOut' => $ipAddress ?? '',
-                    'geoLocationCheckOut' => "{$latitude},{$longitude}",
-                    'date' => now('Asia/Manila')->toDateString(),
-                    'checkOutTime' => now('Asia/Manila')->toIso8601String(),
-                    'remarks' => $remarks ?? '',
-                ],
-                idempotencyKey: $idempotencyKey,
-            );
+            // Update the existing check-in process with check-out fields
+            if ($session->saras_process_id) {
+                $this->sarasClient->updateProcessField(
+                    processId: $session->saras_process_id,
+                    subProjectId: config('saras.subproject_ids.attendance'),
+                    updates: [
+                        'ipAddressCheckOut' => $ipAddress ?? '',
+                        'geoLocationCheckOut' => "{$latitude},{$longitude}",
+                        'checkOutTime' => now('Asia/Manila')->toIso8601String(),
+                        'remarks' => $remarks ?? '',
+                    ],
+                );
+
+                $response = ProcessResponse::fromArray([
+                    'success' => true,
+                    'processId' => $session->saras_process_id,
+                    'entryId' => $session->saras_process_id,
+                    'message' => 'Check-out recorded (updated existing process)',
+                ]);
+            } else {
+                // Fallback: create new process if no saras_process_id stored
+                $response = $this->sarasClient->createProcess(
+                    subProjectId: config('saras.subproject_ids.attendance'),
+                    fields: [
+                        'userId' => $user->saras_user_id,
+                        'contractId' => $resolvedContractId,
+                        'ipAddressCheckOut' => $ipAddress ?? '',
+                        'geoLocationCheckOut' => "{$latitude},{$longitude}",
+                        'date' => now('Asia/Manila')->toDateString(),
+                        'checkOutTime' => now('Asia/Manila')->toIso8601String(),
+                        'remarks' => $remarks ?? '',
+                    ],
+                    idempotencyKey: $idempotencyKey,
+                );
+            }
         } catch (SarasApiException $e) {
             return [
                 'response' => ProcessResponse::fromArray([
@@ -184,6 +208,7 @@ class AttendanceService
 
             AuditLog::log($userId, 'attendance_check_out', $contractId, [
                 'entry_id' => $response->entryId,
+                'saras_process_id' => $session->saras_process_id,
                 'idempotency_key' => $idempotencyKey,
                 'session_id' => $session->id,
                 'duration_minutes' => $session->getDurationMinutes(),

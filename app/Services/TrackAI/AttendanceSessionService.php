@@ -57,11 +57,13 @@ class AttendanceSessionService
         string $projectExternalId,
         float $latitude,
         float $longitude,
-        ?string $remarks = null
+        ?string $remarks = null,
+        ?string $sarasProcessId = null,
     ): AttendanceSession {
         return AttendanceSession::create([
             'user_id' => $userId,
             'project_external_id' => $projectExternalId,
+            'saras_process_id' => $sarasProcessId,
             'check_in_at' => now(),
             'check_in_latitude' => $latitude,
             'check_in_longitude' => $longitude,

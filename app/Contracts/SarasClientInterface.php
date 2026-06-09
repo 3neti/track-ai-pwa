@@ -86,4 +86,14 @@ interface SarasClientInterface
      * @throws \App\Exceptions\SarasApiException
      */
     public function getProcesses(string $subProjectId, int $page = 1, int $perPage = 10): array;
+
+    /**
+     * Update fields on an existing process.
+     *
+     * @param  array<string, mixed>  $updates  Key-value map of fields to update
+     * @return array<string, mixed>
+     *
+     * @throws \App\Exceptions\SarasApiException
+     */
+    public function updateProcessField(string $processId, string $subProjectId, array $updates): array;
 }

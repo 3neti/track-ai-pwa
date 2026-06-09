@@ -20,6 +20,7 @@ class AttendanceSession extends Model
     protected $fillable = [
         'user_id',
         'project_external_id',
+        'saras_process_id',
         'check_in_at',
         'check_in_latitude',
         'check_in_longitude',
