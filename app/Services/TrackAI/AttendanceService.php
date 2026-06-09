@@ -61,11 +61,11 @@ class AttendanceService
                 fields: [
                     'userId' => $user->saras_user_id,
                     'contractId' => $resolvedContractId,
-                    'ipAddressCheckIn' => $ipAddress,
+                    'ipAddressCheckIn' => $ipAddress ?? '',
                     'geoLocationCheckIn' => "{$latitude},{$longitude}",
                     'date' => now()->toDateString(),
                     'checkInTime' => now()->toIso8601String(),
-                    'remarks' => $remarks,
+                    'remarks' => $remarks ?? '',
                 ],
                 idempotencyKey: $idempotencyKey,
             );
@@ -153,11 +153,11 @@ class AttendanceService
                 fields: [
                     'userId' => $user->saras_user_id,
                     'contractId' => $resolvedContractId,
-                    'ipAddressCheckOut' => $ipAddress,
+                    'ipAddressCheckOut' => $ipAddress ?? '',
                     'geoLocationCheckOut' => "{$latitude},{$longitude}",
                     'date' => now()->toDateString(),
                     'checkOutTime' => now()->toIso8601String(),
-                    'remarks' => $remarks,
+                    'remarks' => $remarks ?? '',
                 ],
                 idempotencyKey: $idempotencyKey,
             );
