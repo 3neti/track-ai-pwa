@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Award } from 'lucide-vue-next';
+import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Award, Info } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,12 +56,12 @@ const isSubmitting = ref(false);
 const isPolling = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
 const submitStep = ref<string | null>(null);
-const previousFiles = ref<UploadedFile[]>([]);
 const currentFiles = ref<UploadedFile[]>([]);
-const isUploadingPrevious = ref(false);
 const isUploadingCurrent = ref(false);
 const reports = ref<ProgressReport[]>([]);
 const isLoadingReports = ref(false);
+const previousProgressInfo = ref<{ isFirstReport: boolean; previousFileCount: number } | null>(null);
+const isLoadingPreviousProgress = ref(false);
 
 watch(() => props.contracts, (c) => {
     if (c.length > 0 && !selectedContractId.value) {
@@ -71,8 +71,19 @@ watch(() => props.contracts, (c) => {
 
 watch(selectedContractId, () => {
     selectedMilestone.value = '';
+    previousProgressInfo.value = null;
     if (selectedContract.value?.milestones.length) selectedMilestone.value = selectedContract.value.milestones[0];
 });
+
+watch(selectedMilestone, async () => {
+    previousProgressInfo.value = null;
+    if (!selectedContractId.value || !selectedMilestone.value) return;
+    isLoadingPreviousProgress.value = true;
+    try {
+        const r = await axios.get(`/api/contracts/${encodeURIComponent(selectedContractId.value)}/milestones/${encodeURIComponent(selectedMilestone.value)}/previous-progress`);
+        if (r.data.success) previousProgressInfo.value = { isFirstReport: r.data.isFirstReport, previousFileCount: r.data.previousFileCount };
+    } catch { /* ignore */ } finally { isLoadingPreviousProgress.value = false; }
+}, { immediate: true });
 
 watch(selectedProject, () => loadReports(), { immediate: true });
 
@@ -85,20 +96,17 @@ async function loadReports() {
     } catch { /* ignore */ } finally { isLoadingReports.value = false; }
 }
 
-async function handleFileUpload(event: Event, type: 'previous' | 'current') {
+async function handleFileUpload(event: Event) {
     const target = event.target as HTMLInputElement;
     if (!target.files?.length || !selectedProject.value) return;
     const files = Array.from(target.files);
-    const isUploading = type === 'previous' ? isUploadingPrevious : isUploadingCurrent;
-    const fileList = type === 'previous' ? previousFiles : currentFiles;
-    const docType = type === 'previous' ? 'previous_progress' : 'current_progress';
-    isUploading.value = true;
+    isUploadingCurrent.value = true;
     for (const file of files) {
         try {
             const cr = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {
                 contract_id: selectedContractId.value || selectedProjectId.value,
                 client_request_id: crypto.randomUUID(),
-                title: file.name, document_type: docType, tags: ['progress', docType],
+                title: file.name, document_type: 'current_progress', tags: ['progress', 'current_progress'],
             });
             if (!cr.data.success) continue;
             const fd = new FormData(); fd.append('file', file);
@@ -107,25 +115,24 @@ async function handleFileUpload(event: Event, type: 'previous' | 'current') {
                 fd, { headers: { 'Content-Type': 'multipart/form-data' } }
             );
             if (ur.data.success && ur.data.upload) {
-                fileList.value.push({
+                currentFiles.value.push({
                     id: ur.data.upload.id, remote_file_id: ur.data.upload.remote_file_id,
                     title: file.name, status: ur.data.upload.status,
                 });
             }
         } catch (err) { console.error(`Failed to upload ${file.name}`, err); }
     }
-    isUploading.value = false;
+    isUploadingCurrent.value = false;
     target.value = '';
 }
 
-function removeFile(type: 'previous' | 'current', index: number) {
-    (type === 'previous' ? previousFiles : currentFiles).value.splice(index, 1);
+function removeFile(index: number) {
+    currentFiles.value.splice(index, 1);
 }
 
 async function handleSubmit() {
     if (!selectedProject.value || isSubmitting.value) return;
     isSubmitting.value = true; message.value = null;
-    const prevIds = previousFiles.value.filter(f => f.remote_file_id).map(f => f.remote_file_id!);
     const currIds = currentFiles.value.filter(f => f.remote_file_id).map(f => f.remote_file_id!);
     try {
         submitStep.value = 'Creating progress report...';
@@ -134,11 +141,11 @@ async function handleSubmit() {
             current_milestone: selectedMilestone.value || null,
             remarks: remarks.value || null,
             tags: tags.value,
-            previous_progress_file_ids: prevIds, current_progress_file_ids: currIds,
+            current_progress_file_ids: currIds,
         });
         if (!r.data.success) throw new Error(r.data.message);
         const report = r.data.report;
-        if (report.saras_process_id && (prevIds.length || currIds.length)) {
+        if (report.saras_process_id && currIds.length) {
             submitStep.value = 'Attaching stage files...';
             await axios.post(`/api/progress-reports/${report.id}/stage-files`);
         }
@@ -147,7 +154,7 @@ async function handleSubmit() {
             await axios.post(`/api/progress-reports/${report.id}/workflow`);
         }
         message.value = { type: 'success', text: 'Progress report submitted and AI evaluation started.' };
-        remarks.value = ''; previousFiles.value = []; currentFiles.value = [];
+        remarks.value = ''; currentFiles.value = [];
         await loadReports();
     } catch (error: any) {
         message.value = { type: 'error', text: error.response?.data?.message || error.message || 'Failed to submit.' };
@@ -168,7 +175,7 @@ const statusConfig = (s: string) => ({
     failed: { label: 'Failed', variant: 'destructive' as const },
 }[s] || { label: s, variant: 'secondary' as const });
 
-const canSubmit = computed(() => selectedProject.value && !isSubmitting.value && (previousFiles.value.length > 0 || currentFiles.value.length > 0));
+const canSubmit = computed(() => selectedProject.value && !isSubmitting.value && currentFiles.value.length > 0);
 </script>
 
 <template>
@@ -223,25 +230,27 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
 
                     <Separator />
 
-                    <!-- Previous Progress Photos -->
+                    <!-- Previous Progress Photos (auto-populated) -->
                     <div class="space-y-2">
                         <Label class="flex items-center gap-2"><Camera class="h-4 w-4" /> Previous Progress Photos</Label>
-                        <p class="text-xs text-muted-foreground">Baseline or previous condition images</p>
-                        <div v-if="previousFiles.length" class="space-y-1">
-                            <div v-for="(file, i) in previousFiles" :key="file.id" class="flex items-center justify-between text-sm bg-muted/50 rounded px-3 py-1.5">
-                                <span class="truncate">{{ file.title }}</span>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="outline" class="text-xs">{{ file.remote_file_id ? 'uploaded' : file.status }}</Badge>
-                                    <button @click="removeFile('previous', i)" class="text-muted-foreground hover:text-destructive">×</button>
-                                </div>
-                            </div>
+                        <div v-if="isLoadingPreviousProgress" class="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 class="h-3 w-3 animate-spin" /> Checking previous progress...
                         </div>
-                        <label class="cursor-pointer">
-                            <Button variant="outline" size="sm" as="span" :disabled="isUploadingPrevious">
-                                <Loader2 v-if="isUploadingPrevious" class="mr-1 h-3 w-3 animate-spin" /><Upload v-else class="mr-1 h-3 w-3" /> Add Photos
-                            </Button>
-                            <input type="file" accept="image/*" multiple capture="environment" class="hidden" @change="(e) => handleFileUpload(e, 'previous')" />
-                        </label>
+                        <div v-else-if="previousProgressInfo?.isFirstReport" class="flex items-center gap-2 p-3 rounded-md border border-dashed bg-muted/30">
+                            <Info class="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <p class="text-sm text-muted-foreground">No previous progress photos yet. This is the first report for this milestone.</p>
+                        </div>
+                        <div v-else-if="previousProgressInfo" class="flex items-center gap-2 p-3 rounded-md border bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+                            <Info class="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            <p class="text-sm text-blue-700 dark:text-blue-300">
+                                Previous progress photos will be auto-populated from the last submitted report.
+                                <span class="font-medium">({{ previousProgressInfo.previousFileCount }} file(s))</span>
+                            </p>
+                        </div>
+                        <div v-else class="flex items-center gap-2 p-3 rounded-md border border-dashed bg-muted/30">
+                            <Info class="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <p class="text-sm text-muted-foreground">Select a contract and milestone to check for previous progress photos.</p>
+                        </div>
                     </div>
 
                     <!-- Current Progress Photos -->
@@ -253,7 +262,7 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
                                 <span class="truncate">{{ file.title }}</span>
                                 <div class="flex items-center gap-2">
                                     <Badge variant="outline" class="text-xs">{{ file.remote_file_id ? 'uploaded' : file.status }}</Badge>
-                                    <button @click="removeFile('current', i)" class="text-muted-foreground hover:text-destructive">×</button>
+                                    <button @click="removeFile(i)" class="text-muted-foreground hover:text-destructive">×</button>
                                 </div>
                             </div>
                         </div>
@@ -261,7 +270,7 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
                             <Button variant="outline" size="sm" as="span" :disabled="isUploadingCurrent">
                                 <Loader2 v-if="isUploadingCurrent" class="mr-1 h-3 w-3 animate-spin" /><Upload v-else class="mr-1 h-3 w-3" /> Add Photos
                             </Button>
-                            <input type="file" accept="image/*" multiple capture="environment" class="hidden" @change="(e) => handleFileUpload(e, 'current')" />
+                            <input type="file" accept="image/*" multiple capture="environment" class="hidden" @change="handleFileUpload" />
                         </label>
                     </div>
 

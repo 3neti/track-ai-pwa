@@ -21,6 +21,44 @@ class ProjectProgressService
     ) {}
 
     /**
+     * Find the latest progress report for a contract/milestone combination.
+     */
+    public function findLatestProgressForContractMilestone(
+        string $contractId,
+        string $milestone,
+    ): ?ProjectProgressReport {
+        return ProjectProgressReport::where('contract_id', $contractId)
+            ->where('current_milestone', $milestone)
+            ->whereNotNull('current_progress_file_ids')
+            ->whereNotIn('progress_status', [
+                ProjectProgressReport::STATUS_DRAFT,
+                ProjectProgressReport::STATUS_FAILED,
+            ])
+            ->orderByDesc('created_at')
+            ->first();
+    }
+
+    /**
+     * Resolve previous progress file IDs from the last submitted report.
+     *
+     * @return array<string>
+     */
+    public function resolvePreviousProgressFileIds(
+        string $contractId,
+        string $milestone,
+    ): array {
+        $latest = $this->findLatestProgressForContractMilestone($contractId, $milestone);
+
+        if (! $latest) {
+            return [];
+        }
+
+        $fileIds = $latest->current_progress_file_ids ?? [];
+
+        return ! empty($fileIds) ? $fileIds : [];
+    }
+
+    /**
      * Check if progress sync to Saras is enabled.
      */
     protected function isProgressSyncEnabled(): bool
@@ -37,14 +75,22 @@ class ProjectProgressService
     public function createProgress(User $user, Project $project, array $input): ProjectProgressReport
     {
         $contractId = $input['contract_id'] ?? $project->contract_id ?: config('saras.default_contract_id');
+        $milestone = $input['current_milestone'] ?? '';
+
+        // Auto-resolve previous progress file IDs if not explicitly provided
+        $previousFileIds = $input['previous_progress_file_ids'] ?? [];
+
+        if (empty($previousFileIds) && $contractId && $milestone) {
+            $previousFileIds = $this->resolvePreviousProgressFileIds($contractId, $milestone);
+        }
 
         $report = ProjectProgressReport::create([
             'project_id' => $project->id,
             'user_id' => $user->id,
             'contract_id' => $contractId,
-            'current_milestone' => $input['current_milestone'] ?? null,
+            'current_milestone' => $milestone ?: null,
             'remarks' => $input['remarks'] ?? null,
-            'previous_progress_file_ids' => $input['previous_progress_file_ids'] ?? [],
+            'previous_progress_file_ids' => $previousFileIds,
             'current_progress_file_ids' => $input['current_progress_file_ids'] ?? [],
             'progress_status' => ProjectProgressReport::STATUS_DRAFT,
         ]);

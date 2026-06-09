@@ -52,7 +52,11 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         $uploadResult = $this->phaseUploadFiles($context, $activeContractId);
         $payload['phases']['upload'] = $uploadResult;
 
-        // Phase 3: Submit Progress with file UUIDs
+        // Phase 2.5: Resolve previous progress photos
+        $previousProgressResult = $this->phaseResolvePreviousProgress($context, $activeContractId);
+        $payload['phases']['previous_progress'] = $previousProgressResult;
+
+        // Phase 3: Submit Progress with file UUIDs (previous auto-resolved by service)
         $progressResult = $this->phaseSubmitProgress($context, $uploadResult, $activeContractId);
         $payload['phases']['progress'] = $progressResult;
 
@@ -408,6 +412,37 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function phaseResolvePreviousProgress(ScenarioRunContext $context, string $contractId): array
+    {
+        if (! $context->output->isJson()) {
+            $context->output->line('Phase 2.5: Resolving previous progress photos...');
+        }
+
+        $milestone = $context->currentMilestone();
+        $previousFileIds = $this->progressService->resolvePreviousProgressFileIds($contractId, $milestone);
+
+        if (! $context->output->isJson()) {
+            if (empty($previousFileIds)) {
+                $context->output->info('  First report: no previous photos found');
+            } else {
+                $latestReport = $this->progressService->findLatestProgressForContractMilestone($contractId, $milestone);
+                $sourceId = $latestReport?->id ?? '?';
+                $context->output->info("  ✓ Found previous progress from report ID {$sourceId}");
+                $context->output->line('  Previous files: '.count($previousFileIds));
+            }
+        }
+
+        return [
+            'success' => true,
+            'is_first_report' => empty($previousFileIds),
+            'previous_file_count' => count($previousFileIds),
+            'previous_file_ids' => $previousFileIds,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $uploadResult
      * @return array<string, mixed>
      */
@@ -419,6 +454,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
 
         $fileIds = $uploadResult['file_ids'] ?? [];
 
+        // Only pass current file IDs — previous are auto-resolved by the service
         $report = $this->progressService->createProgress(
             user: $context->user,
             project: $context->project,
@@ -426,7 +462,6 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 'contract_id' => $contractId,
                 'current_milestone' => $context->currentMilestone(),
                 'remarks' => $context->remarks(),
-                'previous_progress_file_ids' => $fileIds['previous'] ?? [],
                 'current_progress_file_ids' => $fileIds['current'] ?? [],
                 'ip_address' => '127.0.0.1',
                 'geo_location' => '14.5995,120.9842',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ClipboardCheck, Clock, Upload, RefreshCw, Radio } from 'lucide-vue-next';
+import { Briefcase, ClipboardCheck, Clock, Upload, RefreshCw, Radio } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -8,11 +8,11 @@ const page = usePage();
 const currentRoute = computed(() => page.url);
 
 const navItems = [
+    { name: 'Contracts', href: '/app/contracts', icon: Briefcase },
     { name: 'Progress', href: '/app/project-progress', icon: ClipboardCheck },
     { name: 'Attendance', href: '/app/attendance', icon: Clock },
     { name: 'Uploads', href: '/app/project-uploads', icon: Upload },
     { name: 'Sync', href: '/app/sync', icon: RefreshCw },
-    { name: 'X-Ray', href: '/developer/saras-api-xray', icon: Radio },
 ];
 
 const isActive = (href: string) => currentRoute.value.startsWith(href);

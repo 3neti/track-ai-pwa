@@ -135,29 +135,18 @@ class ProjectProgressController extends Controller
     }
 
     /**
-     * List available contracts with milestones.
+     * Get previous progress photo status for a contract/milestone.
      */
-    public function contracts(): JsonResponse
+    public function previousProgress(string $contractId, string $milestone): JsonResponse
     {
-        try {
-            $response = $this->sarasClient->getProcesses(
-                config('saras.subproject_ids.contract_ai'), 1, 50
-            );
+        $milestone = urldecode($milestone);
+        $fileIds = $this->progressService->resolvePreviousProgressFileIds($contractId, $milestone);
 
-            $contracts = [];
-
-            foreach ($response['processes'] ?? [] as $c) {
-                $contracts[] = [
-                    'id' => $c['id'] ?? '',
-                    'name' => $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?'),
-                    'milestones' => $c['fields']['milestone'] ?? [],
-                    'display_number' => $c['metaDetails']['displayNumber'] ?? '',
-                ];
-            }
-
-            return response()->json(['success' => true, 'contracts' => $contracts]);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'contracts' => [], 'message' => $e->getMessage()]);
-        }
+        return response()->json([
+            'success' => true,
+            'isFirstReport' => empty($fileIds),
+            'previousFileCount' => count($fileIds),
+            'previousFileIds' => $fileIds,
+        ]);
     }
 }

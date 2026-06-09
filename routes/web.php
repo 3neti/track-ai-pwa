@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\App\AttendanceController;
+use App\Http\Controllers\App\ContractController;
 use App\Http\Controllers\App\ProgressController;
 use App\Http\Controllers\App\ProjectController;
 use App\Http\Controllers\App\ProjectProgressController;
@@ -48,6 +49,7 @@ Route::get('dashboard', function () {
 */
 
 Route::middleware(['auth'])->prefix('app')->group(function () {
+    Route::get('/contracts', [ContractController::class, 'index'])->name('app.contracts');
     Route::get('/projects', [ProjectController::class, 'index'])->name('app.projects');
     Route::get('/attendance', [AttendanceController::class, 'index'])->name('app.attendance');
     Route::get('/uploads', [UploadController::class, 'index'])->name('app.uploads');

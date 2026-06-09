@@ -129,6 +129,20 @@ final class LifecycleReportRenderer
             ];
         }
 
+        // Previous Progress Resolved
+        $previousProgress = $phases['previous_progress'] ?? null;
+        if ($previousProgress) {
+            $isFirst = $previousProgress['is_first_report'] ?? true;
+            $prevCount = $previousProgress['previous_file_count'] ?? 0;
+            $steps[] = [
+                'label' => 'Previous Progress Resolved',
+                'status' => 'success',
+                'detail' => $isFirst
+                    ? 'First report: no previous photos'
+                    : "Source: last current progress | Files: {$prevCount}",
+            ];
+        }
+
         // Progress
         $progress = $phases['progress'] ?? null;
         if ($progress) {
