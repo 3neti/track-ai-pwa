@@ -16,6 +16,8 @@ class ContractService
     /**
      * Sync contracts from Saras Contract AI into local database.
      *
+     * Also fetches ProjectProgress records to find certificates.
+     *
      * @return Collection<int, Contract>
      */
     public function syncContractsFromSaras(): Collection
@@ -23,6 +25,9 @@ class ContractService
         $contractAiId = config('saras.subproject_ids.contract_ai');
 
         $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
+
+        // Fetch ProjectProgress records to cross-reference certificates
+        $progressCertificates = $this->fetchProgressCertificates();
 
         foreach (($response['processes'] ?? []) as $process) {
             $processId = $process['id'] ?? null;
@@ -36,8 +41,8 @@ class ContractService
                 ?? 'Contract #'.($process['metaDetails']['displayNumber'] ?? '?');
 
             $milestones = $process['fields']['milestone'] ?? [];
-            $certificateStatus = $this->determineCertificateStatus($process);
-            $certificateFileId = $this->extractCertificateFileId($process);
+            $certificateStatus = $this->determineCertificateStatus($process, $progressCertificates);
+            $certificateFileId = $this->extractCertificateFileId($process, $progressCertificates);
 
             Contract::updateOrCreate(
                 ['saras_process_id' => $processId],
@@ -81,22 +86,61 @@ class ContractService
     }
 
     /**
-     * Determine certificate status from Saras process data.
+     * Fetch certificates from ProjectProgress records in Saras.
+     *
+     * Returns a map of contractId => certificateFileId.
+     *
+     * @return array<string, string>
      */
-    public function determineCertificateStatus(array $processData): string
+    protected function fetchProgressCertificates(): array
     {
+        $certificates = [];
+
+        try {
+            $ppSubId = config('saras.subproject_ids.project_progress');
+            $ppResponse = $this->sarasClient->getProcesses($ppSubId, 1, 50);
+
+            foreach ($ppResponse['processes'] ?? [] as $pp) {
+                $certFileId = $pp['fields']['certificateOfCompletion'] ?? null;
+                $contractId = $pp['fields']['contractId'] ?? null;
+
+                if (! empty($certFileId) && ! empty($contractId) && is_string($certFileId)) {
+                    // Keep the latest certificate per contract (processes are ordered by creation)
+                    $certificates[$contractId] = $certFileId;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('ContractService: Failed to fetch progress certificates', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $certificates;
+    }
+
+    /**
+     * Determine certificate status from contract data and progress certificates.
+     *
+     * @param  array<string, string>  $progressCertificates  Map of contractId => certificateFileId from ProjectProgress
+     */
+    public function determineCertificateStatus(array $processData, array $progressCertificates = []): string
+    {
+        $processId = $processData['id'] ?? null;
         $fields = $processData['fields'] ?? [];
 
-        // Check if certificateOfCompletion has a file UUID
+        // 1. Check if the Contract AI record itself has a certificate
         $certificate = $fields['certificateOfCompletion'] ?? null;
 
         if (! empty($certificate)) {
             return Contract::STATUS_AVAILABLE;
         }
 
-        // Check if any progress reports exist for this contract
-        $processId = $processData['id'] ?? null;
+        // 2. Check if a ProjectProgress record for this contract has a certificate
+        if ($processId && ! empty($progressCertificates[$processId])) {
+            return Contract::STATUS_AVAILABLE;
+        }
 
+        // 3. Check local progress reports
         if ($processId) {
             $hasProgress = \App\Models\ProjectProgressReport::where('contract_id', $processId)
                 ->whereNotIn('progress_status', ['draft', 'failed'])
@@ -111,10 +155,13 @@ class ContractService
     }
 
     /**
-     * Extract certificate file ID from Saras process data.
+     * Extract certificate file ID from contract data or progress certificates.
+     *
+     * @param  array<string, string>  $progressCertificates  Map of contractId => certificateFileId from ProjectProgress
      */
-    protected function extractCertificateFileId(array $processData): ?string
+    protected function extractCertificateFileId(array $processData, array $progressCertificates = []): ?string
     {
+        // 1. Check Contract AI record
         $certificate = $processData['fields']['certificateOfCompletion'] ?? null;
 
         if (is_string($certificate) && ! empty($certificate)) {
@@ -123,6 +170,13 @@ class ContractService
 
         if (is_array($certificate) && ! empty($certificate[0]['id'])) {
             return $certificate[0]['id'];
+        }
+
+        // 2. Check ProjectProgress records
+        $processId = $processData['id'] ?? null;
+
+        if ($processId && ! empty($progressCertificates[$processId])) {
+            return $progressCertificates[$processId];
         }
 
         return null;

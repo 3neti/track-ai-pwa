@@ -108,17 +108,12 @@ class ContractController extends Controller
             ]);
         }
 
-        if ($contract->certificate_file_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Certificate exists but download endpoint is not yet configured.',
-                'certificate_file_id' => $contract->certificate_file_id,
-            ], 422);
-        }
-
+        // Certificate file exists in Saras but no direct download API is available yet
         return response()->json([
-            'success' => false,
-            'message' => 'Certificate metadata unavailable.',
-        ], 404);
+            'success' => true,
+            'download_url' => null,
+            'certificate_file_id' => $contract->certificate_file_id,
+            'message' => 'Certificate is available on the Saras dashboard. File download API is pending Saras deployment.',
+        ]);
     }
 }

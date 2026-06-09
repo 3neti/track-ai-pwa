@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import { Briefcase, RefreshCw, Loader2, AlertCircle, Award, Download, ChevronRight } from 'lucide-vue-next';
+import { Briefcase, RefreshCw, Loader2, AlertCircle, Award, Download, ChevronRight, Info } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -30,6 +30,7 @@ const contractList = ref<ContractItem[]>(props.contracts);
 const isRefreshing = ref(false);
 const error = ref<string | null>(null);
 const downloadingId = ref<number | null>(null);
+const infoMessage = ref<string | null>(null);
 
 async function handleRefresh() {
     isRefreshing.value = true;
@@ -50,10 +51,13 @@ async function handleRefresh() {
 
 async function handleDownloadCertificate(contract: ContractItem) {
     downloadingId.value = contract.id;
+    infoMessage.value = null;
     try {
         const r = await axios.get(`/api/contracts/${contract.id}/certificate`);
         if (r.data.success && r.data.download_url) {
             window.open(r.data.download_url, '_blank');
+        } else if (r.data.success && r.data.certificate_file_id) {
+            infoMessage.value = r.data.message || `Certificate file: ${r.data.certificate_file_id}`;
         } else {
             error.value = r.data.message || 'Certificate download not available.';
         }
@@ -102,6 +106,11 @@ const lastSyncTime = computed(() => {
             <Alert v-if="error" variant="destructive">
                 <AlertCircle class="h-4 w-4" />
                 <AlertDescription>{{ error }}</AlertDescription>
+            </Alert>
+
+            <Alert v-if="infoMessage" variant="default">
+                <Info class="h-4 w-4" />
+                <AlertDescription>{{ infoMessage }}</AlertDescription>
             </Alert>
 
             <p v-if="lastSyncTime" class="text-xs text-muted-foreground text-right">
@@ -160,20 +169,25 @@ const lastSyncTime = computed(() => {
                         </div>
 
                         <!-- Certificate section -->
-                        <div v-if="contract.certificate_status === 'available'" class="flex items-center gap-2 p-2 rounded border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
-                            <Award class="h-4 w-4 text-green-600 flex-shrink-0" />
-                            <span class="text-sm text-green-700 dark:text-green-300 flex-1">Certificate of Completion</span>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                class="h-7 text-xs"
-                                @click="handleDownloadCertificate(contract)"
-                                :disabled="downloadingId === contract.id"
-                            >
-                                <Loader2 v-if="downloadingId === contract.id" class="mr-1 h-3 w-3 animate-spin" />
-                                <Download v-else class="mr-1 h-3 w-3" />
-                                Download
-                            </Button>
+                        <div v-if="contract.certificate_status === 'available'" class="space-y-2">
+                            <div class="flex items-center gap-2 p-2 rounded border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
+                                <Award class="h-4 w-4 text-green-600 flex-shrink-0" />
+                                <span class="text-sm text-green-700 dark:text-green-300 flex-1">Certificate of Completion</span>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    class="h-7 text-xs"
+                                    @click="handleDownloadCertificate(contract)"
+                                    :disabled="downloadingId === contract.id"
+                                >
+                                    <Loader2 v-if="downloadingId === contract.id" class="mr-1 h-3 w-3 animate-spin" />
+                                    <Download v-else class="mr-1 h-3 w-3" />
+                                    Download
+                                </Button>
+                            </div>
+                            <p v-if="contract.certificate_file_id" class="text-xs text-muted-foreground font-mono px-2">
+                                File: {{ contract.certificate_file_id.substring(0, 8) }}...
+                            </p>
                         </div>
                         <div v-else-if="contract.certificate_status === 'pending'" class="flex items-center gap-2 p-2 rounded border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950">
                             <Award class="h-4 w-4 text-yellow-600 flex-shrink-0" />
