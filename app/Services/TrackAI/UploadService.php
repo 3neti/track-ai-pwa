@@ -187,8 +187,8 @@ class UploadService
                     'remarks' => $upload->remarks ?? '',
                     'ipAddress' => $ipAddress,
                     'geoLocation' => "{$latitude},{$longitude}",
-                    'date' => now()->toDateString(),
-                    'time' => now()->toIso8601String(),
+                    'date' => now('Asia/Manila')->toDateString(),
+                    'time' => now('Asia/Manila')->toIso8601String(),
                 ],
                 idempotencyKey: $idempotencyKey,
             );

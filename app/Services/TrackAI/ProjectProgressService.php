@@ -115,9 +115,9 @@ class ProjectProgressService
                     'currentProgressFiles' => $input['current_progress_file_ids'] ?? [],
                     'geoLocation' => $input['geo_location'] ?? '',
                     'ipAddress' => $input['ip_address'] ?? '',
-                    'date' => now()->toDateString(),
-                    'time' => now()->toIso8601String(),
-                    'name' => 'Progress Report - '.now()->toDateString(),
+                    'date' => now('Asia/Manila')->toDateString(),
+                    'time' => now('Asia/Manila')->toIso8601String(),
+                    'name' => 'Progress Report - '.now('Asia/Manila')->toDateString(),
                     'tags' => array_values(array_unique(array_merge(
                         ['progress', 'track-ai'],
                         $input['tags'] ?? [],
