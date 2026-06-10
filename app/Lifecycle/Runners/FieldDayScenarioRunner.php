@@ -48,15 +48,15 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             return $this->result($context, $payload, false);
         }
 
-        // Phase 2: Upload Files
-        $uploadResult = $this->phaseUploadFiles($context, $activeContractId);
+        // Phase 2: Upload current progress files only (previous auto-resolved by service)
+        $uploadResult = $this->phaseUploadCurrentFiles($context, $activeContractId);
         $payload['phases']['upload'] = $uploadResult;
 
         // Phase 2.5: Resolve previous progress photos
         $previousProgressResult = $this->phaseResolvePreviousProgress($context, $activeContractId);
         $payload['phases']['previous_progress'] = $previousProgressResult;
 
-        // Phase 3: Submit Progress with file UUIDs (previous auto-resolved by service)
+        // Phase 3: Submit Progress with current file UUIDs (previous auto-resolved by service)
         $progressResult = $this->phaseSubmitProgress($context, $uploadResult, $activeContractId);
         $payload['phases']['progress'] = $progressResult;
 
@@ -66,20 +66,14 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             return $this->result($context, $payload, false);
         }
 
-        // Phase 3.5: Attach stage files
-        if (! empty($progressResult['saras_process_id'])) {
+        // Phase 3.5: Attach stage files (only if enabled via config)
+        if (! empty($progressResult['saras_process_id']) && config('saras.workflows.attach_stage_files', false)) {
             $stageFilesResult = $this->phaseAttachStageFiles($context, $progressResult['report_id']);
             $payload['phases']['stage_files'] = $stageFilesResult;
         }
 
         // Phase 4 + 5: Trigger Workflow + Poll (only if we have a saras_process_id)
         if (! empty($progressResult['saras_process_id'])) {
-            if (isset($stageFilesResult) && ! ($stageFilesResult['success'] ?? false)) {
-                if (! $context->output->isJson()) {
-                    $context->output->warn('  ⚠ Stage file attachment failed — workflow may not have stage checklist data');
-                }
-            }
-
             $workflowResult = $this->phaseWorkflow($context, $progressResult['report_id']);
             $payload['phases']['workflow'] = $workflowResult;
         }
@@ -250,25 +244,24 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     }
 
     /**
+     * Upload only current progress files. Previous files are auto-resolved by the service.
+     *
      * @return array<string, mixed>
      */
-    private function phaseUploadFiles(ScenarioRunContext $context, string $contractId): array
+    private function phaseUploadCurrentFiles(ScenarioRunContext $context, string $contractId): array
     {
         if (! $context->output->isJson()) {
-            $context->output->line('Phase 2: Uploading files to Saras...');
+            $context->output->line('Phase 2: Uploading current progress files to Saras...');
         }
 
         $bucketBase = $this->resolveBucketPath($context);
-        $previousDir = $bucketBase.'/previous';
         $currentDir = $bucketBase.'/current';
 
-        $previousFiles = $this->scanDirectory($previousDir);
         $currentFiles = $this->scanDirectory($currentDir);
 
         // Fallback to test fixtures if bucket is empty
-        if (empty($previousFiles) && empty($currentFiles)) {
+        if (empty($currentFiles)) {
             $fixtureDir = base_path('tests/fixtures/images');
-            $previousFiles = array_filter([is_file("{$fixtureDir}/previous_progress.png") ? "{$fixtureDir}/previous_progress.png" : null]);
             $currentFiles = array_filter([is_file("{$fixtureDir}/current_progress.png") ? "{$fixtureDir}/current_progress.png" : null]);
 
             if (! $context->output->isJson()) {
@@ -276,22 +269,13 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             }
         } else {
             if (! $context->output->isJson()) {
-                $context->output->line("  Bucket: {$bucketBase}");
-                $context->output->line(sprintf('  Found: %d previous, %d current files', count($previousFiles), count($currentFiles)));
+                $context->output->line("  Bucket: {$currentDir}");
+                $context->output->line(sprintf('  Found: %d current files', count($currentFiles)));
             }
         }
 
-        $uploadedFileIds = ['previous' => [], 'current' => []];
+        $uploadedFileIds = ['current' => []];
         $uploads = [];
-
-        foreach ($previousFiles as $path) {
-            $result = $this->uploadSingleFile($context, $path, 'previous_progress', $contractId);
-            $uploads[] = $result;
-
-            if ($result['remote_file_id']) {
-                $uploadedFileIds['previous'][] = $result['remote_file_id'];
-            }
-        }
 
         foreach ($currentFiles as $path) {
             $result = $this->uploadSingleFile($context, $path, 'current_progress', $contractId);
@@ -303,7 +287,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         }
 
         return [
-            'success' => ! empty($uploadedFileIds['previous']) || ! empty($uploadedFileIds['current']),
+            'success' => ! empty($uploadedFileIds['current']),
             'file_ids' => $uploadedFileIds,
             'uploads' => $uploads,
         ];

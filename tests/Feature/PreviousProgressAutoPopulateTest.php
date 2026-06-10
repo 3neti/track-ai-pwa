@@ -96,7 +96,7 @@ test('resolvePreviousProgressFileIds skips draft reports', function () {
     expect($fileIds)->toBe([]);
 });
 
-test('resolvePreviousProgressFileIds skips failed reports', function () {
+test('resolvePreviousProgressFileIds includes failed reports (files are still valid)', function () {
     ProjectProgressReport::factory()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -108,7 +108,7 @@ test('resolvePreviousProgressFileIds skips failed reports', function () {
 
     $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Foundation');
 
-    expect($fileIds)->toBe([]);
+    expect($fileIds)->toBe(['uuid-failed-1']);
 });
 
 test('previous progress endpoint returns first report status', function () {

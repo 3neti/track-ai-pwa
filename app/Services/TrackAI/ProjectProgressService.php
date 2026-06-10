@@ -30,10 +30,7 @@ class ProjectProgressService
         return ProjectProgressReport::where('contract_id', $contractId)
             ->where('current_milestone', $milestone)
             ->whereNotNull('current_progress_file_ids')
-            ->whereNotIn('progress_status', [
-                ProjectProgressReport::STATUS_DRAFT,
-                ProjectProgressReport::STATUS_FAILED,
-            ])
+            ->where('progress_status', '!=', ProjectProgressReport::STATUS_DRAFT)
             ->orderByDesc('created_at')
             ->first();
     }
