@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Link, usePage } from '@inertiajs/vue3';
-import { Briefcase, ClipboardCheck, Clock, Upload, RefreshCw, Radio } from 'lucide-vue-next';
+import { Link, usePage, router } from '@inertiajs/vue3';
+import { Briefcase, ClipboardCheck, Clock, Upload, RefreshCw, LogOut } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -16,6 +16,10 @@ const navItems = [
 ];
 
 const isActive = (href: string) => currentRoute.value.startsWith(href);
+
+function handleLogout() {
+    router.post('/logout');
+}
 </script>
 
 <template>
@@ -34,6 +38,13 @@ const isActive = (href: string) => currentRoute.value.startsWith(href);
                 <component :is="item.icon" class="h-5 w-5" />
                 <span>{{ item.name }}</span>
             </Link>
+            <button
+                @click="handleLogout"
+                class="flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors text-muted-foreground hover:text-destructive"
+            >
+                <LogOut class="h-5 w-5" />
+                <span>Logout</span>
+            </button>
         </div>
     </nav>
 </template>
