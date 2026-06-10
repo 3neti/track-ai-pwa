@@ -115,8 +115,8 @@ class ContractController extends Controller
             try {
                 $response = $this->sarasClient->getFileUrls([$contract->certificate_file_id]);
 
-                $files = $response['files'] ?? $response['data'] ?? [];
-                $url = $files[0]['url'] ?? $files[0]['downloadUrl'] ?? null;
+                $urls = $response['urls'] ?? $response['files'] ?? $response['data'] ?? [];
+                $url = $urls[0]['url'] ?? $urls[0]['downloadUrl'] ?? null;
 
                 if ($url) {
                     return response()->json([
