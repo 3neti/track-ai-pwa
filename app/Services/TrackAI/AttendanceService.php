@@ -152,6 +152,9 @@ class AttendanceService
         try {
             // Update the existing check-in process with check-out fields
             if ($session->saras_process_id) {
+                // Combine check-in and check-out remarks into one field
+                $combinedRemarks = $this->combineRemarks($session->check_in_remarks, $remarks);
+
                 $this->sarasClient->updateProcessField(
                     processId: $session->saras_process_id,
                     subProjectId: config('saras.subproject_ids.attendance'),
@@ -159,7 +162,7 @@ class AttendanceService
                         'ipAddressCheckOut' => $ipAddress ?? '',
                         'geoLocationCheckOut' => "{$latitude},{$longitude}",
                         'checkOutTime' => now('Asia/Manila')->toIso8601String(),
-                        'remarks' => $remarks ?? '',
+                        'remarks' => $combinedRemarks,
                     ],
                 );
 
@@ -225,11 +228,24 @@ class AttendanceService
     }
 
     /**
-     * Generate idempotency key for attendance actions.
-     * Used as fallback when client_request_id is not provided.
-     * Note: This generates a random suffix, so it's NOT safe for offline replay.
-     * Always prefer using client_request_id from the frontend.
+     * Combine check-in and check-out remarks into a single string.
      */
+    protected function combineRemarks(?string $checkInRemarks, ?string $checkOutRemarks): string
+    {
+        $checkIn = trim($checkInRemarks ?? '');
+        $checkOut = trim($checkOutRemarks ?? '');
+
+        if ($checkIn && $checkOut) {
+            return "check in remarks: {$checkIn}\ncheck out remarks: {$checkOut}";
+        }
+
+        if ($checkOut) {
+            return $checkOut;
+        }
+
+        return $checkIn;
+    }
+
     protected function generateIdempotencyKey(int $userId, string $contractId, string $action): string
     {
         $date = now()->format('Y-m-d');
