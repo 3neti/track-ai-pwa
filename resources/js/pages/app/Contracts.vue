@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
-import { Briefcase, RefreshCw, Loader2, AlertCircle, Award, Download, ChevronRight, Info } from 'lucide-vue-next';
+import { Head, router } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
+import { Briefcase, RefreshCw, Loader2, AlertCircle, Award, Download, ChevronRight, Info, Check } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
-import SyncBadge from '@/components/app/SyncBadge.vue';
-import { useOfflineQueue } from '@/composables/useOfflineQueue';
+import { useActiveContract } from '@/composables/useActiveContract';
 import axios from 'axios';
 
 interface ContractItem {
@@ -24,13 +23,36 @@ interface ContractItem {
 
 const props = defineProps<{ contracts: ContractItem[] }>();
 
-const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
+const { activeContractId, setActiveContract } = useActiveContract();
 
 const contractList = ref<ContractItem[]>(props.contracts);
 const isRefreshing = ref(false);
 const error = ref<string | null>(null);
 const downloadingId = ref<number | null>(null);
 const infoMessage = ref<string | null>(null);
+
+// Auto-select if only one contract
+onMounted(() => {
+    if (contractList.value.length === 1 && !activeContractId.value) {
+        selectContract(contractList.value[0]);
+    }
+});
+
+function selectContract(contract: ContractItem) {
+    // Store saras_process_id as the active contract ID — this is what Progress/Attendance/Inventory use
+    setActiveContract(contract.saras_process_id, contract.name);
+}
+
+function openWorkspace() {
+    if (activeContractId.value) {
+        router.visit('/app/project-progress');
+    }
+}
+
+const selectedId = computed(() => {
+    // Match against saras_process_id since that's what we store
+    return activeContractId.value;
+});
 
 async function handleRefresh() {
     isRefreshing.value = true;
@@ -91,14 +113,11 @@ const lastSyncTime = computed(() => {
                     <Briefcase class="h-6 w-6 text-primary" />
                     <h1 class="text-lg font-semibold">Contracts</h1>
                 </div>
-                <div class="flex items-center gap-2">
-                    <Button variant="outline" size="sm" @click="handleRefresh" :disabled="isRefreshing">
-                        <Loader2 v-if="isRefreshing" class="mr-1 h-3 w-3 animate-spin" />
-                        <RefreshCw v-else class="mr-1 h-3 w-3" />
-                        Refresh
-                    </Button>
-                    <SyncBadge :pending-count="pendingCount" :is-syncing="syncStatus.isSyncing" :is-online="isOnline" @sync="triggerSync" />
-                </div>
+                <Button variant="outline" size="sm" @click="handleRefresh" :disabled="isRefreshing">
+                    <Loader2 v-if="isRefreshing" class="mr-1 h-3 w-3 animate-spin" />
+                    <RefreshCw v-else class="mr-1 h-3 w-3" />
+                    Refresh
+                </Button>
             </div>
         </header>
 
@@ -139,62 +158,69 @@ const lastSyncTime = computed(() => {
 
             <!-- Contract cards -->
             <div v-else class="space-y-3">
-                <Card v-for="contract in contractList" :key="contract.id">
-                    <CardHeader class="pb-2">
-                        <div class="flex items-start justify-between">
-                            <div class="space-y-1 flex-1 min-w-0">
-                                <CardTitle class="text-base leading-tight">{{ contract.name }}</CardTitle>
-                                <p class="text-xs text-muted-foreground font-mono">
-                                    {{ contract.saras_process_id.substring(0, 8) }}...
-                                    <span v-if="contract.display_number" class="ml-1">#{{ contract.display_number }}</span>
-                                </p>
-                            </div>
-                            <Badge :variant="certificateConfig(contract.certificate_status).variant">
-                                {{ certificateConfig(contract.certificate_status).label }}
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    <CardContent class="space-y-3">
-                        <!-- Milestones -->
-                        <div v-if="contract.milestones.length">
-                            <p class="text-xs font-medium text-muted-foreground mb-1.5">Milestones</p>
-                            <div class="flex flex-wrap gap-1">
-                                <Badge v-for="m in contract.milestones" :key="m" variant="outline" class="text-xs">
-                                    {{ m }}
-                                </Badge>
-                            </div>
-                        </div>
-                        <div v-else>
-                            <p class="text-xs text-muted-foreground">No milestones defined</p>
-                        </div>
-
-                        <!-- Certificate section -->
-                        <div v-if="contract.certificate_status === 'available'" class="space-y-2">
-                            <div class="flex items-center gap-2 p-2 rounded border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
-                                <Award class="h-4 w-4 text-green-600 flex-shrink-0" />
-                                <span class="text-sm text-green-700 dark:text-green-300 flex-1">Certificate of Completion</span>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    class="h-7 text-xs"
-                                    @click="handleDownloadCertificate(contract)"
-                                    :disabled="downloadingId === contract.id"
+                <div
+                    v-for="contract in contractList"
+                    :key="contract.id"
+                    @click="selectContract(contract)"
+                    class="rounded-lg border-2 p-4 cursor-pointer transition-all space-y-3"
+                    :class="selectedId === contract.saras_process_id
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                        : 'border-muted hover:border-muted-foreground/30'"
+                >
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1 flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <div
+                                    class="h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                    :class="selectedId === contract.saras_process_id
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-muted-foreground/30'"
                                 >
-                                    <Loader2 v-if="downloadingId === contract.id" class="mr-1 h-3 w-3 animate-spin" />
-                                    <Download v-else class="mr-1 h-3 w-3" />
-                                    Download
-                                </Button>
+                                    <Check v-if="selectedId === contract.saras_process_id" class="h-3 w-3" />
+                                </div>
+                                <h3 class="text-base font-semibold leading-tight">{{ contract.name }}</h3>
                             </div>
-                            <p v-if="contract.certificate_file_id" class="text-xs text-muted-foreground font-mono px-2">
-                                File: {{ contract.certificate_file_id.substring(0, 8) }}...
+                            <p class="text-xs text-muted-foreground font-mono ml-7">
+                                {{ contract.saras_process_id.substring(0, 8) }}...
+                                <span v-if="contract.display_number" class="ml-1">#{{ contract.display_number }}</span>
                             </p>
                         </div>
-                        <div v-else-if="contract.certificate_status === 'pending'" class="flex items-center gap-2 p-2 rounded border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950">
-                            <Award class="h-4 w-4 text-yellow-600 flex-shrink-0" />
-                            <span class="text-sm text-yellow-700 dark:text-yellow-300">Certificate pending AI evaluation</span>
+                        <Badge :variant="certificateConfig(contract.certificate_status).variant">
+                            {{ certificateConfig(contract.certificate_status).label }}
+                        </Badge>
+                    </div>
+
+                    <!-- Milestones -->
+                    <div v-if="contract.milestones.length" class="ml-7">
+                        <div class="flex flex-wrap gap-1">
+                            <Badge v-for="m in contract.milestones" :key="m" variant="outline" class="text-xs">{{ m }}</Badge>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+
+                    <!-- Certificate -->
+                    <div v-if="contract.certificate_status === 'available'" class="ml-7">
+                        <div class="flex items-center gap-2 p-2 rounded border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950">
+                            <Award class="h-4 w-4 text-green-600 flex-shrink-0" />
+                            <span class="text-sm text-green-700 dark:text-green-300 flex-1">Certificate available</span>
+                            <Button size="sm" variant="outline" class="h-7 text-xs" @click.stop="handleDownloadCertificate(contract)" :disabled="downloadingId === contract.id">
+                                <Loader2 v-if="downloadingId === contract.id" class="mr-1 h-3 w-3 animate-spin" />
+                                <Download v-else class="mr-1 h-3 w-3" /> Download
+                            </Button>
+                        </div>
+                    </div>
+                    <div v-else-if="contract.certificate_status === 'pending'" class="ml-7">
+                        <div class="flex items-center gap-2 p-2 rounded border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950">
+                            <Award class="h-4 w-4 text-yellow-600 flex-shrink-0" />
+                            <span class="text-sm text-yellow-700 dark:text-yellow-300">Certificate pending</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Open workspace button -->
+                <Button v-if="activeContractId" @click="openWorkspace" class="w-full h-12 text-base">
+                    <ChevronRight class="mr-2 h-5 w-5" />
+                    Open Contract Workspace
+                </Button>
             </div>
         </main>
         <AppBottomNav />

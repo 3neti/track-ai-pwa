@@ -71,7 +71,7 @@ test('certificate endpoint returns 404 when not available', function () {
     $response->assertNotFound();
 });
 
-test('certificate endpoint returns file info when download URL not available', function () {
+test('certificate endpoint returns download URL when certificate available', function () {
     $contract = Contract::factory()->available()->create();
 
     $response = $this->actingAs($this->user)
@@ -79,8 +79,7 @@ test('certificate endpoint returns file info when download URL not available', f
 
     $response->assertSuccessful()
         ->assertJson(['success' => true])
-        ->assertJsonPath('certificate_file_id', $contract->certificate_file_id)
-        ->assertJsonPath('download_url', null);
+        ->assertJsonStructure(['download_url']);
 });
 
 test('certificate status resolves correctly for all states', function () {

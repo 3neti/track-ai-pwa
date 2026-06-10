@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Contracts\SarasClientInterface;
 use App\Http\Controllers\Controller;
 use App\Models\Contract;
 use App\Services\TrackAI\ContractService;
@@ -13,6 +14,7 @@ class ContractController extends Controller
 {
     public function __construct(
         protected ContractService $contractService,
+        protected SarasClientInterface $sarasClient,
     ) {}
 
     /**
@@ -108,12 +110,30 @@ class ContractController extends Controller
             ]);
         }
 
-        // Certificate file exists in Saras but no direct download API is available yet
+        // Fetch download URL from Saras via /knowledges/urlStorage
+        if ($contract->certificate_file_id) {
+            try {
+                $response = $this->sarasClient->getFileUrls([$contract->certificate_file_id]);
+
+                $files = $response['files'] ?? $response['data'] ?? [];
+                $url = $files[0]['url'] ?? $files[0]['downloadUrl'] ?? null;
+
+                if ($url) {
+                    return response()->json([
+                        'success' => true,
+                        'download_url' => $url,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // Fall through to info response
+            }
+        }
+
         return response()->json([
             'success' => true,
             'download_url' => null,
             'certificate_file_id' => $contract->certificate_file_id,
-            'message' => 'Certificate is available on the Saras dashboard. File download API is pending Saras deployment.',
+            'message' => 'Certificate file exists but download URL could not be resolved.',
         ]);
     }
 }

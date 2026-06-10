@@ -39,7 +39,7 @@ Route::post('/auth/face/verify', [FaceAuthController::class, 'verify'])
     ->name('auth.face.verify');
 
 Route::get('dashboard', function () {
-    return redirect('/app/project-progress');
+    return redirect('/app/contracts');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 /*

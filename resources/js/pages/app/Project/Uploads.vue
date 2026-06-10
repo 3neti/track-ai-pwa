@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
-import { Upload, Search, Filter, Loader2, FolderOpen, Plus } from 'lucide-vue-next';
+import { Package, Upload, Search, Filter, Loader2, FolderOpen, Plus } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
-import ContractSelector from '@/components/app/ContractSelector.vue';
+import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import UploadListItem from '@/components/app/UploadListItem.vue';
 import UploadEditSheet from '@/components/app/UploadEditSheet.vue';
 import UploadDeleteDialog from '@/components/app/UploadDeleteDialog.vue';
@@ -45,22 +45,13 @@ const props = defineProps<{
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
-const { getActiveContractId, setActiveContract } = useActiveContract();
+const { activeContractId } = useActiveContract();
 
-// Use Track AI module from config — same as Progress and Attendance pages
+// Use default project from config
 const defaultProject = props.defaultProjectId
     ? props.projects.find(p => p.external_id === props.defaultProjectId)
     : null;
 const selectedProjectId = ref<string>(defaultProject?.external_id || props.projects[0]?.external_id || '');
-const selectedProjectName = computed(() => {
-    const p = props.projects.find(p => p.external_id === selectedProjectId.value);
-    return p?.name || 'Track AI';
-});
-
-// Selected contract
-const contractList = computed(() => props.contracts ?? []);
-const selectedContractId = ref(getActiveContractId(contractList.value));
-watch(selectedContractId, (id) => { if (id) setActiveContract(id); });
 const selectedProject = computed(() =>
     props.projects.find(p => p.external_id === selectedProjectId.value)
 );
@@ -275,14 +266,14 @@ const statusOptions = [
 
 <template>
     <div class="min-h-screen bg-background pb-20">
-        <Head title="Project Uploads" />
+        <Head title="Inventory" />
 
         <!-- Header -->
         <header class="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
             <div class="flex items-center justify-between px-4 py-3">
                 <div class="flex items-center gap-2">
-                    <Upload class="h-6 w-6 text-primary" />
-                    <h1 class="text-lg font-semibold">Project Uploads</h1>
+                    <Package class="h-6 w-6 text-primary" />
+                    <h1 class="text-lg font-semibold">Inventory</h1>
                 </div>
                 <SyncBadge
                     :pending-count="pendingCount"
@@ -293,28 +284,16 @@ const statusOptions = [
             </div>
         </header>
 
+        <ContractIndicator />
+
         <!-- Content -->
         <main class="p-4">
-            <!-- Module (static — always Track AI) -->
-            <div class="mb-4 text-sm text-muted-foreground">
-                Module: <span class="font-medium text-foreground">{{ selectedProjectName }}</span>
-            </div>
-
-            <!-- Contract Selector -->
-            <div class="mb-4" v-if="contractList.length > 0">
-                <ContractSelector
-                    v-model="selectedContractId"
-                    :contracts="contractList"
-                    label="Contract"
-                />
-            </div>
-
             <!-- No project selected -->
             <div v-if="!selectedProject" class="py-12 text-center">
                 <FolderOpen class="mx-auto h-12 w-12 text-muted-foreground/50" />
-                <h3 class="mt-4 text-lg font-medium">No module available</h3>
+                <h3 class="mt-4 text-lg font-medium">No data available</h3>
                 <p class="mt-2 text-sm text-muted-foreground">
-                    No project module is configured.
+                    Select a contract to view inventory.
                 </p>
             </div>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import { Upload, Camera, File, X, AlertCircle } from 'lucide-vue-next';
+import { Package, Upload, Camera, File, X, AlertCircle } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,8 +16,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
-import SyncBadge from '@/components/app/SyncBadge.vue';
+import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
+import { useActiveContract } from '@/composables/useActiveContract';
 import axios from 'axios';
 
 interface Project {
@@ -33,16 +34,12 @@ const props = defineProps<{
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
+const { activeContractId } = useActiveContract();
 
-// Use Track AI module from config — same as all other pages
 const defaultProject = props.defaultProjectId
     ? props.projects.find(p => p.external_id === props.defaultProjectId)
     : null;
 const selectedProject = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
-const selectedProjectName = computed(() => {
-    const p = props.projects.find(p => p.external_id === selectedProject.value);
-    return p?.name || 'Track AI';
-});
 const documentType = ref('');
 const fileName = ref('');
 const remarks = ref('');
@@ -133,23 +130,19 @@ const handleSubmit = async () => {
 
 <template>
     <div class="min-h-screen bg-background pb-20">
-        <Head title="Uploads" />
+        <Head title="New Upload" />
 
         <!-- Header -->
         <header class="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
             <div class="flex items-center justify-between px-4 py-3">
                 <div class="flex items-center gap-2">
-                    <Upload class="h-6 w-6 text-primary" />
-                    <h1 class="text-lg font-semibold">Uploads</h1>
+                    <Package class="h-6 w-6 text-primary" />
+                    <h1 class="text-lg font-semibold">New Upload</h1>
                 </div>
-                <SyncBadge
-                    :pending-count="pendingCount"
-                    :is-syncing="syncStatus.isSyncing"
-                    :is-online="isOnline"
-                    @sync="triggerSync"
-                />
             </div>
         </header>
+
+        <ContractIndicator />
 
         <!-- Content -->
         <main class="p-4">
@@ -166,11 +159,6 @@ const handleSubmit = async () => {
                         <AlertCircle class="h-4 w-4" />
                         <AlertDescription>{{ message.text }}</AlertDescription>
                     </Alert>
-
-                    <!-- Module (static — always Track AI) -->
-                    <div class="text-sm text-muted-foreground">
-                        Module: <span class="font-medium text-foreground">{{ selectedProjectName }}</span>
-                    </div>
 
                     <!-- Document Type -->
                     <div class="grid gap-2">

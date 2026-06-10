@@ -26,6 +26,7 @@ class ProjectProgressRequest extends FormRequest
             'previous_progress_file_ids.*' => ['string', 'max:255'],
             'current_progress_file_ids' => ['nullable', 'array'],
             'current_progress_file_ids.*' => ['string', 'max:255'],
+            'geo_location' => ['nullable', 'string', 'max:100'],
         ];
     }
 

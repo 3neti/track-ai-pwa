@@ -1,23 +1,20 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
-import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Award, Info } from 'lucide-vue-next';
+import { ref, computed, watch, onMounted } from 'vue';
+import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Award, Info, ChevronDown, ChevronUp } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
-import SyncBadge from '@/components/app/SyncBadge.vue';
-import ProjectSelector from '@/components/app/ProjectSelector.vue';
-import ContractSelector from '@/components/app/ContractSelector.vue';
+import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
-import { useActiveProject } from '@/composables/useActiveProject';
 import { useActiveContract } from '@/composables/useActiveContract';
+import { useGeolocation } from '@/composables/useGeolocation';
 import axios from 'axios';
 
 interface Project { id: number; external_id: string; name: string; }
@@ -30,110 +27,101 @@ interface ProgressReport {
     current_progress_file_ids: string[] | null; created_at: string;
 }
 interface UploadedFile { id: number; remote_file_id: string | null; title: string; status: string; }
+interface MilestoneStatus { has_progress: boolean; has_certificate: boolean; status: string; }
 
 const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
-const { getActiveProjectId } = useActiveProject();
-const { getActiveContractId, setActiveContract } = useActiveContract();
+const { activeContractId } = useActiveContract();
+const { state: geoState, getCurrentPosition } = useGeolocation();
 
-// Use Track AI module from config-provided project ID
+// Resolve project internally (hidden from user)
 const defaultProject = props.defaultProjectId
     ? props.projects.find(p => p.external_id === props.defaultProjectId)
     : null;
-const selectedProjectId = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
-const selectedProject = computed(() => props.projects.find(p => p.external_id === selectedProjectId.value));
-const selectedContractId = ref(getActiveContractId(props.contracts));
-const selectedContract = computed(() => props.contracts.find(c => c.id === selectedContractId.value));
+const selectedProject = computed(() => defaultProject || props.projects[0]);
+const selectedContract = computed(() => props.contracts.find(c => String(c.id) === activeContractId.value));
 
-// Persist contract selection
-watch(selectedContractId, (id) => { if (id) setActiveContract(id); });
-const selectedMilestone = ref('');
-const remarks = ref('');
-const tags = ref<string[]>([]);
-const tagInput = ref('');
-const isSubmitting = ref(false);
-const isPolling = ref(false);
-const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
-const submitStep = ref<string | null>(null);
-const currentFiles = ref<UploadedFile[]>([]);
-const isUploadingCurrent = ref(false);
+// State
 const reports = ref<ProgressReport[]>([]);
 const isLoadingReports = ref(false);
-const previousProgressInfo = ref<{ isFirstReport: boolean; previousFileCount: number } | null>(null);
-const isLoadingPreviousProgress = ref(false);
+const milestoneStatuses = ref<Record<string, MilestoneStatus>>({});
+const isPolling = ref(false);
+const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
 
-watch(() => props.contracts, (c) => {
-    if (c.length > 0 && !selectedContractId.value) {
-        selectedContractId.value = getActiveContractId(c);
-    }
-}, { immediate: true });
+// Per-milestone upload state
+const expandedMilestone = ref<string | null>(null);
+const uploadFiles = ref<Record<string, UploadedFile[]>>({});
+const uploadRemarks = ref<Record<string, string>>({});
+const uploadTags = ref<Record<string, string[]>>({});
+const uploadTagInput = ref<Record<string, string>>({});
+const isUploading = ref<Record<string, boolean>>({});
+const isSubmitting = ref<Record<string, boolean>>({});
+const submitStep = ref<Record<string, string | null>>({});
 
-watch(selectedContractId, () => {
-    selectedMilestone.value = '';
-    previousProgressInfo.value = null;
-    selectNextMilestone();
-});
-
-/**
- * Select the first milestone without progress by querying the backend.
- * Checks both local DB and Saras so it works on any deployment.
- */
-async function selectNextMilestone() {
-    const milestones = selectedContract.value?.milestones ?? [];
-    if (!milestones.length) return;
-
-    const contractId = selectedContractId.value;
-    if (!contractId) {
-        selectedMilestone.value = milestones[0];
-        return;
-    }
-
-    try {
-        const r = await axios.get(`/api/contracts/${encodeURIComponent(contractId)}/milestone-progress`);
-        if (r.data.success) {
-            const status: Record<string, { has_progress: boolean }> = r.data.milestones;
-            const nextMilestone = milestones.find(m => !status[m]?.has_progress);
-            selectedMilestone.value = nextMilestone ?? milestones[0];
-            return;
-        }
-    } catch { /* fallback below */ }
-
-    selectedMilestone.value = milestones[0];
-}
-
-watch(selectedMilestone, async () => {
-    previousProgressInfo.value = null;
-    if (!selectedContractId.value || !selectedMilestone.value) return;
-    isLoadingPreviousProgress.value = true;
-    try {
-        const r = await axios.get(`/api/contracts/${encodeURIComponent(selectedContractId.value)}/milestones/${encodeURIComponent(selectedMilestone.value)}/previous-progress`);
-        if (r.data.success) previousProgressInfo.value = { isFirstReport: r.data.isFirstReport, previousFileCount: r.data.previousFileCount };
-    } catch { /* ignore */ } finally { isLoadingPreviousProgress.value = false; }
-}, { immediate: true });
-
-watch(selectedProject, () => loadReports(), { immediate: true });
-
-async function loadReports() {
-    if (!selectedProject.value) { reports.value = []; return; }
+// Load reports + milestone statuses
+async function loadData() {
+    if (!selectedProject.value || !activeContractId.value) return;
     isLoadingReports.value = true;
     try {
-        const r = await axios.get(`/api/projects/${selectedProject.value.id}/progress-reports`);
-        if (r.data.success) reports.value = r.data.data;
+        const [reportsRes, statusRes] = await Promise.all([
+            axios.get(`/api/projects/${selectedProject.value.id}/progress-reports`),
+            axios.get(`/api/contracts/${encodeURIComponent(activeContractId.value)}/milestone-progress`),
+        ]);
+        if (reportsRes.data.success) reports.value = reportsRes.data.data;
+        if (statusRes.data.success) milestoneStatuses.value = statusRes.data.milestones;
     } catch { /* ignore */ } finally { isLoadingReports.value = false; }
 }
 
-async function handleFileUpload(event: Event) {
+onMounted(() => {
+    loadData();
+    getCurrentPosition();
+});
+watch(activeContractId, loadData);
+
+function addTag(milestone: string) {
+    const input = (uploadTagInput.value[milestone] ?? '').trim().toLowerCase();
+    if (!input) return;
+    if (!uploadTags.value[milestone]) uploadTags.value[milestone] = [];
+    if (!uploadTags.value[milestone].includes(input)) uploadTags.value[milestone].push(input);
+    uploadTagInput.value[milestone] = '';
+}
+
+function removeTag(milestone: string, index: number) {
+    uploadTags.value[milestone]?.splice(index, 1);
+}
+
+// Reports grouped by milestone
+function reportsForMilestone(milestone: string): ProgressReport[] {
+    return reports.value
+        .filter(r => r.current_milestone === milestone && r.contract_id === activeContractId.value)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+function milestoneStatus(milestone: string): MilestoneStatus | null {
+    return milestoneStatuses.value[milestone] ?? null;
+}
+
+function toggleMilestone(milestone: string) {
+    expandedMilestone.value = expandedMilestone.value === milestone ? null : milestone;
+}
+
+// File upload per milestone
+async function handleFileUpload(event: Event, milestone: string) {
     const target = event.target as HTMLInputElement;
     if (!target.files?.length || !selectedProject.value) return;
     const files = Array.from(target.files);
-    isUploadingCurrent.value = true;
+    isUploading.value[milestone] = true;
+    if (!uploadFiles.value[milestone]) uploadFiles.value[milestone] = [];
+
     for (const file of files) {
         try {
             const cr = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {
-                contract_id: selectedContractId.value || selectedProjectId.value,
+                contract_id: activeContractId.value,
                 client_request_id: crypto.randomUUID(),
-                title: file.name, document_type: 'current_progress', tags: ['progress', 'current_progress'],
+                title: file.name,
+                document_type: 'current_progress',
+                tags: ['progress', 'current_progress', milestone],
             });
             if (!cr.data.success) continue;
             const fd = new FormData(); fd.append('file', file);
@@ -142,55 +130,70 @@ async function handleFileUpload(event: Event) {
                 fd, { headers: { 'Content-Type': 'multipart/form-data' } }
             );
             if (ur.data.success && ur.data.upload) {
-                currentFiles.value.push({
+                uploadFiles.value[milestone].push({
                     id: ur.data.upload.id, remote_file_id: ur.data.upload.remote_file_id,
                     title: file.name, status: ur.data.upload.status,
                 });
             }
         } catch (err) { console.error(`Failed to upload ${file.name}`, err); }
     }
-    isUploadingCurrent.value = false;
+    isUploading.value[milestone] = false;
     target.value = '';
 }
 
-function removeFile(index: number) {
-    currentFiles.value.splice(index, 1);
+function removeFile(milestone: string, index: number) {
+    uploadFiles.value[milestone]?.splice(index, 1);
 }
 
-async function handleSubmit() {
-    if (!selectedProject.value || isSubmitting.value) return;
-    isSubmitting.value = true; message.value = null;
-    const currIds = currentFiles.value.filter(f => f.remote_file_id).map(f => f.remote_file_id!);
+// Submit progress for a milestone (no updateFiles call — backend handles previousProgressFiles)
+async function handleSubmit(milestone: string) {
+    if (!selectedProject.value || isSubmitting.value[milestone]) return;
+    isSubmitting.value[milestone] = true;
+    message.value = null;
+
+    const files = uploadFiles.value[milestone] ?? [];
+    const currIds = files.filter(f => f.remote_file_id).map(f => f.remote_file_id!);
+
+    // Capture geolocation
+    await getCurrentPosition();
+    const geoLocation = geoState.value.latitude && geoState.value.longitude
+        ? `${geoState.value.latitude},${geoState.value.longitude}` : '';
+
     try {
-        submitStep.value = 'Creating progress report...';
+        submitStep.value[milestone] = 'Creating progress report...';
         const r = await axios.post(`/api/projects/${selectedProject.value.id}/progress-reports`, {
-            contract_id: selectedContractId.value || null,
-            current_milestone: selectedMilestone.value || null,
-            remarks: remarks.value || null,
-            tags: tags.value,
+            contract_id: activeContractId.value || null,
+            current_milestone: milestone,
+            remarks: uploadRemarks.value[milestone] || null,
+            tags: uploadTags.value[milestone] ?? [],
+            geo_location: geoLocation,
             current_progress_file_ids: currIds,
         });
         if (!r.data.success) throw new Error(r.data.message);
         const report = r.data.report;
-        if (report.saras_process_id && currIds.length) {
-            submitStep.value = 'Attaching stage files...';
-            await axios.post(`/api/progress-reports/${report.id}/stage-files`);
-        }
+
         if (report.saras_process_id) {
-            submitStep.value = 'Triggering AI evaluation...';
+            submitStep.value[milestone] = 'Triggering AI evaluation...';
             await axios.post(`/api/progress-reports/${report.id}/workflow`);
         }
-        message.value = { type: 'success', text: 'Progress report submitted and AI evaluation started.' };
-        remarks.value = ''; currentFiles.value = [];
-        await loadReports();
+
+        message.value = { type: 'success', text: `Progress report for ${milestone} submitted.` };
+        uploadFiles.value[milestone] = [];
+        uploadRemarks.value[milestone] = '';
+        uploadTags.value[milestone] = [];
+        expandedMilestone.value = null;
+        await loadData();
     } catch (error: any) {
         message.value = { type: 'error', text: error.response?.data?.message || error.message || 'Failed to submit.' };
-    } finally { isSubmitting.value = false; submitStep.value = null; }
+    } finally {
+        isSubmitting.value[milestone] = false;
+        submitStep.value[milestone] = null;
+    }
 }
 
 async function handlePollStatus(report: ProgressReport) {
     isPolling.value = true;
-    try { await axios.get(`/api/progress-reports/${report.id}/workflow`); await loadReports(); }
+    try { await axios.get(`/api/progress-reports/${report.id}/workflow`); await loadData(); }
     catch { /* ignore */ } finally { isPolling.value = false; }
 }
 
@@ -202,21 +205,24 @@ const statusConfig = (s: string) => ({
     failed: { label: 'Failed', variant: 'destructive' as const },
 }[s] || { label: s, variant: 'secondary' as const });
 
-const canSubmit = computed(() => selectedProject.value && !isSubmitting.value && currentFiles.value.length > 0);
+const canSubmitMilestone = (milestone: string) => {
+    return !isSubmitting.value[milestone] && (uploadFiles.value[milestone]?.length ?? 0) > 0;
+};
 </script>
 
 <template>
     <div class="min-h-screen bg-background pb-20">
-        <Head title="Project Progress" />
+        <Head title="Progress" />
         <header class="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
             <div class="flex items-center justify-between px-4 py-3">
                 <div class="flex items-center gap-2">
                     <ClipboardCheck class="h-6 w-6 text-primary" />
-                    <h1 class="text-lg font-semibold">Project Progress</h1>
+                    <h1 class="text-lg font-semibold">Progress</h1>
                 </div>
-                <SyncBadge :pending-count="pendingCount" :is-syncing="syncStatus.isSyncing" :is-online="isOnline" @sync="triggerSync" />
             </div>
         </header>
+
+        <ContractIndicator />
 
         <main class="p-4 space-y-4">
             <Alert v-if="message" :variant="message.type === 'error' ? 'destructive' : 'default'">
@@ -224,181 +230,124 @@ const canSubmit = computed(() => selectedProject.value && !isSubmitting.value &&
                 <AlertDescription>{{ message.text }}</AlertDescription>
             </Alert>
 
-            <!-- New Progress Report -->
-            <Card>
-                <CardHeader>
-                    <CardTitle>New Progress Report</CardTitle>
-                    <CardDescription>Upload photos and submit for AI evaluation</CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-4">
-                    <!-- Project auto-selected (Track AI module) -->
-                    <div v-if="selectedProject" class="text-sm text-muted-foreground">
-                        Module: <span class="font-medium text-foreground">{{ selectedProject.name }}</span>
-                    </div>
+            <!-- Loading -->
+            <div v-if="isLoadingReports" class="space-y-3">
+                <div v-for="i in 3" :key="i" class="rounded-lg border p-4 space-y-3 animate-pulse">
+                    <div class="h-5 bg-muted rounded w-1/3"></div>
+                    <div class="h-3 bg-muted rounded w-2/3"></div>
+                </div>
+            </div>
 
-                    <!-- Contract -->
-                    <ContractSelector
-                        v-if="contracts.length > 0"
-                        v-model="selectedContractId"
-                        :contracts="contracts"
-                        label="Contract"
-                    />
-
-                    <!-- Milestone -->
-                    <div class="grid gap-2" v-if="selectedContract?.milestones.length">
-                        <Label>Milestone</Label>
-                        <Select v-model="selectedMilestone">
-                            <SelectTrigger><SelectValue placeholder="Select milestone" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem v-for="m in selectedContract.milestones" :key="m" :value="m">{{ m }}</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <Separator />
-
-                    <!-- Previous Progress Photos (auto-populated) -->
-                    <div class="space-y-2">
-                        <Label class="flex items-center gap-2"><Camera class="h-4 w-4" /> Previous Progress Photos</Label>
-                        <div v-if="isLoadingPreviousProgress" class="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 class="h-3 w-3 animate-spin" /> Checking previous progress...
-                        </div>
-                        <div v-else-if="previousProgressInfo?.isFirstReport" class="flex items-center gap-2 p-3 rounded-md border border-dashed bg-muted/30">
-                            <Info class="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <p class="text-sm text-muted-foreground">No previous progress photos yet. This is the first report for this milestone.</p>
-                        </div>
-                        <div v-else-if="previousProgressInfo" class="flex items-center gap-2 p-3 rounded-md border bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-                            <Info class="h-4 w-4 text-blue-600 flex-shrink-0" />
-                            <p class="text-sm text-blue-700 dark:text-blue-300">
-                                Previous progress photos will be auto-populated from the last submitted report.
-                                <span class="font-medium">({{ previousProgressInfo.previousFileCount }} file(s))</span>
-                            </p>
-                        </div>
-                        <div v-else class="flex items-center gap-2 p-3 rounded-md border border-dashed bg-muted/30">
-                            <Info class="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <p class="text-sm text-muted-foreground">Select a contract and milestone to check for previous progress photos.</p>
-                        </div>
-                    </div>
-
-                    <!-- Current Progress Photos -->
-                    <div class="space-y-2">
-                        <Label class="flex items-center gap-2"><Camera class="h-4 w-4" /> Current Progress Photos</Label>
-                        <p class="text-xs text-muted-foreground">Current construction progress images</p>
-                        <div v-if="currentFiles.length" class="space-y-1">
-                            <div v-for="(file, i) in currentFiles" :key="file.id" class="flex items-center justify-between text-sm bg-muted/50 rounded px-3 py-1.5">
-                                <span class="truncate">{{ file.title }}</span>
-                                <div class="flex items-center gap-2">
-                                    <Badge variant="outline" class="text-xs">{{ file.remote_file_id ? 'uploaded' : file.status }}</Badge>
-                                    <button @click="removeFile(i)" class="text-muted-foreground hover:text-destructive">×</button>
-                                </div>
-                            </div>
-                        </div>
-                        <label class="cursor-pointer">
-                            <Button variant="outline" size="sm" as="span" :disabled="isUploadingCurrent">
-                                <Loader2 v-if="isUploadingCurrent" class="mr-1 h-3 w-3 animate-spin" /><Upload v-else class="mr-1 h-3 w-3" /> Add Photos
-                            </Button>
-                            <input type="file" accept="image/*" multiple capture="environment" class="hidden" @change="handleFileUpload" />
-                        </label>
-                    </div>
-
-                    <Separator />
-
-                    <!-- Tags -->
-                    <div class="grid gap-2">
-                        <Label>Tags</Label>
-                        <div class="flex flex-wrap gap-1.5 min-h-[2rem]">
-                            <span
-                                v-for="(tag, i) in tags"
-                                :key="tag"
-                                class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-                            >
-                                {{ tag }}
-                                <button
-                                    @click="tags.splice(i, 1)"
-                                    class="ml-0.5 rounded-full hover:bg-primary/20 p-0.5"
-                                    type="button"
-                                >
-                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                </button>
-                            </span>
-                        </div>
-                        <div class="flex gap-2">
-                            <Input
-                                v-model="tagInput"
-                                placeholder="Add a tag..."
-                                class="flex-1"
-                                @keydown.enter.prevent="() => { const t = tagInput.trim().toLowerCase(); if (t && !tags.includes(t)) { tags.push(t); } tagInput = ''; }"
-                            />
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                type="button"
-                                @click="() => { const t = tagInput.trim().toLowerCase(); if (t && !tags.includes(t)) { tags.push(t); } tagInput = ''; }"
-                                :disabled="!tagInput.trim()"
-                            >
-                                Add
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="remarks">Engineer's Remarks</Label>
-                        <Textarea id="remarks" v-model="remarks" placeholder="Describe current progress, observations, issues..." rows="3" />
-                    </div>
-
-                    <Button @click="handleSubmit" :disabled="!canSubmit" class="w-full">
-                        <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                        <Sparkles v-else class="mr-2 h-4 w-4" />
-                        {{ submitStep || 'Submit & Run AI Evaluation' }}
-                    </Button>
-                    <p v-if="!canSubmit && !isSubmitting" class="text-xs text-center text-muted-foreground">Upload at least one photo to submit</p>
+            <!-- No contract -->
+            <Card v-else-if="!selectedContract">
+                <CardContent class="py-12 text-center">
+                    <ClipboardCheck class="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <p class="text-muted-foreground">Select a contract to view milestones.</p>
                 </CardContent>
             </Card>
 
-            <!-- Reports List -->
-            <Card v-if="selectedProject">
-                <CardHeader>
-                    <div class="flex items-center justify-between">
-                        <CardTitle>Progress Reports</CardTitle>
-                        <Loader2 v-if="isLoadingReports" class="h-4 w-4 animate-spin text-muted-foreground" />
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <div v-if="reports.length === 0" class="text-center py-8 text-muted-foreground">No progress reports yet.</div>
-                    <div v-else class="space-y-3">
-                        <div v-for="report in reports" :key="report.id" class="rounded-lg border p-4 space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div class="space-y-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-medium text-sm">{{ report.current_milestone || 'No milestone' }}</span>
-                                        <Badge :variant="statusConfig(report.progress_status).variant">{{ statusConfig(report.progress_status).label }}</Badge>
-                                    </div>
-                                    <p class="text-xs text-muted-foreground">{{ new Date(report.created_at).toLocaleString() }}</p>
+            <!-- Milestone cards -->
+            <template v-else>
+                <Card v-for="milestone in selectedContract.milestones" :key="milestone">
+                    <CardHeader class="pb-2 cursor-pointer" @click="toggleMilestone(milestone)">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <CardTitle class="text-base">{{ milestone }}</CardTitle>
+                                <Badge v-if="milestoneStatus(milestone)?.has_certificate" variant="default" class="text-xs bg-green-600">Certificate</Badge>
+                                <Badge v-else-if="milestoneStatus(milestone)?.has_progress" variant="outline" class="text-xs">In Progress</Badge>
+                                <Badge v-else variant="secondary" class="text-xs">Not Started</Badge>
+                            </div>
+                            <ChevronDown v-if="expandedMilestone !== milestone" class="h-4 w-4 text-muted-foreground" />
+                            <ChevronUp v-else class="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <p class="text-xs text-muted-foreground">{{ reportsForMilestone(milestone).length }} update(s)</p>
+                    </CardHeader>
+
+                    <CardContent v-if="expandedMilestone === milestone" class="space-y-4">
+                        <!-- Progress update history -->
+                        <div v-if="reportsForMilestone(milestone).length" class="space-y-2">
+                            <p class="text-xs font-medium text-muted-foreground">Progress History</p>
+                            <div v-for="report in reportsForMilestone(milestone)" :key="report.id" class="rounded-md border p-3 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-muted-foreground">{{ new Date(report.created_at).toLocaleString() }}</span>
+                                    <Badge :variant="statusConfig(report.progress_status).variant" class="text-xs">{{ statusConfig(report.progress_status).label }}</Badge>
                                 </div>
-                            </div>
-                            <p v-if="report.remarks" class="text-sm text-muted-foreground">{{ report.remarks }}</p>
-                            <div class="flex gap-4 text-xs text-muted-foreground">
-                                <span v-if="report.previous_progress_file_ids?.length">📷 {{ report.previous_progress_file_ids.length }} previous</span>
-                                <span v-if="report.current_progress_file_ids?.length">📷 {{ report.current_progress_file_ids.length }} current</span>
-                            </div>
-
-                            <!-- Certificate -->
-                            <div v-if="report.progress_status === 'evaluated' || report.certificate_file_id" class="flex items-center gap-2 p-2 rounded bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
-                                <Award class="h-4 w-4 text-green-600" />
-                                <span class="text-sm text-green-700 dark:text-green-300">{{ report.certificate_file_id ? 'Certificate available' : 'Evaluation complete' }}</span>
-                                <Badge v-if="report.certificate_file_id" variant="outline" class="text-xs ml-auto">{{ report.certificate_file_id.substring(0, 8) }}...</Badge>
-                            </div>
-
-                            <div class="flex gap-2">
-                                <Button v-if="report.progress_status === 'processing'" size="sm" variant="outline" @click="handlePollStatus(report)" :disabled="isPolling">
+                                <p v-if="report.remarks" class="text-sm text-muted-foreground">{{ report.remarks }}</p>
+                                <div class="flex gap-3 text-xs text-muted-foreground">
+                                    <span v-if="report.previous_progress_file_ids?.length">{{ report.previous_progress_file_ids.length }} prev</span>
+                                    <span v-if="report.current_progress_file_ids?.length">{{ report.current_progress_file_ids.length }} current</span>
+                                </div>
+                                <div v-if="report.certificate_file_id" class="flex items-center gap-2 p-2 rounded bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
+                                    <Award class="h-3 w-3 text-green-600" />
+                                    <span class="text-xs text-green-700 dark:text-green-300">Certificate available</span>
+                                </div>
+                                <Button v-if="report.progress_status === 'processing'" size="sm" variant="outline" class="h-7 text-xs" @click.stop="handlePollStatus(report)" :disabled="isPolling">
                                     <Loader2 v-if="isPolling" class="mr-1 h-3 w-3 animate-spin" /><Clock v-else class="mr-1 h-3 w-3" /> Check Status
                                 </Button>
-                                <Badge v-if="report.completion_status" variant="outline" class="text-xs">{{ report.completion_status }}</Badge>
                             </div>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+
+                        <Separator />
+
+                        <!-- Previous progress info -->
+                        <div class="flex items-center gap-2 p-3 rounded-md border border-dashed bg-muted/30">
+                            <Info class="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <p v-if="!reportsForMilestone(milestone).length" class="text-sm text-muted-foreground">No previous progress photos yet. This is the first report for this milestone.</p>
+                            <p v-else class="text-sm text-muted-foreground">Previous progress photos will be auto-filled from the last progress update.</p>
+                        </div>
+
+                        <!-- Upload current progress -->
+                        <div class="space-y-2">
+                            <Label class="flex items-center gap-2"><Camera class="h-4 w-4" /> Current Progress Photos</Label>
+                            <div v-if="(uploadFiles[milestone] ?? []).length" class="space-y-1">
+                                <div v-for="(file, i) in uploadFiles[milestone]" :key="file.id" class="flex items-center justify-between text-sm bg-muted/50 rounded px-3 py-1.5">
+                                    <span class="truncate">{{ file.title }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <Badge variant="outline" class="text-xs">{{ file.remote_file_id ? 'uploaded' : file.status }}</Badge>
+                                        <button @click="removeFile(milestone, i)" class="text-muted-foreground hover:text-destructive">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="cursor-pointer">
+                                <Button variant="outline" size="sm" as="span" :disabled="isUploading[milestone]">
+                                    <Loader2 v-if="isUploading[milestone]" class="mr-1 h-3 w-3 animate-spin" /><Upload v-else class="mr-1 h-3 w-3" /> Add Photos
+                                </Button>
+                                <input type="file" accept="image/*" multiple capture="environment" class="hidden" @change="(e) => handleFileUpload(e, milestone)" />
+                            </label>
+                        </div>
+
+                        <!-- Remarks -->
+                        <div class="grid gap-2">
+                            <Label>Engineer's Remarks</Label>
+                            <Textarea v-model="uploadRemarks[milestone]" placeholder="Describe current progress..." rows="2" />
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="grid gap-2">
+                            <Label>Tags</Label>
+                            <div class="flex flex-wrap gap-1.5 min-h-[1.5rem]">
+                                <span v-for="(tag, i) in (uploadTags[milestone] ?? [])" :key="tag" class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                                    {{ tag }}
+                                    <button @click="removeTag(milestone, i)" class="ml-0.5 rounded-full hover:bg-primary/20 p-0.5" type="button">
+                                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </span>
+                            </div>
+                            <div class="flex gap-2">
+                                <Input v-model="uploadTagInput[milestone]" placeholder="Add a tag..." class="flex-1" @keydown.enter.prevent="addTag(milestone)" />
+                                <Button variant="outline" size="sm" type="button" @click="addTag(milestone)" :disabled="!(uploadTagInput[milestone] ?? '').trim()">Add</Button>
+                            </div>
+                        </div>
+
+                        <!-- Submit -->
+                        <Button @click="handleSubmit(milestone)" :disabled="!canSubmitMilestone(milestone)" class="w-full">
+                            <Loader2 v-if="isSubmitting[milestone]" class="mr-2 h-4 w-4 animate-spin" />
+                            <Sparkles v-else class="mr-2 h-4 w-4" />
+                            {{ submitStep[milestone] || 'Submit & Run AI Evaluation' }}
+                        </Button>
+                    </CardContent>
+                </Card>
+            </template>
         </main>
         <AppBottomNav />
     </div>

@@ -111,17 +111,16 @@ class ProjectProgressService
                     'contractId' => $contractId,
                     'currentMilestone' => $input['current_milestone'] ?? '',
                     'remarks' => $input['remarks'] ?? '',
-                    'previousProgressFiles' => $input['previous_progress_file_ids'] ?? [],
+                    'previousProgressFiles' => $previousFileIds,
                     'currentProgressFiles' => $input['current_progress_file_ids'] ?? [],
                     'geoLocation' => $input['geo_location'] ?? '',
                     'ipAddress' => $input['ip_address'] ?? '',
                     'date' => now('Asia/Manila')->toDateString(),
                     'time' => now('Asia/Manila')->toIso8601String(),
                     'name' => 'Progress Report - '.now('Asia/Manila')->toDateString(),
-                    'tags' => array_values(array_unique(array_merge(
-                        ['progress', 'track-ai'],
-                        $input['tags'] ?? [],
-                    ))),
+                    'tags' => ! empty($input['tags'])
+                        ? array_values($input['tags'])
+                        : ['progress', 'track-ai'],
                 ],
             );
 

@@ -96,4 +96,14 @@ interface SarasClientInterface
      * @throws \App\Exceptions\SarasApiException
      */
     public function updateProcessField(string $processId, string $subProjectId, array $updates): array;
+
+    /**
+     * Get download URLs for files by their UUIDs.
+     *
+     * @param  array<string>  $fileIds
+     * @return array<string, mixed>
+     *
+     * @throws \App\Exceptions\SarasApiException
+     */
+    public function getFileUrls(array $fileIds): array;
 }

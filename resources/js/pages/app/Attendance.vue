@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
-import SyncBadge from '@/components/app/SyncBadge.vue';
+import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useGeolocation } from '@/composables/useGeolocation';
+import { useActiveContract } from '@/composables/useActiveContract';
 import axios from 'axios';
 
 interface Project {
@@ -37,16 +38,10 @@ const props = defineProps<{
 
 const { pendingCount, syncStatus, isOnline, triggerSync, queueRequest } = useOfflineQueue();
 const { state: geoState, getCurrentPosition } = useGeolocation();
+const { activeContractId } = useActiveContract();
 
-// Use Track AI module from config — same as Progress page
-const defaultProject = props.defaultProjectId
-    ? props.projects.find(p => p.external_id === props.defaultProjectId)
-    : null;
-const selectedProject = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
-const selectedProjectName = computed(() => {
-    const p = props.projects.find(p => p.external_id === selectedProject.value);
-    return p?.name || 'Track AI';
-});
+// Use active contract as the contract_id for attendance, fallback to default project
+const selectedProject = computed(() => activeContractId.value || props.defaultProjectId || props.projects[0]?.external_id || '');
 const remarks = ref('');
 const isSubmitting = ref(false);
 const isLoadingStatus = ref(false);
@@ -235,6 +230,8 @@ onMounted(() => {
             </div>
         </header>
 
+        <ContractIndicator />
+
         <!-- Content -->
         <main class="p-4">
             <Card>
@@ -296,11 +293,6 @@ onMounted(() => {
                             <div class="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                             <span>Loading attendance status...</span>
                         </div>
-                    </div>
-
-                    <!-- Module (static — always Track AI) -->
-                    <div class="text-sm text-muted-foreground">
-                        Module: <span class="font-medium text-foreground">{{ selectedProjectName }}</span>
                     </div>
 
                     <!-- Location Status -->

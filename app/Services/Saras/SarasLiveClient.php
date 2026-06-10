@@ -257,6 +257,26 @@ class SarasLiveClient implements SarasClientInterface
         );
     }
 
+    public function getFileUrls(array $fileIds): array
+    {
+        $requestId = Str::uuid()->toString();
+
+        Log::info('Saras API: getFileUrls', [
+            'request_id' => $requestId,
+            'endpoint' => '/knowledges/urlStorage',
+            'file_count' => count($fileIds),
+        ]);
+
+        return $this->makeRequest(
+            method: 'POST',
+            endpoint: '/knowledges/urlStorage',
+            requestId: $requestId,
+            data: [
+                'fileIds' => $fileIds,
+            ],
+        );
+    }
+
     public function updateProcessField(string $processId, string $subProjectId, array $updates): array
     {
         $requestId = Str::uuid()->toString();
