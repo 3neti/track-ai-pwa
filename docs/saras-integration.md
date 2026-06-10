@@ -212,48 +212,41 @@ The new Saras flow requires uploading the file first, then creating a process en
 
 ---
 
-### 2. Attendance Flow
+### 2. Attendance Flow (Unified Check-in/Check-out)
+
+Check-in creates a Saras process. Check-out **updates the same process** via `updateProcessField` instead of creating a second record. The `saras_process_id` is stored on the local `AttendanceSession`.
+
+Check-in and check-out remarks are combined into one field:
+```
+check in remarks: <check-in text>
+check out remarks: <check-out text>
+```
 
 ```
 ┌──────────┐    ┌───────────────┐    ┌──────────────────┐    ┌───────────┐
 │  Client  │    │ AttendanceCtrl│    │ AttendanceService│    │   Saras   │
 └────┬─────┘    └───────┬───────┘    └────────┬─────────┘    └─────┬─────┘
      │                  │                     │                    │
-     │ POST /attendance │                     │                    │
-     │ /check-in        │                     │                    │
-     │ {contract_id,    │                     │                    │
-     │  lat, lng}       │                     │                    │
-     │─────────────────▶│                     │                    │
-     │                  │                     │                    │
-     │                  │ checkIn()           │                    │
-     │                  │────────────────────▶│                    │
-     │                  │                     │                    │
-     │                  │                     │ POST /process/     │
-     │                  │                     │ createProcess      │
-     │                  │                     │ {subProjectId:     │
-     │                  │                     │  ATTENDANCE,       │
-     │                  │                     │  fields: {         │
-     │                  │                     │    userId,         │
-     │                  │                     │    contractId,     │
-     │                  │                     │    checkInTime,    │
-     │                  │                     │    geoLocation,    │
-     │                  │                     │    ...}}           │
+     │ POST /check-in   │                     │                    │
+     │─────────────────▶│ checkIn()           │                    │
+     │                  │────────────────────▶│ createProcess      │
      │                  │                     │───────────────────▶│
-     │                  │                     │                    │
-     │                  │                     │ {entryId, ...}     │
+     │                  │                     │ {processId}        │
      │                  │                     │◀───────────────────│
-     │                  │                     │                    │
-     │                  │                     │ Create local       │
-     │                  │                     │ AttendanceSession  │
-     │                  │                     │                    │
-     │                  │ {session, status}   │                    │
-     │                  │◀────────────────────│                    │
-     │                  │                     │                    │
-     │ {success,        │                     │                    │
-     │  entry_id,       │                     │                    │
-     │  session}        │                     │                    │
+     │                  │                     │ Store processId    │
+     │                  │                     │ on session         │
+     │ {success}        │                     │                    │
      │◀─────────────────│                     │                    │
      │                  │                     │                    │
+     │ POST /check-out  │                     │                    │
+     │─────────────────▶│ checkOut()          │                    │
+     │                  │────────────────────▶│ updateProcessField │
+     │                  │                     │ (same processId)   │
+     │                  │                     │───────────────────▶│
+     │                  │                     │ {success}          │
+     │                  │                     │◀───────────────────│
+     │ {success}        │                     │                    │
+     │◀─────────────────│                     │                    │
 ```
 
 ---
@@ -307,7 +300,7 @@ The new Saras flow requires uploading the file first, then creating a process en
 | `SarasClient.updateFiles()` | `/process/updateFiles` | POST | Stage file attachment |
 | `SarasClient.executeWorkflow()` | `/process/workflows/executeWorkflow` | POST | |
 | `SarasClient.getWorkflowRuns()` | `/process/workflows/getWorkflowRuns` | GET | |
-| — (not yet used) | `/process/updateProcessField` | POST | [Update Process](https://docs.sarasfinance.com/v1.0.0/api-reference/process/update) |
+| `SarasClient.updateProcessField()` | `/process/updateProcessField` | POST | [Update Process](https://docs.sarasfinance.com/v1.0.0/api-reference/process/update) |
 
 **Naming note**: Our method `getProcesses()` calls the Saras endpoint `/process/getProcess` (singular). The `getProcesses` (plural) endpoint returns 417 and is not used.
 
@@ -382,6 +375,10 @@ Set `SARAS_MODE=stub` in `.env`. The stub client returns:
 - **getProjectsForUser()** → 3 sample DPWH projects
 - **createProcess()** → Random entry_id, always succeeds
 - **uploadFiles()** → Random UUID for each file
+- **updateProcessField()** → Success response
+- **getProcesses()** → Empty process list
+- **updateFiles()** → Success response
+- **getWorkflowRuns()** → 3 sample runs (SUCCESS, FAILED, INITIALISED)
 
 ### Testing
 
@@ -465,7 +462,9 @@ php artisan test --filter=Attendance
 | `date` | ISO date | Attendance date |
 | `checkInTime` | ISO datetime | Check-in timestamp |
 | `checkOutTime` | ISO datetime | Check-out timestamp |
-| `remarks` | string | Optional notes |
+| `remarks` | string | Combined check-in/check-out notes |
+
+**Note**: All date/time fields use `Asia/Manila` timezone. Check-out updates the same record via `updateProcessField`.
 
 ### Upload & Tagging / TrackData (`subProjectId: efb3b7c8-f6af-479f-95e3-bd623add7c56`)
 
@@ -563,10 +562,20 @@ php artisan trackai:lifecycle:run dpwh_field_day --report
 
 ---
 
+## Recent Changes (2026-06-10)
+
+1. **Contracts page** — New PWA tab: contract listing, milestone display, certificate status, manual refresh from Saras
+2. **Certificate detection** — Cross-references ProjectProgress records from Saras to find `certificateOfCompletion` per contract
+3. **Auto-populate previous progress** — `createProgress()` auto-resolves previous files from last report's current files
+4. **Unified attendance** — Check-out updates same Saras process via `updateProcessField`; remarks are combined
+5. **Timezone fix** — All date/time fields use `Asia/Manila` timezone
+6. **Default module** — All pages use Track AI module from config; project selector removed
+7. **Smart milestone selection** — Queries Saras to pre-select next incomplete milestone
+8. **Logout button** — Added to bottom navigation
+
 ## Future Enhancements
 
-1. **Certificate display** — Show `certificateOfCompletion` when workflow produces it
+1. **Certificate download** — Saras file download API not available for tenant; file UUID exists but cannot be downloaded
 2. **Certificate workflow** — `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404; pending deployment
 3. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState; need failure reason exposure
-4. **`updateProcessField`** — Official Saras endpoint for updating process fields post-creation; not yet used
-5. **Lifecycle report Phase 2** — Timeline view, debug package export, demo mode
+4. **Lifecycle report Phase 2** — Timeline view, debug package export, demo mode

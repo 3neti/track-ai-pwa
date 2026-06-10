@@ -740,19 +740,26 @@ The `dpwh_field_day` scenario has been run successfully against live Saras (`ind
 | Trigger Saras workflow using processId | ✅ `executeWorkflow` with correct workflowId + stageKey |
 | Poll workflow runs | ✅ `getWorkflowRuns` with server-side `filters` param (returns `totalCount: 1` directly) |
 | Display normalized status | ✅ INITIALISED → WAITING → SUCCESS/FAILED |
-| Display certificate | ⏳ Pending (field exists in schema but AI workflow returns FAILED with test images) |
+|| Display certificate | ✅ Certificate detected via ProjectProgress cross-reference (PP#27 has cert `5c5b5186...` for Contract #5) |
+
+### Recent Enhancements (2026-06-10)
+
+1. **Contracts page** — ✅ New PWA tab with contract listing, milestone display, certificate status, and manual refresh from Saras. Certificate detection cross-references ProjectProgress records.
+2. **Auto-populate previous progress** — ✅ `createProgress()` auto-resolves `previousProgressFiles` from the last report's `currentProgressFiles`. Frontend shows info banner instead of upload section.
+3. **Unified attendance** — ✅ Check-out updates the same Saras process via `updateProcessField` (single record per session). Check-in/check-out remarks are combined.
+4. **Timezone fix** — ✅ All date/time fields use `Asia/Manila` timezone to match Saras dashboard.
+5. **Default module** — ✅ All pages (Attendance, Uploads, Progress) use Track AI module from config. Project selector removed.
+6. **Smart milestone selection** — ✅ Progress page queries `GET /api/contracts/{id}/milestone-progress` (checks both local DB and Saras) to pre-select the next incomplete milestone.
+7. **Bottom nav** — ✅ Contracts tab added as first item. Logout button added at end.
+8. **Login redirect** — ✅ `/dashboard` redirects to `/app/project-progress`.
+9. **Register fix** — ✅ Hardcoded route for Register page (wayfinder doesn't generate it when Fortify registration is disabled).
 
 ### Pending / Next Steps
 
-1. **Milestone concept** — ✅ Milestones now available per contract via `getProcess`. 5 contracts found with milestone arrays (e.g., Foundation Work, Floor1–Floor4, Terrace, Interior, Painting). Next: integrate milestone selection into lifecycle scenario and frontend.
-2. **Certificate workflow deployment** — Workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404. Confirm with Saras devs it's deployed for tenant `681e0d5e-fcd9-46e6-b2e8-405b0d177558` (DPWH Philippines).
-3. **Certificate display** — Show `certificateOfCompletion` when workflow produces it.
-4. **Stage file attachment** — ✅ Implemented via `POST /process/updateFiles`. Files now attached to stage checklist with correct `processId`, `stageKey`, and `subProjectId`. Verify on Saras dashboard that `previousProgressImages`/`currentProgressImages` appear populated.
-5. **Webhook/notification** — For long-running AI evaluation, implement webhook or polling notification instead of blocking poll loop.
-6. **Real site photos** — Current bucket has Unsplash stock construction photos. Replace with actual DPWH site images for meaningful AI evaluation.
-7. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState. Need Saras to expose failure reason, node errors, workflow output, and certificate artifacts.
-8. **Lifecycle report Phase 2** — Timeline view, debug package export, Saras escalation pack, demo mode (per original enhancement spec).
-9. **Contract listing** — ✅ Resolved. Correct endpoint is `GET /process/getProcess` (singular) with `filters={"subProjectId_id": "acfdb45a-..."}`. Returns 5 contracts with milestone arrays. Phase 0 now displays contracts and milestones in lifecycle report.
-10. **Contract ID in payload** — ✅ Selected contract ID (winning bid) now flows through upload and progress submission to Saras `createProcess` payload as `contractId`.
-11. **Photo checklist per milestone** — TODO: The old `/app/progress` page has a nice photo checklist UI (Top View, Left Side, Right Side, Front View, Detail Shot). Consider adapting this pattern so each milestone has a required photo checklist. This would make the UI more structured than free-form multi-file upload. The old Progress page is now demoted from the bottom nav but the route still exists.
-12. **POC polish** — ✅ Login pre-fills demo credentials, registration disabled, post-login redirects to `/app/project-progress`, bottom nav leads with Progress tab, PWA manifest updated.
+1. **Certificate download** — Saras file download API returns 417 for all endpoint patterns. Certificate file UUID exists (`5c5b5186-9005-4941-8c6c-50a1ffd69c50`) but cannot be downloaded directly. Pending Saras API deployment.
+2. **Certificate workflow deployment** — Workflow `3406f390-ce85-4b32-8531-8b90c837dcb4` returns 404. Pending Saras deployment for DPWH tenant.
+3. **Webhook/notification** — For long-running AI evaluation, implement webhook or polling notification instead of blocking poll loop.
+4. **Real site photos** — Replace stock construction photos with actual DPWH site images.
+5. **Workflow diagnostics** — `getWorkflowRuns` returns only id/state/flowState. Need failure reason exposure.
+6. **Lifecycle report Phase 2** — Timeline view, debug package export, demo mode.
+7. **Photo checklist per milestone** — Consider adapting the old Progress page's checklist UI (Top View, Left Side, Right Side, Front View, Detail Shot) for structured photo capture per milestone.
