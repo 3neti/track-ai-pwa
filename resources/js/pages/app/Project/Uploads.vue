@@ -13,14 +13,12 @@ import {
 } from '@/components/ui/select';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
-import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import ContractSelector from '@/components/app/ContractSelector.vue';
 import UploadListItem from '@/components/app/UploadListItem.vue';
 import UploadEditSheet from '@/components/app/UploadEditSheet.vue';
 import UploadDeleteDialog from '@/components/app/UploadDeleteDialog.vue';
 import UploadPreviewDrawer from '@/components/app/UploadPreviewDrawer.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
-import { useActiveProject } from '@/composables/useActiveProject';
 import { useActiveContract } from '@/composables/useActiveContract';
 import type { Upload as UploadType } from '@/composables/useProjectUploads';
 import axios from 'axios';
@@ -47,14 +45,17 @@ const props = defineProps<{
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
-const { getActiveProjectId } = useActiveProject();
 const { getActiveContractId, setActiveContract } = useActiveContract();
 
-// Selected project (default to Track AI)
+// Use Track AI module from config — same as Progress and Attendance pages
 const defaultProject = props.defaultProjectId
     ? props.projects.find(p => p.external_id === props.defaultProjectId)
     : null;
-const selectedProjectId = ref<string>(defaultProject?.external_id || getActiveProjectId(props.projects));
+const selectedProjectId = ref<string>(defaultProject?.external_id || props.projects[0]?.external_id || '');
+const selectedProjectName = computed(() => {
+    const p = props.projects.find(p => p.external_id === selectedProjectId.value);
+    return p?.name || 'Track AI';
+});
 
 // Selected contract
 const contractList = computed(() => props.contracts ?? []);
@@ -294,6 +295,11 @@ const statusOptions = [
 
         <!-- Content -->
         <main class="p-4">
+            <!-- Module (static — always Track AI) -->
+            <div class="mb-4 text-sm text-muted-foreground">
+                Module: <span class="font-medium text-foreground">{{ selectedProjectName }}</span>
+            </div>
+
             <!-- Contract Selector -->
             <div class="mb-4" v-if="contractList.length > 0">
                 <ContractSelector
@@ -306,9 +312,9 @@ const statusOptions = [
             <!-- No project selected -->
             <div v-if="!selectedProject" class="py-12 text-center">
                 <FolderOpen class="mx-auto h-12 w-12 text-muted-foreground/50" />
-                <h3 class="mt-4 text-lg font-medium">Select a Project</h3>
+                <h3 class="mt-4 text-lg font-medium">No module available</h3>
                 <p class="mt-2 text-sm text-muted-foreground">
-                    Choose a project to view its uploads.
+                    No project module is configured.
                 </p>
             </div>
 
