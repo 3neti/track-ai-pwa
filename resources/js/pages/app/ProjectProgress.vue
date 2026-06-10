@@ -75,34 +75,31 @@ watch(selectedContractId, () => {
     selectNextMilestone();
 });
 
-// Also re-evaluate after reports load (they tell us which milestones have certificates)
-watch(reports, () => {
-    if (!selectedMilestone.value) selectNextMilestone();
-});
-
 /**
- * Select the first milestone that doesn't yet have an evaluated report with a certificate.
- * Falls back to the first milestone if all are complete or no reports exist.
+ * Select the first milestone without progress by querying the backend.
+ * Checks both local DB and Saras so it works on any deployment.
  */
-function selectNextMilestone() {
+async function selectNextMilestone() {
     const milestones = selectedContract.value?.milestones ?? [];
     if (!milestones.length) return;
 
     const contractId = selectedContractId.value;
+    if (!contractId) {
+        selectedMilestone.value = milestones[0];
+        return;
+    }
 
-    // Filter reports to only those belonging to the selected contract
-    const contractReports = reports.value.filter(r => r.contract_id === contractId);
+    try {
+        const r = await axios.get(`/api/contracts/${encodeURIComponent(contractId)}/milestone-progress`);
+        if (r.data.success) {
+            const status: Record<string, { has_progress: boolean }> = r.data.milestones;
+            const nextMilestone = milestones.find(m => !status[m]?.has_progress);
+            selectedMilestone.value = nextMilestone ?? milestones[0];
+            return;
+        }
+    } catch { /* fallback below */ }
 
-    // Milestones with any submitted/processing/evaluated report are "in progress or done"
-    const inProgressOrDone = new Set(
-        contractReports
-            .filter(r => ['submitted', 'processing', 'evaluated'].includes(r.progress_status) && r.current_milestone)
-            .map(r => r.current_milestone!)
-    );
-
-    // Find first milestone without any progress report for this contract
-    const nextMilestone = milestones.find(m => !inProgressOrDone.has(m));
-    selectedMilestone.value = nextMilestone ?? milestones[0];
+    selectedMilestone.value = milestones[0];
 }
 
 watch(selectedMilestone, async () => {

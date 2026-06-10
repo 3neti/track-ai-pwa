@@ -49,6 +49,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/progress-reports/{progressReport}/workflow', [ProjectProgressController::class, 'triggerWorkflow'])->name('api.progress-reports.workflow');
     Route::get('/progress-reports/{progressReport}/workflow', [ProjectProgressController::class, 'workflowStatus'])->name('api.progress-reports.workflow-status');
     Route::post('/progress-reports/{progressReport}/stage-files', [ProjectProgressController::class, 'attachStageFiles'])->name('api.progress-reports.stage-files');
+    Route::get('/contracts/{contractId}/milestone-progress', [ProjectProgressController::class, 'milestoneProgress'])->name('api.contracts.milestone-progress');
     Route::get('/contracts/{contractId}/milestones/{milestone}/previous-progress', [ProjectProgressController::class, 'previousProgress'])->name('api.contracts.milestones.previous-progress');
     // Contracts
     Route::get('/contracts', [ContractController::class, 'list'])->name('api.contracts.list');

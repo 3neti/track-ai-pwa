@@ -135,6 +135,60 @@ class ProjectProgressController extends Controller
     }
 
     /**
+     * Get milestone progress status for a contract.
+     *
+     * Checks both local reports and Saras ProjectProgress records.
+     */
+    public function milestoneProgress(string $contractId): JsonResponse
+    {
+        // Check local reports
+        $localReports = ProjectProgressReport::where('contract_id', $contractId)
+            ->whereNotIn('progress_status', ['draft', 'failed'])
+            ->whereNotNull('current_milestone')
+            ->get(['current_milestone', 'progress_status', 'certificate_file_id']);
+
+        $milestoneStatus = [];
+        foreach ($localReports as $report) {
+            $milestoneStatus[$report->current_milestone] = [
+                'has_progress' => true,
+                'has_certificate' => ! empty($report->certificate_file_id),
+                'status' => $report->progress_status,
+            ];
+        }
+
+        // Also check Saras ProjectProgress records (covers reports not in local DB)
+        try {
+            $ppSubId = config('saras.subproject_ids.project_progress');
+            $ppResponse = $this->sarasClient->getProcesses($ppSubId, 1, 50);
+
+            foreach ($ppResponse['processes'] ?? [] as $pp) {
+                $ppContractId = $pp['fields']['contractId'] ?? null;
+                $ppMilestone = $pp['fields']['currentMilestone'] ?? null;
+
+                if ($ppContractId !== $contractId || ! $ppMilestone) {
+                    continue;
+                }
+
+                // Don't overwrite local data if already present
+                if (! isset($milestoneStatus[$ppMilestone])) {
+                    $milestoneStatus[$ppMilestone] = [
+                        'has_progress' => true,
+                        'has_certificate' => ! empty($pp['fields']['certificateOfCompletion'] ?? null),
+                        'status' => 'submitted',
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // Saras unavailable — proceed with local data only
+        }
+
+        return response()->json([
+            'success' => true,
+            'milestones' => $milestoneStatus,
+        ]);
+    }
+
+    /**
      * Get previous progress photo status for a contract/milestone.
      */
     public function previousProgress(string $contractId, string $milestone): JsonResponse
