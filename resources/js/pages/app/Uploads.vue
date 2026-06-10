@@ -17,9 +17,7 @@ import {
 } from '@/components/ui/select';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import SyncBadge from '@/components/app/SyncBadge.vue';
-import ProjectSelector from '@/components/app/ProjectSelector.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
-import { useActiveProject } from '@/composables/useActiveProject';
 import axios from 'axios';
 
 interface Project {
@@ -31,12 +29,20 @@ interface Project {
 
 const props = defineProps<{
     projects: Project[];
+    defaultProjectId?: string;
 }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
-const { getActiveProjectId } = useActiveProject();
 
-const selectedProject = ref(getActiveProjectId(props.projects));
+// Use Track AI module from config — same as all other pages
+const defaultProject = props.defaultProjectId
+    ? props.projects.find(p => p.external_id === props.defaultProjectId)
+    : null;
+const selectedProject = ref(defaultProject?.external_id || props.projects[0]?.external_id || '');
+const selectedProjectName = computed(() => {
+    const p = props.projects.find(p => p.external_id === selectedProject.value);
+    return p?.name || 'Track AI';
+});
 const documentType = ref('');
 const fileName = ref('');
 const remarks = ref('');
@@ -161,12 +167,10 @@ const handleSubmit = async () => {
                         <AlertDescription>{{ message.text }}</AlertDescription>
                     </Alert>
 
-                    <!-- Project Selection -->
-                    <ProjectSelector
-                        v-model="selectedProject"
-                        :projects="projects"
-                        label="Project"
-                    />
+                    <!-- Module (static — always Track AI) -->
+                    <div class="text-sm text-muted-foreground">
+                        Module: <span class="font-medium text-foreground">{{ selectedProjectName }}</span>
+                    </div>
 
                     <!-- Document Type -->
                     <div class="grid gap-2">

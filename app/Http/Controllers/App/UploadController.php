@@ -35,6 +35,7 @@ class UploadController extends Controller
 
         return Inertia::render('app/Uploads', [
             'projects' => $projects,
+            'defaultProjectId' => config('saras.project_id'),
         ]);
     }
 
