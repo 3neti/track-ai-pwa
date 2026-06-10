@@ -63,6 +63,11 @@ class ProjectUploadController extends Controller
             ->with('user:id,name')
             ->latest();
 
+        // Filter by contract
+        if ($request->filled('contract_id')) {
+            $query->forContract($request->input('contract_id'));
+        }
+
         // Filter by status
         if ($request->filled('status')) {
             $query->byStatus($request->input('status'));

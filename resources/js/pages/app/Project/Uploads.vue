@@ -76,6 +76,7 @@ async function fetchUploads(page = 1, reset = true) {
 
     try {
         const params: Record<string, string | number> = { page };
+        if (activeContractId.value) params.contract_id = activeContractId.value;
         if (statusFilter.value && statusFilter.value !== 'all') params.status = statusFilter.value;
         if (searchQuery.value) params.q = searchQuery.value;
 

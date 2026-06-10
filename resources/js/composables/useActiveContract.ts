@@ -1,10 +1,16 @@
-import { ref, onMounted, computed } from 'vue';
+import { ref, computed } from 'vue';
 
 const STORAGE_KEY = 'activeContract';
 const NAME_STORAGE_KEY = 'activeContractName';
 
-const activeContractId = ref<string | null>(null);
-const activeContractName = ref<string | null>(null);
+// Initialize synchronously from localStorage so the value is available
+// before onMounted (watches with immediate: true fire during setup).
+const activeContractId = ref<string | null>(
+    typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
+);
+const activeContractName = ref<string | null>(
+    typeof window !== 'undefined' ? localStorage.getItem(NAME_STORAGE_KEY) : null
+);
 
 export interface Contract {
     id: string;
@@ -19,12 +25,6 @@ export interface Contract {
  * Persists to localStorage for cross-page consistency.
  */
 export function useActiveContract() {
-    onMounted(() => {
-        if (typeof window !== 'undefined') {
-            activeContractId.value = localStorage.getItem(STORAGE_KEY);
-            activeContractName.value = localStorage.getItem(NAME_STORAGE_KEY);
-        }
-    });
 
     function setActiveContract(id: string, name?: string): void {
         activeContractId.value = id;
