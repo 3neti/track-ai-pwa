@@ -24,7 +24,7 @@ interface Project { id: number; external_id: string; name: string; }
 interface Contract { id: string; name: string; milestones: string[]; display_number: string; }
 interface ProgressReport {
     id: number; progress_status: string; current_milestone: string | null;
-    remarks: string | null; saras_process_id: string | null;
+    contract_id: string | null; remarks: string | null; saras_process_id: string | null;
     saras_workflow_run_id: string | null; completion_status: string | null;
     certificate_file_id: string | null; previous_progress_file_ids: string[] | null;
     current_progress_file_ids: string[] | null; created_at: string;
@@ -72,8 +72,38 @@ watch(() => props.contracts, (c) => {
 watch(selectedContractId, () => {
     selectedMilestone.value = '';
     previousProgressInfo.value = null;
-    if (selectedContract.value?.milestones.length) selectedMilestone.value = selectedContract.value.milestones[0];
+    selectNextMilestone();
 });
+
+// Also re-evaluate after reports load (they tell us which milestones have certificates)
+watch(reports, () => {
+    if (!selectedMilestone.value) selectNextMilestone();
+});
+
+/**
+ * Select the first milestone that doesn't yet have an evaluated report with a certificate.
+ * Falls back to the first milestone if all are complete or no reports exist.
+ */
+function selectNextMilestone() {
+    const milestones = selectedContract.value?.milestones ?? [];
+    if (!milestones.length) return;
+
+    const contractId = selectedContractId.value;
+
+    // Filter reports to only those belonging to the selected contract
+    const contractReports = reports.value.filter(r => r.contract_id === contractId);
+
+    // Milestones with any submitted/processing/evaluated report are "in progress or done"
+    const inProgressOrDone = new Set(
+        contractReports
+            .filter(r => ['submitted', 'processing', 'evaluated'].includes(r.progress_status) && r.current_milestone)
+            .map(r => r.current_milestone!)
+    );
+
+    // Find first milestone without any progress report for this contract
+    const nextMilestone = milestones.find(m => !inProgressOrDone.has(m));
+    selectedMilestone.value = nextMilestone ?? milestones[0];
+}
 
 watch(selectedMilestone, async () => {
     previousProgressInfo.value = null;
