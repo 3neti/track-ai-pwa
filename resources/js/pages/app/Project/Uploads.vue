@@ -51,7 +51,13 @@ const { activeContractId } = useActiveContract();
 const defaultProject = props.defaultProjectId
     ? props.projects.find(p => p.external_id === props.defaultProjectId)
     : null;
-const selectedProjectId = ref<string>(defaultProject?.external_id || props.projects[0]?.external_id || '');
+const requestedProjectId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('project')
+    : null;
+const requestedProject = requestedProjectId
+    ? props.projects.find(p => p.external_id === requestedProjectId)
+    : null;
+const selectedProjectId = ref<string>(requestedProject?.external_id || defaultProject?.external_id || props.projects[0]?.external_id || '');
 const selectedProject = computed(() =>
     props.projects.find(p => p.external_id === selectedProjectId.value)
 );

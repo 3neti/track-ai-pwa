@@ -8,13 +8,17 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 ## Foundational Context
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- php - 8.4.15
+- php - 8.4.18
 - inertiajs/inertia-laravel (INERTIA) - v2
 - laravel/framework (LARAVEL) - v12
 - laravel/prompts (PROMPTS) - v0
 - laravel/wayfinder (WAYFINDER) - v0
 - laravel/pint (PINT) - v1
 - pestphp/pest (PEST) - v4
+- @inertiajs/vue3 (INERTIA) - v2
+- tailwindcss (TAILWINDCSS) - v4
+- vue (VUE) - v3
+- @laravel/vite-plugin-wayfinder (WAYFINDER) - v0
 
 
 ## Conventions
@@ -325,6 +329,116 @@ $pages = visit(['/', '/about', '/contact']);
 
 $pages->assertNoJavascriptErrors()->assertNoConsoleLogs();
 </code-snippet>
+
+
+=== inertia-vue/core rules ===
+
+## Inertia + Vue
+
+- Vue components must have a single root element.
+- Use `router.visit()` or `<Link>` for navigation instead of traditional links.
+
+<code-snippet lang="vue" name="Inertia Client Navigation">
+    import { Link } from '@inertiajs/vue3'
+
+    <Link href="/">Home</Link>
+</code-snippet>
+
+- For form handling, use `router.post` and related methods. Do not use regular forms.
+
+
+<code-snippet lang="vue" name="Inertia Vue Form Example">
+    <script setup>
+    import { reactive } from 'vue'
+    import { router } from '@inertiajs/vue3'
+    import { usePage } from '@inertiajs/vue3'
+
+    const page = usePage()
+
+    const form = reactive({
+      first_name: null,
+      last_name: null,
+      email: null,
+    })
+
+    function submit() {
+      router.post('/users', form)
+    }
+    </script>
+
+    <template>
+        <h1>Create {{ page.modelName }}</h1>
+        <form @submit.prevent="submit">
+            <label for="first_name">First name:</label>
+            <input id="first_name" v-model="form.first_name" />
+            <label for="last_name">Last name:</label>
+            <input id="last_name" v-model="form.last_name" />
+            <label for="email">Email:</label>
+            <input id="email" v-model="form.email" />
+            <button type="submit">Submit</button>
+        </form>
+    </template>
+</code-snippet>
+
+
+=== tailwindcss/core rules ===
+
+## Tailwind Core
+
+- Use Tailwind CSS classes to style HTML, check and use existing tailwind conventions within the project before writing your own.
+- Offer to extract repeated patterns into components that match the project's conventions (i.e. Blade, JSX, Vue, etc..)
+- Think through class placement, order, priority, and defaults - remove redundant classes, add classes to parent or child carefully to limit repetition, group elements logically
+- You can use the `search-docs` tool to get exact examples from the official documentation when needed.
+
+### Spacing
+- When listing items, use gap utilities for spacing, don't use margins.
+
+    <code-snippet name="Valid Flex Gap Spacing Example" lang="html">
+        <div class="flex gap-8">
+            <div>Superior</div>
+            <div>Michigan</div>
+            <div>Erie</div>
+        </div>
+    </code-snippet>
+
+
+### Dark Mode
+- If existing pages and components support dark mode, new pages and components must support dark mode in a similar way, typically using `dark:`.
+
+
+=== tailwindcss/v4 rules ===
+
+## Tailwind 4
+
+- Always use Tailwind CSS v4 - do not use the deprecated utilities.
+- `corePlugins` is not supported in Tailwind v4.
+- In Tailwind v4, you import Tailwind using a regular CSS `@import` statement, not using the `@tailwind` directives used in v3:
+
+<code-snippet name="Tailwind v4 Import Tailwind Diff" lang="diff"
+   - @tailwind base;
+   - @tailwind components;
+   - @tailwind utilities;
+   + @import "tailwindcss";
+</code-snippet>
+
+
+### Replaced Utilities
+- Tailwind v4 removed deprecated utilities. Do not use the deprecated option - use the replacement.
+- Opacity values are still numeric.
+
+| Deprecated |	Replacement |
+|------------+--------------|
+| bg-opacity-* | bg-black/* |
+| text-opacity-* | text-black/* |
+| border-opacity-* | border-black/* |
+| divide-opacity-* | divide-black/* |
+| ring-opacity-* | ring-black/* |
+| placeholder-opacity-* | placeholder-black/* |
+| flex-shrink-* | shrink-* |
+| flex-grow-* | grow-* |
+| overflow-ellipsis | text-ellipsis |
+| decoration-slice | box-decoration-slice |
+| decoration-clone | box-decoration-clone |
 
 
 === tests rules ===

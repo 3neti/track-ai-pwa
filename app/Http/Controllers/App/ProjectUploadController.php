@@ -115,6 +115,7 @@ class ProjectUploadController extends Controller
             remarks: $validated['remarks'] ?? null,
             mime: $validated['mime'] ?? null,
             size: $validated['size'] ?? null,
+            projectId: $project->id,
         );
 
         return response()->json([
@@ -129,6 +130,7 @@ class ProjectUploadController extends Controller
      */
     public function show(Project $project, Upload $upload): JsonResponse
     {
+        $this->ensureUploadBelongsToProject($upload, $project);
         $this->authorize('view', $upload);
 
         return response()->json([
@@ -142,6 +144,7 @@ class ProjectUploadController extends Controller
      */
     public function update(UpdateUploadRequest $request, Project $project, Upload $upload): JsonResponse
     {
+        $this->ensureUploadBelongsToProject($upload, $project);
         $this->authorize('update', $upload);
 
         if (! $upload->isEditable()) {
@@ -173,6 +176,7 @@ class ProjectUploadController extends Controller
      */
     public function destroy(Request $request, Project $project, Upload $upload): JsonResponse
     {
+        $this->ensureUploadBelongsToProject($upload, $project);
         $this->authorize('delete', $upload);
 
         if (! $upload->isDeletable()) {
@@ -203,6 +207,7 @@ class ProjectUploadController extends Controller
      */
     public function retry(Request $request, Project $project, Upload $upload): JsonResponse
     {
+        $this->ensureUploadBelongsToProject($upload, $project);
         $this->authorize('retry', $upload);
 
         if (! $upload->isRetryable()) {
@@ -229,6 +234,7 @@ class ProjectUploadController extends Controller
      */
     public function file(Request $request, Project $project, Upload $upload): JsonResponse
     {
+        $this->ensureUploadBelongsToProject($upload, $project);
         $this->authorize('update', $upload);
 
         $request->validate([
@@ -273,5 +279,10 @@ class ProjectUploadController extends Controller
             'upload' => $upload,
             'message' => 'File uploaded successfully.',
         ]);
+    }
+
+    protected function ensureUploadBelongsToProject(Upload $upload, Project $project): void
+    {
+        abort_unless($upload->project_id === $project->id, 404);
     }
 }

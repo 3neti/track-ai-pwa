@@ -91,7 +91,7 @@ const handleSubmit = async () => {
 
         // Step 1: Create Upload record
         const createResponse = await axios.post(`/api/projects/${project.id}/uploads`, {
-            contract_id: selectedProject.value,
+            contract_id: activeContractId.value || selectedProject.value,
             client_request_id: clientRequestId,
             title: fileName.value || selectedFile.value?.name || 'Untitled Upload',
             document_type: documentType.value,
@@ -116,7 +116,11 @@ const handleSubmit = async () => {
         if (uploadResponse.data.success) {
             // Navigate to uploads list with preview query param
             const uploadId = uploadResponse.data.upload.id;
-            router.visit(`/app/project-uploads?preview=${uploadId}`);
+            const params = new URLSearchParams({
+                project: project.external_id,
+                preview: String(uploadId),
+            });
+            router.visit(`/app/project-uploads?${params.toString()}`);
         } else {
             throw new Error(uploadResponse.data.message);
         }

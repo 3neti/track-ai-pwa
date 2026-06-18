@@ -3,8 +3,10 @@
 use App\Models\Project;
 use App\Models\Upload;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 
-uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -75,6 +77,7 @@ test('pending upload can be created', function () {
 
     $this->assertDatabaseHas('uploads', [
         'client_request_id' => $clientRequestId,
+        'project_id' => $this->project->id,
         'title' => 'New Upload',
         'status' => 'pending',
     ]);
@@ -84,6 +87,61 @@ test('pending upload can be created', function () {
         'user_id' => $this->user->id,
         'action' => 'upload_enqueued',
     ]);
+});
+
+test('project scoped upload creation uses the route project', function () {
+    $clientRequestId = fake()->uuid();
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads", [
+            'client_request_id' => $clientRequestId,
+            'contract_id' => 'SARAS-CONTRACT-DOES-NOT-MATCH-LOCAL-PROJECT',
+            'title' => 'Route Project Upload',
+            'document_type' => 'delivery_receipts',
+        ]);
+
+    $response->assertCreated();
+
+    $this->assertDatabaseHas('uploads', [
+        'client_request_id' => $clientRequestId,
+        'project_id' => $this->project->id,
+        'contract_id' => 'SARAS-CONTRACT-DOES-NOT-MATCH-LOCAL-PROJECT',
+    ]);
+
+    $listResponse = $this->actingAs($this->user)
+        ->getJson("/api/projects/{$this->project->id}/uploads");
+
+    $listResponse->assertSuccessful();
+    expect($listResponse->json('data.0.title'))->toBe('Route Project Upload');
+});
+
+test('project scoped upload actions reject uploads from another project', function () {
+    $otherProject = Project::create([
+        'external_id' => 'TEST-PROJECT-002',
+        'name' => 'Other Project',
+        'description' => 'Another test project',
+        'status' => 'active',
+    ]);
+
+    $upload = Upload::create([
+        'user_id' => $this->user->id,
+        'project_id' => $otherProject->id,
+        'contract_id' => $otherProject->external_id,
+        'title' => 'Other Project Upload',
+        'document_type' => 'equipment_pictures',
+        'status' => 'pending',
+        'client_request_id' => fake()->uuid(),
+    ]);
+
+    $this->actingAs($this->user)
+        ->getJson("/api/projects/{$this->project->id}/uploads/{$upload->id}")
+        ->assertNotFound();
+
+    $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads/{$upload->id}/file", [
+            'file' => UploadedFile::fake()->image('wrong-project.jpg', 10, 10),
+        ])
+        ->assertNotFound();
 });
 
 test('upload metadata can be updated when not locked', function () {
@@ -371,7 +429,7 @@ test('legacy file endpoint uploads file and creates entry', function () {
     $uploadId = $initResponse->json('upload_id');
 
     // Upload file using legacy endpoint with upload_id
-    $file = \Illuminate\Http\UploadedFile::fake()->image('test.jpg', 100, 100);
+    $file = UploadedFile::fake()->image('test.jpg', 100, 100);
 
     $response = $this->actingAs($this->user)
         ->postJson('/api/uploads/file', [
@@ -402,7 +460,7 @@ test('new file endpoint uploads and updates status', function () {
         'client_request_id' => fake()->uuid(),
     ]);
 
-    $file = \Illuminate\Http\UploadedFile::fake()->image('photo.jpg', 200, 200);
+    $file = UploadedFile::fake()->image('photo.jpg', 200, 200);
 
     $response = $this->actingAs($this->user)
         ->postJson("/api/projects/{$this->project->id}/uploads/{$upload->id}/file", [

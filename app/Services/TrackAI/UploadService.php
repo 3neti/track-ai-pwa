@@ -30,14 +30,14 @@ class UploadService
         ?string $remarks = null,
         ?string $mime = null,
         ?int $size = null,
+        ?int $projectId = null,
     ): Upload {
-        // Find project by contract_id (user-provided) or external_id (legacy)
-        $project = Project::where('contract_id', $contractId)
+        $projectId ??= Project::where('contract_id', $contractId)
             ->orWhere('external_id', $contractId)
-            ->first();
+            ->value('id');
 
         $upload = Upload::create([
-            'project_id' => $project?->id,
+            'project_id' => $projectId,
             'user_id' => $userId,
             'contract_id' => $contractId,
             'title' => $title,
