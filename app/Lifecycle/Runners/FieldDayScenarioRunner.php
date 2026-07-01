@@ -31,6 +31,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             'phases' => [],
             'user' => ['id' => $context->user->id, 'name' => $context->user->name],
             'project' => ['id' => $context->project->id, 'name' => $context->project->name],
+            'contract' => null,
         ];
         $workflowSucceeded = true;
 
@@ -41,6 +42,11 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         // Use the selected contract ID for all subsequent phases
         $activeContractId = $contractsResult['selected_contract_id'] ?? $context->contractId;
         $activeMilestone = $contractsResult['selected_milestones'][0] ?? $context->currentMilestone();
+        $payload['contract'] = [
+            'id' => $activeContractId,
+            'name' => $contractsResult['selected_contract_name'] ?? null,
+            'milestone' => $activeMilestone,
+        ];
 
         // Phase 1: Attendance Check-In
         $checkInResult = $this->phaseCheckIn($context, $activeContractId);
@@ -479,6 +485,8 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             'report_id' => $report->id,
             'progress_status' => $report->progress_status,
             'saras_process_id' => $report->saras_process_id,
+            'previous_progress_file_ids' => $report->previous_progress_file_ids ?? [],
+            'current_progress_file_ids' => $report->current_progress_file_ids ?? [],
         ];
     }
 

@@ -32,7 +32,8 @@ class ProjectProgressService
             ->whereNotNull('current_progress_file_ids')
             ->where('progress_status', '!=', ProjectProgressReport::STATUS_DRAFT)
             ->orderByDesc('created_at')
-            ->first();
+            ->get()
+            ->first(fn (ProjectProgressReport $report): bool => ! empty($report->current_progress_file_ids ?? []));
     }
 
     /**
@@ -53,6 +54,59 @@ class ProjectProgressService
         $fileIds = $latest->current_progress_file_ids ?? [];
 
         return ! empty($fileIds) ? $fileIds : [];
+    }
+
+    /**
+     * Determine whether a milestone already has active progress and should no longer be edited.
+     */
+    public function isMilestoneLockedForProgress(string $contractId, string $milestone): bool
+    {
+        $hasLocalProgress = ProjectProgressReport::where('contract_id', $contractId)
+            ->where('current_milestone', $milestone)
+            ->whereNotIn('progress_status', [
+                ProjectProgressReport::STATUS_DRAFT,
+                ProjectProgressReport::STATUS_FAILED,
+            ])
+            ->whereNull('certificate_file_id')
+            ->exists();
+
+        if ($hasLocalProgress) {
+            return true;
+        }
+
+        if (! $this->isProgressSyncEnabled()) {
+            return false;
+        }
+
+        try {
+            $response = $this->sarasClient->getProcesses(
+                config('saras.subproject_ids.project_progress'),
+                1,
+                50,
+            );
+
+            foreach ($response['processes'] ?? [] as $process) {
+                if (($process['fields']['contractId'] ?? null) !== $contractId) {
+                    continue;
+                }
+
+                if (($process['fields']['currentMilestone'] ?? null) !== $milestone) {
+                    continue;
+                }
+
+                if (empty($process['fields']['certificateOfCompletion'] ?? null)) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('ProjectProgress: Unable to check remote milestone lock', [
+                'contract_id' => $contractId,
+                'milestone' => $milestone,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return false;
     }
 
     /**

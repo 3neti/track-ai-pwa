@@ -132,6 +132,63 @@ test('validation rejects invalid remarks length', function () {
         ->assertJsonValidationErrors('remarks');
 });
 
+test('progress report cannot be created for an in progress milestone', function () {
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-locked',
+        'current_milestone' => 'Foundation',
+        'certificate_file_id' => null,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'contract_id' => 'contract-locked',
+            'current_milestone' => 'Foundation',
+            'remarks' => 'Attempt to edit locked milestone.',
+            'current_progress_file_ids' => ['new-file-id'],
+        ]);
+
+    $response->assertStatus(423)
+        ->assertJson([
+            'success' => false,
+            'message' => 'This milestone is already in progress and cannot be edited.',
+        ]);
+});
+
+test('progress report cannot be created when Saras has in progress milestone', function () {
+    config(['saras.feature_flags.progress_enabled' => true]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.project_progress'), 1, 50)
+        ->once()
+        ->andReturn([
+            'processes' => [[
+                'fields' => [
+                    'contractId' => 'contract-remote-locked',
+                    'currentMilestone' => 'Foundation',
+                ],
+            ]],
+        ]);
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'contract_id' => 'contract-remote-locked',
+            'current_milestone' => 'Foundation',
+            'remarks' => 'Attempt to edit remotely locked milestone.',
+            'current_progress_file_ids' => ['new-file-id'],
+        ]);
+
+    $response->assertStatus(423)
+        ->assertJson([
+            'success' => false,
+            'message' => 'This milestone is already in progress and cannot be edited.',
+        ]);
+});
+
 test('progress report page renders via inertia', function () {
     $this->withoutVite();
 

@@ -8,6 +8,7 @@ use App\Http\Requests\App\StoreUploadRequest;
 use App\Http\Requests\App\UpdateUploadRequest;
 use App\Models\Project;
 use App\Models\Upload;
+use App\Services\TrackAI\ProjectProgressService;
 use App\Services\TrackAI\UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ class ProjectUploadController extends Controller
     public function __construct(
         protected UploadService $uploadService,
         protected SarasClientInterface $sarasClient,
+        protected ProjectProgressService $progressService,
     ) {}
 
     /**
@@ -104,6 +106,14 @@ class ProjectUploadController extends Controller
     {
         $user = $request->user();
         $validated = $request->validated();
+        $milestone = $this->currentProgressMilestone($validated);
+
+        if ($milestone && $this->progressService->isMilestoneLockedForProgress($validated['contract_id'], $milestone)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This milestone is already in progress and cannot accept new uploads.',
+            ], 423);
+        }
 
         $upload = $this->uploadService->createUploadRecord(
             userId: $user->id,
@@ -284,5 +294,25 @@ class ProjectUploadController extends Controller
     protected function ensureUploadBelongsToProject(Upload $upload, Project $project): void
     {
         abort_unless($upload->project_id === $project->id, 404);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    protected function currentProgressMilestone(array $validated): ?string
+    {
+        if (($validated['document_type'] ?? null) !== 'current_progress') {
+            return null;
+        }
+
+        $tags = array_values(array_filter($validated['tags'] ?? []));
+
+        foreach ($tags as $tag) {
+            if (! in_array($tag, ['progress', 'current_progress'], true)) {
+                return (string) $tag;
+            }
+        }
+
+        return null;
     }
 }

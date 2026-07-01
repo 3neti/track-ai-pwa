@@ -282,22 +282,28 @@ final class LifecycleReportRenderer
         $command->line('════════ Run Artifacts ════════');
         $command->newLine();
 
-        $contract = $payload['project']['name'] ?? '';
+        $project = $payload['project']['name'] ?? '';
+        $contract = $payload['contract'] ?? [];
+        $contractId = $contract['id'] ?? '—';
+        $contractName = $contract['name'] ?? 'selected contract';
+        $milestone = $contract['milestone'] ?? '—';
         $checkIn = $phases['check_in']['entry_id'] ?? '—';
         $checkOut = $phases['check_out']['entry_id'] ?? '—';
         $uploads = $phases['upload']['uploads'] ?? [];
         $progress = $phases['progress']['saras_process_id'] ?? '—';
         $workflowRun = $phases['workflow']['workflow_run_id'] ?? '—';
-        $prevCount = count(array_filter($uploads, fn ($u) => ($u['type'] ?? '') === 'previous_progress'));
+        $resolvedPrevCount = count($phases['progress']['previous_progress_file_ids'] ?? $phases['previous_progress']['previous_file_ids'] ?? []);
         $currCount = count(array_filter($uploads, fn ($u) => ($u['type'] ?? '') === 'current_progress'));
 
         $projectId = $payload['project']['id'] ?? '—';
-        $command->line("  Contract:     {$projectId} ({$contract})");
+        $command->line("  Project:      {$projectId} ({$project})");
+        $command->line("  Contract:     {$this->short($contractId)} ({$contractName})");
+        $command->line("  Milestone:    {$milestone}");
         $command->line("  Attendance:   {$this->short($checkIn)} (in) → {$this->short($checkOut)} (out)");
         $command->line('  TrackData:    '.count($uploads).' files uploaded');
         $command->line("  Progress:     {$progress}");
         $command->line('  Workflow:     '.config('saras.workflows.completion_id', '—')." → Run: {$this->short($workflowRun)}");
-        $command->line("  Images:       {$prevCount} previous, {$currCount} current");
+        $command->line("  Images:       {$resolvedPrevCount} previous resolved, {$currCount} current uploaded");
         $command->newLine();
     }
 

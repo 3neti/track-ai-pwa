@@ -66,6 +66,15 @@ class ProjectProgressController extends Controller
     {
         $user = $request->user();
         $validated = $request->validated();
+        $contractId = $validated['contract_id'] ?? $project->contract_id ?: config('saras.default_contract_id');
+        $milestone = $validated['current_milestone'] ?? null;
+
+        if ($contractId && $milestone && $this->progressService->isMilestoneLockedForProgress($contractId, $milestone)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This milestone is already in progress and cannot be edited.',
+            ], 423);
+        }
 
         $report = $this->progressService->createProgress(
             user: $user,

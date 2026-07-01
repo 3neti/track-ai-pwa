@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Project;
+use App\Models\ProjectProgressReport;
 use App\Models\Upload;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -113,6 +114,31 @@ test('project scoped upload creation uses the route project', function () {
 
     $listResponse->assertSuccessful();
     expect($listResponse->json('data.0.title'))->toBe('Route Project Upload');
+});
+
+test('current progress upload cannot be created for an in progress milestone', function () {
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-locked',
+        'current_milestone' => 'Foundation',
+        'certificate_file_id' => null,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads", [
+            'client_request_id' => fake()->uuid(),
+            'contract_id' => 'contract-locked',
+            'title' => 'Locked Progress Upload',
+            'document_type' => 'current_progress',
+            'tags' => ['progress', 'current_progress', 'Foundation'],
+        ]);
+
+    $response->assertStatus(423)
+        ->assertJson([
+            'success' => false,
+            'message' => 'This milestone is already in progress and cannot accept new uploads.',
+        ]);
 });
 
 test('project scoped upload actions reject uploads from another project', function () {

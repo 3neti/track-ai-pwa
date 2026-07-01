@@ -122,6 +122,7 @@ onMounted(() => {
 watch(activeContractId, loadData);
 
 function addTag(milestone: string) {
+    if (isMilestoneLocked(milestone)) return;
     const input = (uploadTagInput.value[milestone] ?? '').trim().toLowerCase();
     if (!input) return;
     if (!uploadTags.value[milestone]) uploadTags.value[milestone] = [];
@@ -130,6 +131,7 @@ function addTag(milestone: string) {
 }
 
 function removeTag(milestone: string, index: number) {
+    if (isMilestoneLocked(milestone)) return;
     uploadTags.value[milestone]?.splice(index, 1);
 }
 
@@ -144,6 +146,12 @@ function milestoneStatus(milestone: string): MilestoneStatus | null {
     return milestoneStatuses.value[milestone] ?? null;
 }
 
+function isMilestoneLocked(milestone: string): boolean {
+    const status = milestoneStatus(milestone);
+
+    return Boolean(status?.has_progress && !status.has_certificate);
+}
+
 function toggleMilestone(milestone: string) {
     expandedMilestone.value = expandedMilestone.value === milestone ? null : milestone;
 }
@@ -151,6 +159,11 @@ function toggleMilestone(milestone: string) {
 // File upload per milestone
 async function handleFileUpload(event: Event, milestone: string) {
     const target = event.target as HTMLInputElement;
+    if (isMilestoneLocked(milestone)) {
+        target.value = '';
+        message.value = { type: 'error', text: 'This milestone is already in progress and cannot be edited.' };
+        return;
+    }
     if (!target.files?.length || !selectedProject.value) return;
     const files = Array.from(target.files);
     isUploading.value[milestone] = true;
@@ -184,12 +197,17 @@ async function handleFileUpload(event: Event, milestone: string) {
 }
 
 function removeFile(milestone: string, index: number) {
+    if (isMilestoneLocked(milestone)) return;
     uploadFiles.value[milestone]?.splice(index, 1);
 }
 
 // Submit progress for a milestone (no updateFiles call — backend handles previousProgressFiles)
 async function handleSubmit(milestone: string) {
     if (!selectedProject.value || isSubmitting.value[milestone]) return;
+    if (isMilestoneLocked(milestone)) {
+        message.value = { type: 'error', text: 'This milestone is already in progress and cannot be edited.' };
+        return;
+    }
     isSubmitting.value[milestone] = true;
     message.value = null;
 
@@ -242,7 +260,7 @@ const statusConfig = (s: string) => ({
 }[s] || { label: s, variant: 'secondary' as const });
 
 const canSubmitMilestone = (milestone: string) => {
-    return !isSubmitting.value[milestone] && (uploadFiles.value[milestone]?.length ?? 0) > 0;
+    return !isMilestoneLocked(milestone) && !isSubmitting.value[milestone] && (uploadFiles.value[milestone]?.length ?? 0) > 0;
 };
 </script>
 
@@ -327,6 +345,13 @@ const canSubmitMilestone = (milestone: string) => {
 
                         <Separator />
 
+                        <Alert v-if="isMilestoneLocked(milestone)" variant="default" class="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                            <Info class="h-4 w-4" />
+                            <AlertDescription>
+                                This milestone is already in progress. Remarks, tags, uploads, and resubmission are locked until the workflow completes.
+                            </AlertDescription>
+                        </Alert>
+
                         <!-- Previous progress info -->
                         <div class="flex items-center gap-2 p-3 rounded-md border border-dashed bg-muted/30">
                             <Info class="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -342,22 +367,22 @@ const canSubmitMilestone = (milestone: string) => {
                                     <span class="truncate">{{ file.title }}</span>
                                     <div class="flex items-center gap-2">
                                         <Badge variant="outline" class="text-xs">{{ file.remote_file_id ? 'uploaded' : file.status }}</Badge>
-                                        <button @click="removeFile(milestone, i)" class="text-muted-foreground hover:text-destructive">×</button>
+                                        <button @click="removeFile(milestone, i)" class="text-muted-foreground hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50" :disabled="isMilestoneLocked(milestone)">×</button>
                                     </div>
                                 </div>
                             </div>
-                            <label class="cursor-pointer">
-                                <Button variant="outline" size="sm" as="span" :disabled="isUploading[milestone]">
+                            <label :class="isMilestoneLocked(milestone) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'">
+                                <Button variant="outline" size="sm" as="span" :disabled="isUploading[milestone] || isMilestoneLocked(milestone)">
                                     <Loader2 v-if="isUploading[milestone]" class="mr-1 h-3 w-3 animate-spin" /><Upload v-else class="mr-1 h-3 w-3" /> Add Photos
                                 </Button>
-                                <input type="file" accept="image/*" multiple capture="environment" class="hidden" @change="(e) => handleFileUpload(e, milestone)" />
+                                <input type="file" accept="image/*" multiple capture="environment" class="hidden" :disabled="isMilestoneLocked(milestone)" @change="(e) => handleFileUpload(e, milestone)" />
                             </label>
                         </div>
 
                         <!-- Remarks -->
                         <div class="grid gap-2">
                             <Label>Engineer's Remarks</Label>
-                            <Textarea v-model="uploadRemarks[milestone]" placeholder="Describe current progress..." rows="2" />
+                            <Textarea v-model="uploadRemarks[milestone]" placeholder="Describe current progress..." rows="2" :disabled="isMilestoneLocked(milestone)" />
                         </div>
 
                         <!-- Tags -->
@@ -366,14 +391,14 @@ const canSubmitMilestone = (milestone: string) => {
                             <div class="flex flex-wrap gap-1.5 min-h-[1.5rem]">
                                 <span v-for="(tag, i) in (uploadTags[milestone] ?? [])" :key="tag" class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
                                     {{ tag }}
-                                    <button @click="removeTag(milestone, i)" class="ml-0.5 rounded-full hover:bg-primary/20 p-0.5" type="button">
+                                    <button @click="removeTag(milestone, i)" class="ml-0.5 rounded-full hover:bg-primary/20 p-0.5 disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="isMilestoneLocked(milestone)">
                                         <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                     </button>
                                 </span>
                             </div>
                             <div class="flex gap-2">
-                                <Input v-model="uploadTagInput[milestone]" placeholder="Add a tag..." class="flex-1" @keydown.enter.prevent="addTag(milestone)" />
-                                <Button variant="outline" size="sm" type="button" @click="addTag(milestone)" :disabled="!(uploadTagInput[milestone] ?? '').trim()">Add</Button>
+                                <Input v-model="uploadTagInput[milestone]" placeholder="Add a tag..." class="flex-1" :disabled="isMilestoneLocked(milestone)" @keydown.enter.prevent="addTag(milestone)" />
+                                <Button variant="outline" size="sm" type="button" @click="addTag(milestone)" :disabled="isMilestoneLocked(milestone) || !(uploadTagInput[milestone] ?? '').trim()">Add</Button>
                             </div>
                         </div>
 
@@ -381,7 +406,7 @@ const canSubmitMilestone = (milestone: string) => {
                         <Button @click="handleSubmit(milestone)" :disabled="!canSubmitMilestone(milestone)" class="w-full">
                             <Loader2 v-if="isSubmitting[milestone]" class="mr-2 h-4 w-4 animate-spin" />
                             <Sparkles v-else class="mr-2 h-4 w-4" />
-                            {{ submitStep[milestone] || 'Submit & Run AI Evaluation' }}
+                            {{ isMilestoneLocked(milestone) ? 'Milestone In Progress' : (submitStep[milestone] || 'Submit & Run AI Evaluation') }}
                         </Button>
                     </CardContent>
                 </Card>

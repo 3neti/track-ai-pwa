@@ -4,8 +4,9 @@ use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
 use App\Services\TrackAI\ProjectProgressService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -109,6 +110,30 @@ test('resolvePreviousProgressFileIds includes failed reports (files are still va
     $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Foundation');
 
     expect($fileIds)->toBe(['uuid-failed-1']);
+});
+
+test('resolvePreviousProgressFileIds skips newer reports without current files', function () {
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-abc',
+        'current_milestone' => 'Foundation',
+        'current_progress_file_ids' => ['uuid-previous-1', 'uuid-previous-2'],
+        'created_at' => now()->subMinute(),
+    ]);
+
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-abc',
+        'current_milestone' => 'Foundation',
+        'current_progress_file_ids' => [],
+        'created_at' => now(),
+    ]);
+
+    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Foundation');
+
+    expect($fileIds)->toBe(['uuid-previous-1', 'uuid-previous-2']);
 });
 
 test('previous progress endpoint returns first report status', function () {
