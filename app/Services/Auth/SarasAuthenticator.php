@@ -3,14 +3,20 @@
 namespace App\Services\Auth;
 
 use App\Models\User;
+use App\Services\TrackAI\ContractService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SarasAuthenticator
 {
+    public function __construct(
+        protected ContractService $contractService,
+    ) {}
+
     /**
      * Authenticate user against Saras API (live mode) or local DB (stub mode).
      */
@@ -100,7 +106,11 @@ class SarasAuthenticator
             $userData = $userResponse->successful() ? $userResponse->json() : [];
 
             // JIT provision: get or create local user with their token
-            return $this->getOrCreateUser($email, $password, $userData, $accessToken, $expiresIn);
+            $user = $this->getOrCreateUser($email, $password, $userData, $accessToken, $expiresIn);
+
+            $this->syncSarasResourcesForLogin($user);
+
+            return $user;
 
         } catch (ConnectionException $e) {
             Log::error('Saras connection failed during authentication', [
@@ -177,6 +187,41 @@ class SarasAuthenticator
         ]);
 
         return $user;
+    }
+
+    /**
+     * Refresh local Saras-backed resources after a successful Saras login.
+     *
+     * Fortify has not completed the web login yet, so temporarily bind the
+     * authenticated user while SarasTokenManager reads the newly stored token.
+     */
+    protected function syncSarasResourcesForLogin(User $user): void
+    {
+        if (config('saras.mode') !== 'live') {
+            return;
+        }
+
+        $guard = Auth::guard();
+        $previousUser = $guard->user();
+
+        try {
+            $guard->setUser($user);
+            $contracts = $this->contractService->syncContractsFromSaras();
+
+            Log::info('Saras resources synced after login', [
+                'user_id' => $user->id,
+                'contract_count' => $contracts->count(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Saras resource sync after login failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        } finally {
+            if ($previousUser instanceof User) {
+                $guard->setUser($previousUser);
+            }
+        }
     }
 
     /**

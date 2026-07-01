@@ -78,6 +78,7 @@ class ProgressService
                     'time' => now()->toTimeString(),
                 ],
                 idempotencyKey: $idempotencyKey,
+                parentProcessId: $contractId ?: config('saras.default_contract_id'),
             );
 
             if ($response->success) {
@@ -119,7 +120,10 @@ class ProgressService
         }
 
         try {
-            $response = $this->sarasClient->uploadFiles([$file]);
+            $response = $this->sarasClient->uploadFiles(
+                files: [$file],
+                subProjectId: config('saras.subproject_ids.progress') ?: config('saras.subproject_ids.trackdata'),
+            );
 
             if ($response->success) {
                 AuditLog::log($userId, 'progress_photo_upload', $contractId, [

@@ -68,6 +68,7 @@ class AttendanceService
                     'remarks' => $remarks ?? '',
                 ],
                 idempotencyKey: $idempotencyKey,
+                parentProcessId: $resolvedContractId,
             );
         } catch (SarasApiException $e) {
             return [
@@ -186,6 +187,7 @@ class AttendanceService
                         'remarks' => $remarks ?? '',
                     ],
                     idempotencyKey: $idempotencyKey,
+                    parentProcessId: $resolvedContractId,
                 );
             }
         } catch (SarasApiException $e) {

@@ -77,18 +77,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | File Upload Plugin Name
-    |--------------------------------------------------------------------------
-    |
-    | The plugin name for file uploads to /process/knowledges/createStorage.
-    | Get the correct value from Saras for your tenant.
-    |
-    */
-
-    'plugin_name' => env('SARAS_PLUGIN_NAME', 'knowledgeRepo'),
-
-    /*
-    |--------------------------------------------------------------------------
     | AI Workflow Configuration
     |--------------------------------------------------------------------------
     |
@@ -111,7 +99,7 @@ return [
     'workflows' => [
         'completion_id' => env('SARAS_WORKFLOW_COMPLETION_ID', 'd702fb25-51ae-4d7f-88fc-132d555b2f00'),
         'completion_stage_key' => env('SARAS_WORKFLOW_COMPLETION_STAGE_KEY', 'stage_1779863565116_eqt6'),
-        'send_image_payload' => env('SARAS_SEND_IMAGE_PAYLOAD_TO_WORKFLOW', true),
+        'send_image_payload' => env('SARAS_SEND_IMAGE_PAYLOAD_TO_WORKFLOW', false),
         'attach_stage_files' => env('SARAS_ATTACH_STAGE_FILES', false),
     ],
 

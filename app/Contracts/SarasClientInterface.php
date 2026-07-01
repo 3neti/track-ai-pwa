@@ -2,6 +2,7 @@
 
 namespace App\Contracts;
 
+use App\Exceptions\SarasApiException;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\ProjectsResponse;
@@ -20,14 +21,14 @@ interface SarasClientInterface
     /**
      * Get user details for the authenticated service account.
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function getUserDetails(): UserDetails;
 
     /**
      * Get projects assigned to a user with pagination.
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function getProjectsForUser(int $page = 1, int $perPage = 10): ProjectsResponse;
 
@@ -36,18 +37,23 @@ interface SarasClientInterface
      *
      * @param  array<string, mixed>  $fields
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
-    public function createProcess(string $subProjectId, array $fields, ?string $idempotencyKey = null): ProcessResponse;
+    public function createProcess(
+        string $subProjectId,
+        array $fields,
+        ?string $idempotencyKey = null,
+        ?string $parentProcessId = null,
+    ): ProcessResponse;
 
     /**
      * Upload files to Saras storage.
      *
      * @param  array<UploadedFile>  $files
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
-    public function uploadFiles(array $files): FileUploadResponse;
+    public function uploadFiles(array $files, string $subProjectId): FileUploadResponse;
 
     /**
      * Execute an AI workflow for image analysis.
@@ -55,16 +61,16 @@ interface SarasClientInterface
      * @param  array<string, mixed>  $otherDetails
      * @param  array<string, mixed>  $payload
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function executeWorkflow(?string $workflowId = null, array $otherDetails = [], array $payload = []): WorkflowResponse;
 
     /**
-     * Get workflow runs with optional server-side filtering.
+     * Get workflow runs with optional Saras query parameters.
      *
-     * @param  array<string, string>  $filters  e.g. ['workflowId_id' => '...', 'otherDetails__processId' => '...']
+     * @param  array<string, string>  $filters  Supported: subProjectId, stageKey, processId, workflowId, runId.
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function getWorkflowRuns(int $page = 1, int $perPage = 10, array $filters = []): WorkflowRunsResponse;
 
@@ -74,7 +80,7 @@ interface SarasClientInterface
      * @param  array<string, array{fileIds: array<string>}>  $files
      * @return array<string, mixed>
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function updateFiles(string $processId, string $stageKey, string $subProjectId, array $files): array;
 
@@ -83,7 +89,7 @@ interface SarasClientInterface
      *
      * @return array<string, mixed>
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function getProcesses(string $subProjectId, int $page = 1, int $perPage = 10): array;
 
@@ -93,17 +99,16 @@ interface SarasClientInterface
      * @param  array<string, mixed>  $updates  Key-value map of fields to update
      * @return array<string, mixed>
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
     public function updateProcessField(string $processId, string $subProjectId, array $updates): array;
 
     /**
-     * Get download URLs for files by their UUIDs.
+     * Get a temporary download URL for a file in a subproject.
      *
-     * @param  array<string>  $fileIds
      * @return array<string, mixed>
      *
-     * @throws \App\Exceptions\SarasApiException
+     * @throws SarasApiException
      */
-    public function getFileUrls(array $fileIds): array;
+    public function getFileUrl(string $subProjectId, string $fileId): array;
 }

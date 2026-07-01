@@ -2,10 +2,11 @@
 
 namespace Database\Factories;
 
+use App\Models\Contract;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Contract>
+ * @extends Factory<Contract>
  */
 class ContractFactory extends Factory
 {
@@ -31,6 +32,7 @@ class ContractFactory extends Factory
         return $this->state(fn () => [
             'certificate_status' => 'available',
             'certificate_file_id' => fake()->uuid(),
+            'certificate_subproject_id' => config('saras.subproject_ids.project_progress'),
         ]);
     }
 

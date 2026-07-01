@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Database\Factories\ContractFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Contract extends Model
 {
-    /** @use HasFactory<\Database\Factories\ContractFactory> */
+    /** @use HasFactory<ContractFactory> */
     use HasFactory;
 
     public const STATUS_AVAILABLE = 'available';
@@ -25,6 +26,7 @@ class Contract extends Model
         'milestones',
         'certificate_status',
         'certificate_file_id',
+        'certificate_subproject_id',
         'certificate_url',
         'raw_saras_payload',
         'last_synced_at',

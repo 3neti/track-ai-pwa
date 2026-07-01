@@ -1,10 +1,14 @@
 <?php
 
+use App\Contracts\SarasClientInterface;
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 
-uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -99,6 +103,25 @@ test('workflow status can be polled', function () {
         ->assertJsonStructure(['success', 'report', 'workflow_run']);
 });
 
+test('automatically triggered workflow can be discovered by process ID', function () {
+    $report = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => $this->project->external_id,
+        'saras_workflow_run_id' => null,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->getJson("/api/progress-reports/{$report->id}/workflow");
+
+    $response->assertSuccessful()
+        ->assertJsonPath('workflow_run.id', 'run_stub_success_001');
+
+    $report->refresh();
+    expect($report->saras_workflow_run_id)->toBe('run_stub_success_001')
+        ->and($report->progress_status)->toBe(ProjectProgressReport::STATUS_EVALUATED);
+});
+
 test('validation rejects invalid remarks length', function () {
     $response = $this->actingAs($this->user)
         ->postJson("/api/projects/{$this->project->id}/progress-reports", [
@@ -116,6 +139,72 @@ test('progress report page renders via inertia', function () {
         ->get('/app/project-progress');
 
     $response->assertSuccessful();
+});
+
+test('progress page uses locally synchronized contracts and Saras identifiers', function () {
+    $this->withoutVite();
+
+    $contract = Contract::factory()->create([
+        'saras_process_id' => 'saras-contract-123',
+        'milestones' => ['Foundation', 'Roofing'],
+    ]);
+
+    $this->actingAs($this->user)
+        ->get('/app/project-progress')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('app/ProjectProgress')
+            ->where('contracts.0.id', 'saras-contract-123')
+            ->where('contracts.0.local_id', $contract->id)
+            ->where('contracts.0.saras_process_id', 'saras-contract-123')
+            ->where('contracts.0.milestones', ['Foundation', 'Roofing'])
+        );
+});
+
+test('progress page refreshes contracts and excludes stale local contract IDs', function () {
+    $this->withoutVite();
+
+    Contract::factory()->create([
+        'saras_process_id' => 'stale-contract-id',
+        'name' => 'Stale Contract',
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('isStubMode')
+        ->once()
+        ->andReturnFalse();
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.contract_ai'), 1, 50)
+        ->once()
+        ->andReturn([
+            'processes' => [[
+                'id' => 'current-contract-id',
+                'fields' => [
+                    'legalName1' => 'Current Contract',
+                    'milestone' => ['Foundation'],
+                ],
+                'metaDetails' => [
+                    'displayNumber' => '1',
+                ],
+            ]],
+        ]);
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.project_progress'), 1, 50)
+        ->once()
+        ->andReturn(['processes' => []]);
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $this->actingAs($this->user)
+        ->get('/app/project-progress')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('app/ProjectProgress')
+            ->has('contracts', 1)
+            ->where('contracts.0.id', 'current-contract-id')
+            ->where('contracts.0.saras_process_id', 'current-contract-id')
+            ->where('contracts.0.name', 'Current Contract')
+        );
 });
 
 test('unauthenticated requests are rejected', function () {

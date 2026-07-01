@@ -4,6 +4,7 @@ namespace App\Services\TrackAI;
 
 use App\Contracts\SarasClientInterface;
 use App\Models\Contract;
+use App\Models\ProjectProgressReport;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -20,7 +21,7 @@ class ContractService
      *
      * @return Collection<int, Contract>
      */
-    public function syncContractsFromSaras(): Collection
+    public function syncContractsFromSaras(bool $pruneMissing = true): Collection
     {
         $contractAiId = config('saras.subproject_ids.contract_ai');
 
@@ -29,6 +30,8 @@ class ContractService
         // Fetch ProjectProgress records to cross-reference certificates
         $progressCertificates = $this->fetchProgressCertificates();
 
+        $syncedProcessIds = [];
+
         foreach (($response['processes'] ?? []) as $process) {
             $processId = $process['id'] ?? null;
 
@@ -36,13 +39,15 @@ class ContractService
                 continue;
             }
 
+            $syncedProcessIds[] = $processId;
+
             $name = $process['fields']['legalName1']
                 ?? $process['metaDetails']['title']
                 ?? 'Contract #'.($process['metaDetails']['displayNumber'] ?? '?');
 
             $milestones = $process['fields']['milestone'] ?? [];
             $certificateStatus = $this->determineCertificateStatus($process, $progressCertificates);
-            $certificateFileId = $this->extractCertificateFileId($process, $progressCertificates);
+            $certificate = $this->extractCertificate($process, $progressCertificates);
 
             Contract::updateOrCreate(
                 ['saras_process_id' => $processId],
@@ -51,14 +56,21 @@ class ContractService
                     'display_number' => $process['metaDetails']['displayNumber'] ?? null,
                     'milestones' => $milestones,
                     'certificate_status' => $certificateStatus,
-                    'certificate_file_id' => $certificateFileId,
+                    'certificate_file_id' => $certificate['file_id'],
+                    'certificate_subproject_id' => $certificate['subproject_id'],
                     'raw_saras_payload' => $process,
                     'last_synced_at' => now(),
                 ],
             );
         }
 
-        return Contract::orderBy('name')->get();
+        if ($pruneMissing) {
+            Contract::whereNotIn('saras_process_id', $syncedProcessIds)->delete();
+        }
+
+        return Contract::whereIn('saras_process_id', $syncedProcessIds)
+            ->orderBy('name')
+            ->get();
     }
 
     /**
@@ -66,9 +78,19 @@ class ContractService
      *
      * @return Collection<int, Contract>
      */
-    public function listContracts(): Collection
+    public function listContracts(bool $refresh = false): Collection
     {
         $contracts = Contract::orderBy('name')->get();
+
+        if ($refresh && ! $this->sarasClient->isStubMode()) {
+            try {
+                return $this->syncContractsFromSaras();
+            } catch (\Exception $e) {
+                Log::warning('ContractService: Failed to refresh contracts from Saras', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         if ($contracts->isEmpty()) {
             try {
@@ -88,9 +110,9 @@ class ContractService
     /**
      * Fetch certificates from ProjectProgress records in Saras.
      *
-     * Returns a map of contractId => certificateFileId.
+     * Returns a map of contractId => certificate details.
      *
-     * @return array<string, string>
+     * @return array<string, array{file_id: string, subproject_id: string}>
      */
     protected function fetchProgressCertificates(): array
     {
@@ -106,7 +128,10 @@ class ContractService
 
                 if (! empty($certFileId) && ! empty($contractId) && is_string($certFileId)) {
                     // Keep the latest certificate per contract (processes are ordered by creation)
-                    $certificates[$contractId] = $certFileId;
+                    $certificates[$contractId] = [
+                        'file_id' => $certFileId,
+                        'subproject_id' => $ppSubId,
+                    ];
                 }
             }
         } catch (\Exception $e) {
@@ -121,7 +146,7 @@ class ContractService
     /**
      * Determine certificate status from contract data and progress certificates.
      *
-     * @param  array<string, string>  $progressCertificates  Map of contractId => certificateFileId from ProjectProgress
+     * @param  array<string, array{file_id: string, subproject_id: string}>  $progressCertificates  Map of contractId => certificate details from ProjectProgress
      */
     public function determineCertificateStatus(array $processData, array $progressCertificates = []): string
     {
@@ -142,7 +167,7 @@ class ContractService
 
         // 3. Check local progress reports
         if ($processId) {
-            $hasProgress = \App\Models\ProjectProgressReport::where('contract_id', $processId)
+            $hasProgress = ProjectProgressReport::where('contract_id', $processId)
                 ->whereNotIn('progress_status', ['draft', 'failed'])
                 ->exists();
 
@@ -155,30 +180,43 @@ class ContractService
     }
 
     /**
-     * Extract certificate file ID from contract data or progress certificates.
+     * Extract certificate file ID and source subproject from contract data or progress certificates.
      *
-     * @param  array<string, string>  $progressCertificates  Map of contractId => certificateFileId from ProjectProgress
+     * @param  array<string, array{file_id: string, subproject_id: string}>  $progressCertificates  Map of contractId => certificate details from ProjectProgress
+     * @return array{file_id: ?string, subproject_id: ?string}
      */
-    protected function extractCertificateFileId(array $processData, array $progressCertificates = []): ?string
+    protected function extractCertificate(array $processData, array $progressCertificates = []): array
     {
         // 1. Check Contract AI record
         $certificate = $processData['fields']['certificateOfCompletion'] ?? null;
 
         if (is_string($certificate) && ! empty($certificate)) {
-            return $certificate;
+            return [
+                'file_id' => $certificate,
+                'subproject_id' => config('saras.subproject_ids.contract_ai'),
+            ];
         }
 
         if (is_array($certificate) && ! empty($certificate[0]['id'])) {
-            return $certificate[0]['id'];
+            return [
+                'file_id' => $certificate[0]['id'],
+                'subproject_id' => config('saras.subproject_ids.contract_ai'),
+            ];
         }
 
         // 2. Check ProjectProgress records
         $processId = $processData['id'] ?? null;
 
         if ($processId && ! empty($progressCertificates[$processId])) {
-            return $progressCertificates[$processId];
+            return [
+                'file_id' => $progressCertificates[$processId]['file_id'],
+                'subproject_id' => $progressCertificates[$processId]['subproject_id'],
+            ];
         }
 
-        return null;
+        return [
+            'file_id' => null,
+            'subproject_id' => null,
+        ];
     }
 }

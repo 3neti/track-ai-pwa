@@ -81,8 +81,12 @@ class SarasStubClient implements SarasClientInterface
         ]);
     }
 
-    public function createProcess(string $subProjectId, array $fields, ?string $idempotencyKey = null): ProcessResponse
-    {
+    public function createProcess(
+        string $subProjectId,
+        array $fields,
+        ?string $idempotencyKey = null,
+        ?string $parentProcessId = null,
+    ): ProcessResponse {
         $entryId = 'entry_'.Str::random(12);
 
         return ProcessResponse::fromArray([
@@ -95,7 +99,7 @@ class SarasStubClient implements SarasClientInterface
         ]);
     }
 
-    public function uploadFiles(array $files): FileUploadResponse
+    public function uploadFiles(array $files, string $subProjectId): FileUploadResponse
     {
         $uploadedFiles = [];
 
@@ -142,17 +146,15 @@ class SarasStubClient implements SarasClientInterface
         ];
     }
 
-    public function getFileUrls(array $fileIds): array
+    public function getFileUrl(string $subProjectId, string $fileId): array
     {
-        $urls = [];
-        foreach ($fileIds as $fileId) {
-            $urls[] = [
+        return [
+            'urls' => [[
+                'fileId' => $fileId,
                 'id' => $fileId,
                 'url' => "https://stub.saras.test/files/{$fileId}",
-            ];
-        }
-
-        return ['files' => $urls];
+            ]],
+        ];
     }
 
     public function updateProcessField(string $processId, string $subProjectId, array $updates): array

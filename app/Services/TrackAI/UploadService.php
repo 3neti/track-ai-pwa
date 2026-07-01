@@ -156,7 +156,10 @@ class UploadService
 
         try {
             // Step 1: Upload file to Saras storage
-            $fileResponse = $this->sarasClient->uploadFiles([$file]);
+            $fileResponse = $this->sarasClient->uploadFiles(
+                files: [$file],
+                subProjectId: config('saras.subproject_ids.trackdata'),
+            );
 
             if (! $fileResponse->success || ! $fileResponse->getFirstFileId()) {
                 throw SarasApiException::uploadFailed(
@@ -191,6 +194,7 @@ class UploadService
                     'time' => now('Asia/Manila')->toIso8601String(),
                 ],
                 idempotencyKey: $idempotencyKey,
+                parentProcessId: $resolvedContractId,
             );
 
             if (! $processResponse->success) {

@@ -1,9 +1,12 @@
 <?php
 
+use App\Contracts\SarasClientInterface;
 use App\Models\Contract;
 use App\Models\User;
+use App\Services\TrackAI\ContractService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -49,6 +52,7 @@ test('contracts API returns contract fields correctly', function () {
     expect($first['display_number'])->toBe('42');
     expect($first['milestones'])->toBe(['Foundation', 'Piers', 'Deck']);
     expect($first['certificate_status'])->toBe('pending');
+    expect($first)->toHaveKey('certificate_subproject_id');
 });
 
 test('contract refresh triggers sync from saras stub', function () {
@@ -58,6 +62,124 @@ test('contract refresh triggers sync from saras stub', function () {
     // Stub returns empty processes, so contracts will be empty but call succeeds
     $response->assertSuccessful()
         ->assertJson(['success' => true]);
+});
+
+test('contract sync returns only contracts present in latest saras response', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'stale-contract-id',
+        'name' => 'Stale Contract',
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.contract_ai'), 1, 50)
+        ->once()
+        ->andReturn([
+            'processes' => [[
+                'id' => 'current-contract-id',
+                'fields' => [
+                    'legalName1' => 'Current Contract',
+                    'milestone' => ['Foundation'],
+                ],
+                'metaDetails' => [
+                    'displayNumber' => '1',
+                ],
+            ]],
+        ]);
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.project_progress'), 1, 50)
+        ->once()
+        ->andReturn(['processes' => []]);
+
+    $contracts = (new ContractService($client))->syncContractsFromSaras();
+
+    expect($contracts)->toHaveCount(1)
+        ->and($contracts->first()->saras_process_id)->toBe('current-contract-id')
+        ->and($contracts->first()->name)->toBe('Current Contract');
+
+    $this->assertDatabaseMissing('contracts', [
+        'saras_process_id' => 'stale-contract-id',
+    ]);
+});
+
+test('contract sync stores certificate source subproject from project progress', function () {
+    config([
+        'saras.subproject_ids.contract_ai' => 'contract-ai-subproject',
+        'saras.subproject_ids.project_progress' => 'project-progress-subproject',
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getProcesses')
+        ->with('contract-ai-subproject', 1, 50)
+        ->once()
+        ->andReturn([
+            'processes' => [[
+                'id' => 'contract-process-id',
+                'fields' => [
+                    'legalName1' => 'Contract With Progress Certificate',
+                    'milestone' => ['Foundation'],
+                ],
+                'metaDetails' => [
+                    'displayNumber' => '1',
+                ],
+            ]],
+        ]);
+    $client->shouldReceive('getProcesses')
+        ->with('project-progress-subproject', 1, 50)
+        ->once()
+        ->andReturn([
+            'processes' => [[
+                'fields' => [
+                    'contractId' => 'contract-process-id',
+                    'certificateOfCompletion' => 'progress-certificate-file-id',
+                ],
+            ]],
+        ]);
+
+    $contracts = (new ContractService($client))->syncContractsFromSaras();
+    $contract = $contracts->first();
+
+    expect($contract->certificate_status)->toBe(Contract::STATUS_AVAILABLE)
+        ->and($contract->certificate_file_id)->toBe('progress-certificate-file-id')
+        ->and($contract->certificate_subproject_id)->toBe('project-progress-subproject');
+});
+
+test('contract sync stores certificate source subproject from contract ai', function () {
+    config([
+        'saras.subproject_ids.contract_ai' => 'contract-ai-subproject',
+        'saras.subproject_ids.project_progress' => 'project-progress-subproject',
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getProcesses')
+        ->with('contract-ai-subproject', 1, 50)
+        ->once()
+        ->andReturn([
+            'processes' => [[
+                'id' => 'contract-process-id',
+                'fields' => [
+                    'legalName1' => 'Contract With Contract AI Certificate',
+                    'milestone' => ['Foundation'],
+                    'certificateOfCompletion' => [
+                        ['id' => 'contract-ai-certificate-file-id'],
+                    ],
+                ],
+                'metaDetails' => [
+                    'displayNumber' => '1',
+                ],
+            ]],
+        ]);
+    $client->shouldReceive('getProcesses')
+        ->with('project-progress-subproject', 1, 50)
+        ->once()
+        ->andReturn(['processes' => []]);
+
+    $contracts = (new ContractService($client))->syncContractsFromSaras();
+    $contract = $contracts->first();
+
+    expect($contract->certificate_status)->toBe(Contract::STATUS_AVAILABLE)
+        ->and($contract->certificate_file_id)->toBe('contract-ai-certificate-file-id')
+        ->and($contract->certificate_subproject_id)->toBe('contract-ai-subproject');
 });
 
 test('certificate endpoint returns 404 when not available', function () {
@@ -80,6 +202,38 @@ test('certificate endpoint returns download URL when certificate available', fun
     $response->assertSuccessful()
         ->assertJson(['success' => true])
         ->assertJsonStructure(['download_url']);
+});
+
+test('certificate endpoint opens file with stored certificate subproject', function () {
+    $contract = Contract::factory()->available()->create([
+        'certificate_file_id' => 'certificate-file-id',
+        'certificate_subproject_id' => 'source-subproject-id',
+        'certificate_url' => null,
+        'raw_saras_payload' => [
+            'fields' => [],
+        ],
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getFileUrl')
+        ->with('source-subproject-id', 'certificate-file-id')
+        ->once()
+        ->andReturn([
+            'urls' => [[
+                'url' => 'https://storage.test/certificate-file-id',
+            ]],
+        ]);
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->getJson("/api/contracts/{$contract->id}/certificate");
+
+    $response->assertSuccessful()
+        ->assertJson([
+            'success' => true,
+            'download_url' => 'https://storage.test/certificate-file-id',
+        ]);
 });
 
 test('certificate status resolves correctly for all states', function () {

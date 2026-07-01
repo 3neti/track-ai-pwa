@@ -78,8 +78,12 @@ class SarasLiveClient implements SarasClientInterface
         return ProjectsResponse::fromArray($response);
     }
 
-    public function createProcess(string $subProjectId, array $fields, ?string $idempotencyKey = null): ProcessResponse
-    {
+    public function createProcess(
+        string $subProjectId,
+        array $fields,
+        ?string $idempotencyKey = null,
+        ?string $parentProcessId = null,
+    ): ProcessResponse {
         $requestId = Str::uuid()->toString();
 
         Log::info('Saras API: createProcess', [
@@ -94,21 +98,27 @@ class SarasLiveClient implements SarasClientInterface
             $headers['Idempotency-Key'] = $idempotencyKey;
         }
 
+        $data = [
+            'subProjectId' => $subProjectId,
+            'fields' => $fields,
+        ];
+
+        if ($parentProcessId) {
+            $data['metaDetails'] = ['parentId' => $parentProcessId];
+        }
+
         $response = $this->makeRequest(
             method: 'POST',
             endpoint: '/process/createProcess',
             requestId: $requestId,
-            data: [
-                'subProjectId' => $subProjectId,
-                'fields' => $fields,
-            ],
+            data: $data,
             headers: $headers,
         );
 
         return ProcessResponse::fromArray($response);
     }
 
-    public function uploadFiles(array $files): FileUploadResponse
+    public function uploadFiles(array $files, string $subProjectId): FileUploadResponse
     {
         $requestId = Str::uuid()->toString();
 
@@ -116,6 +126,7 @@ class SarasLiveClient implements SarasClientInterface
             'request_id' => $requestId,
             'endpoint' => '/process/knowledges/createStorage',
             'file_count' => count($files),
+            'sub_project_id' => $subProjectId,
         ]);
 
         try {
@@ -136,9 +147,9 @@ class SarasLiveClient implements SarasClientInterface
                 );
             }
 
-            // pluginName sent as query parameter for multipart upload
-            $pluginName = config('saras.plugin_name', 'knowledgeRepo');
-            $uploadEndpoint = "/process/knowledges/createStorage?pluginName={$pluginName}";
+            $uploadEndpoint = '/process/knowledges/createStorage?'.http_build_query([
+                'subProjectId' => $subProjectId,
+            ]);
             $startTime = microtime(true);
             $response = $request->post($uploadEndpoint);
             $durationMs = (microtime(true) - $startTime) * 1000;
@@ -155,11 +166,17 @@ class SarasLiveClient implements SarasClientInterface
             $this->recordTrace(
                 'POST',
                 $uploadEndpoint,
-                [],
+                [
+                    'subProjectId' => $subProjectId,
+                    'files' => $fileNames,
+                ],
                 $response->status(),
                 $responseData,
                 $durationMs,
-                requestSummaryOverride: ['files' => $fileNames],
+                requestSummaryOverride: [
+                    'subProjectId' => $subProjectId,
+                    'files' => $fileNames,
+                ],
             );
 
             if (! $response->successful()) {
@@ -183,6 +200,14 @@ class SarasLiveClient implements SarasClientInterface
     {
         $requestId = Str::uuid()->toString();
         $workflowId = $workflowId ?? config('saras.workflow_id');
+        $processId = $otherDetails['processId'] ?? null;
+        $stageKey = $otherDetails['initiatorMeta']['stageKey'] ?? null;
+        $workflowData = array_map(
+            fn (mixed $value): object => (object) [
+                'data' => (object) ['value' => $value],
+            ],
+            $payload,
+        );
 
         Log::info('Saras API: executeWorkflow', [
             'request_id' => $requestId,
@@ -196,8 +221,12 @@ class SarasLiveClient implements SarasClientInterface
             requestId: $requestId,
             data: [
                 'workflowId' => $workflowId,
-                'otherDetails' => (object) $otherDetails,
-                'payload' => (object) $payload,
+                'processId' => $processId,
+                'stageKey' => $stageKey,
+                'otherDetails' => (object) [
+                    ...$otherDetails,
+                    'data' => (object) $workflowData,
+                ],
             ],
         );
 
@@ -221,8 +250,12 @@ class SarasLiveClient implements SarasClientInterface
             'perPageCount' => $perPage,
         ];
 
-        if (! empty($filters)) {
-            $query['filters'] = json_encode($filters);
+        $supportedFilters = ['subProjectId', 'stageKey', 'processId', 'workflowId', 'runId'];
+
+        foreach ($filters as $key => $value) {
+            if (in_array($key, $supportedFilters, true) && $value !== '') {
+                $query[$key] = $value;
+            }
         }
 
         $response = $this->makeRequest(
@@ -257,22 +290,24 @@ class SarasLiveClient implements SarasClientInterface
         );
     }
 
-    public function getFileUrls(array $fileIds): array
+    public function getFileUrl(string $subProjectId, string $fileId): array
     {
         $requestId = Str::uuid()->toString();
 
-        Log::info('Saras API: getFileUrls', [
+        Log::info('Saras API: getFileUrl', [
             'request_id' => $requestId,
-            'endpoint' => '/knowledges/urlStorage',
-            'file_count' => count($fileIds),
+            'endpoint' => '/process/knowledges/urlStorage',
+            'sub_project_id' => $subProjectId,
+            'file_id' => $fileId,
         ]);
 
         return $this->makeRequest(
             method: 'POST',
-            endpoint: '/knowledges/urlStorage',
+            endpoint: '/process/knowledges/urlStorage',
             requestId: $requestId,
             data: [
-                'fileIds' => $fileIds,
+                'subProjectId' => $subProjectId,
+                'fileId' => $fileId,
             ],
         );
     }
@@ -400,6 +435,7 @@ class SarasLiveClient implements SarasClientInterface
     {
         $status = $response->status();
         $data = $response->json();
+        $data['message'] ??= $data['msg'] ?? null;
         $message = $data['message'] ?? $data['error'] ?? "Request failed with status {$status}";
 
         Log::error('Saras API: Error response', [
@@ -589,7 +625,7 @@ class SarasLiveClient implements SarasClientInterface
                 // Only retry on connection errors and 5xx responses
                 return $exception instanceof ConnectionException
                     || ($exception->response?->status() >= 500);
-            })
+            }, throw: false)
             ->acceptJson()
             ->asJson();
     }

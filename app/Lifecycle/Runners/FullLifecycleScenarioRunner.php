@@ -42,27 +42,12 @@ final class FullLifecycleScenarioRunner implements ScenarioRunnerContract
             $context->output->info("Progress report submitted (Saras ID: {$report->saras_process_id})");
         }
 
-        // Phase 2: Trigger workflow
+        // Phase 2: Wait for the workflow Saras automatically starts for the process.
         if (! $context->output->isJson()) {
-            $context->output->line('Phase 2: Triggering AI evaluation workflow...');
+            $context->output->line('Phase 2: Waiting for automatic AI evaluation...');
         }
 
-        $report = $this->progressService->triggerWorkflow($report);
-
-        if (! $report->isProcessing()) {
-            if (! $context->output->isJson()) {
-                $context->output->error('Workflow trigger failed.');
-            }
-
-            return $this->buildResult($context, $report, 'workflow_failed');
-        }
-
-        if (! $context->output->isJson()) {
-            $context->output->info("Workflow triggered (run ID: {$report->saras_workflow_run_id})");
-            $context->output->line('Phase 3: Polling for completion...');
-        }
-
-        // Phase 3: Poll for completion
+        // Phase 3: Discover and poll the automatically created workflow run.
         $pollCount = 0;
 
         while ($pollCount < $context->maxPolls) {
@@ -74,6 +59,10 @@ final class FullLifecycleScenarioRunner implements ScenarioRunnerContract
             if (! $context->output->isJson()) {
                 $status = $run ? $run->state : 'unknown';
                 $context->output->line("  Poll {$pollCount}/{$context->maxPolls}: {$status}");
+
+                if ($run && $pollCount === 1) {
+                    $context->output->info("  Automatic workflow found (run ID: {$run->id})");
+                }
             }
 
             if ($report->isTerminal()) {

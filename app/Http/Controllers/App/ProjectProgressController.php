@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\App\ProjectProgressRequest;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
+use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,6 +18,7 @@ class ProjectProgressController extends Controller
 {
     public function __construct(
         protected ProjectProgressService $progressService,
+        protected ContractService $contractService,
         protected SarasClientInterface $sarasClient,
     ) {}
 
@@ -26,23 +29,15 @@ class ProjectProgressController extends Controller
     {
         $projects = Project::orderBy('name')->get();
 
-        $contracts = [];
-
-        try {
-            $contractAiId = config('saras.subproject_ids.contract_ai');
-            $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
-
-            foreach ($response['processes'] ?? [] as $c) {
-                $contracts[] = [
-                    'id' => $c['id'] ?? '',
-                    'name' => $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?'),
-                    'milestones' => $c['fields']['milestone'] ?? [],
-                    'display_number' => $c['metaDetails']['displayNumber'] ?? '',
-                ];
-            }
-        } catch (\Exception $e) {
-            // Contracts not available — page still renders
-        }
+        $contracts = $this->contractService->listContracts(refresh: true)
+            ->map(fn ($contract) => [
+                'id' => $contract->saras_process_id,
+                'local_id' => $contract->id,
+                'saras_process_id' => $contract->saras_process_id,
+                'name' => $contract->name,
+                'milestones' => $contract->milestones ?? [],
+                'display_number' => $contract->display_number ?? '',
+            ]);
 
         return Inertia::render('app/ProjectProgress', [
             'projects' => $projects,
@@ -179,7 +174,10 @@ class ProjectProgressController extends Controller
                 }
             }
         } catch (\Exception $e) {
-            // Saras unavailable — proceed with local data only
+            Log::warning('ProjectProgress: Saras milestone status unavailable', [
+                'contract_id' => $contractId,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return response()->json([

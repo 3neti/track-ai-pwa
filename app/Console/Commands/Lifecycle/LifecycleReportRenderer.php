@@ -169,8 +169,8 @@ final class LifecycleReportRenderer
         $workflow = $phases['workflow'] ?? null;
         if ($workflow) {
             $steps[] = [
-                'label' => 'Workflow Triggered',
-                'status' => 'success',
+                'label' => 'Automatic Workflow',
+                'status' => ! empty($workflow['workflow_run_id']) ? 'success' : 'pending',
                 'detail' => isset($workflow['workflow_run_id']) ? "Run: {$workflow['workflow_run_id']}" : '',
             ];
 
@@ -259,7 +259,7 @@ final class LifecycleReportRenderer
             return;
         }
 
-        $command->line('════════ Workflow Trigger ════════');
+        $command->line('════════ Automatic Workflow ════════');
         $command->newLine();
 
         $command->line('  Workflow:   '.config('saras.workflows.completion_id', '—'));
@@ -477,7 +477,7 @@ final class LifecycleReportRenderer
         $this->interpretLine($command, $upload && ($upload['success'] ?? false), 'TrackData process creation works');
         $this->interpretLine($command, $progress && ($progress['success'] ?? false), 'ProjectProgress process creation works');
         $this->interpretLine($command, $progress && ! empty($progress['saras_process_id']), 'Previous/current progress file UUID mapping works');
-        $this->interpretLine($command, $workflow && ! empty($workflow['workflow_run_id']), 'Workflow trigger works');
+        $this->interpretLine($command, $workflow && ! empty($workflow['workflow_run_id']), 'Automatic workflow starts');
         $this->interpretLine($command, $workflow !== null, 'Workflow polling works');
 
         $command->newLine();
@@ -513,11 +513,11 @@ final class LifecycleReportRenderer
             $command->line('  Track AI integration path is operational up to Saras workflow execution.');
             $command->line('  The remaining blocker is Saras workflow debugging and certificate artifact exposure.');
         } elseif ($outcome === 'processing') {
-            $command->line('  Track AI integration path is operational. Workflow was triggered successfully.');
+            $command->line('  Track AI integration path is operational. The automatic workflow started successfully.');
             $command->line('  The workflow is still processing — results may be available after a longer polling window.');
         } else {
             $command->line('  Track AI integration path is operational up to Saras workflow execution.');
-            $command->line('  Workflow was not triggered — verify Saras sync is enabled and processId was obtained.');
+            $command->line('  Saras did not automatically start a workflow for the created process.');
         }
 
         $command->newLine();
@@ -645,7 +645,7 @@ final class LifecycleReportRenderer
 
         $command->line('Track AI successfully completed the operational workflow:');
         $command->newLine();
-        $command->line('  Attendance → File Upload → TrackData → ProjectProgress → Workflow Trigger → Polling');
+        $command->line('  Attendance → File Upload → TrackData → ProjectProgress → Automatic Workflow Polling');
         $command->newLine();
 
         $workflow = $phases['workflow'] ?? null;
@@ -675,8 +675,8 @@ final class LifecycleReportRenderer
             $blocker = 'Saras workflow still processing.';
             $action = 'Re-run with longer timeout or check Saras dashboard.';
         } else {
-            $blocker = 'Workflow not triggered.';
-            $action = 'Verify Saras sync configuration.';
+            $blocker = 'Automatic workflow did not start.';
+            $action = 'Saras to inspect the ProjectProgress process and workflow trigger configuration.';
         }
 
         $command->line("Current readiness:  {$readiness}%");

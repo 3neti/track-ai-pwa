@@ -18,6 +18,7 @@ interface ContractItem {
     milestones: string[];
     certificate_status: string;
     certificate_file_id: string | null;
+    certificate_subproject_id: string | null;
     last_synced_at: string | null;
 }
 
@@ -41,6 +42,10 @@ onMounted(() => {
 function selectContract(contract: ContractItem) {
     // Store saras_process_id as the active contract ID — this is what Progress/Attendance/Inventory use
     setActiveContract(contract.saras_process_id, contract.name);
+
+    if (import.meta.env.DEV) {
+        console.log('[TrackAI] selected contract id:', contract.saras_process_id);
+    }
 }
 
 function openWorkspace() {

@@ -7,7 +7,10 @@ export interface ServiceWorkerRegistration {
 let registration: globalThis.ServiceWorkerRegistration | null = null;
 
 export async function registerServiceWorker(): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
+    if (
+        !('serviceWorker' in navigator) ||
+        import.meta.env.VITE_ENABLE_SERVICE_WORKER !== 'true'
+    ) {
         console.log('[PWA] Service workers not supported');
         return;
     }
@@ -24,7 +27,10 @@ export async function registerServiceWorker(): Promise<void> {
             const newWorker = registration?.installing;
             if (newWorker) {
                 newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    if (
+                        newWorker.state === 'installed' &&
+                        navigator.serviceWorker.controller
+                    ) {
                         // New content is available, notify user
                         dispatchUpdateAvailable();
                     }
@@ -51,17 +57,30 @@ export function skipWaiting(): void {
 }
 
 export async function unregisterServiceWorker(): Promise<boolean> {
-    if (!registration) {
+    if (!('serviceWorker' in navigator)) {
         return false;
     }
 
     try {
-        const result = await registration.unregister();
-        console.log('[PWA] Service Worker unregistered:', result);
-        return result;
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const results = await Promise.all(
+            registrations.map((item) => item.unregister()),
+        );
+        registration = null;
+
+        return results.some(Boolean);
     } catch (error) {
         console.error('[PWA] Service Worker unregistration failed:', error);
         return false;
+    }
+}
+
+async function clearServiceWorkerState(): Promise<void> {
+    await unregisterServiceWorker();
+
+    if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
     }
 }
 
@@ -79,10 +98,14 @@ export function getRegistration(): globalThis.ServiceWorkerRegistration | null {
 
 // Auto-register on module import if in browser
 if (typeof window !== 'undefined') {
-    // Register when the page loads
-    if (document.readyState === 'complete') {
-        registerServiceWorker();
+    if (import.meta.env.VITE_ENABLE_SERVICE_WORKER === 'true') {
+        if (document.readyState === 'complete') {
+            registerServiceWorker();
+        } else {
+            window.addEventListener('load', registerServiceWorker);
+        }
     } else {
-        window.addEventListener('load', registerServiceWorker);
+        // Debug/demo cleanup. Remove after PWA caching is redesigned.
+        void clearServiceWorkerState();
     }
 }

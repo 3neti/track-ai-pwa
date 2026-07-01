@@ -33,6 +33,7 @@ class ContractController extends Controller
                 'milestones' => $c->milestones ?? [],
                 'certificate_status' => $c->certificate_status,
                 'certificate_file_id' => $c->certificate_file_id,
+                'certificate_subproject_id' => $c->certificate_subproject_id,
                 'last_synced_at' => $c->last_synced_at?->toIso8601String(),
             ]),
         ]);
@@ -55,6 +56,7 @@ class ContractController extends Controller
                 'milestones' => $c->milestones ?? [],
                 'certificate_status' => $c->certificate_status,
                 'certificate_file_id' => $c->certificate_file_id,
+                'certificate_subproject_id' => $c->certificate_subproject_id,
                 'last_synced_at' => $c->last_synced_at?->toIso8601String(),
             ]),
         ]);
@@ -78,6 +80,7 @@ class ContractController extends Controller
                     'milestones' => $c->milestones ?? [],
                     'certificate_status' => $c->certificate_status,
                     'certificate_file_id' => $c->certificate_file_id,
+                    'certificate_subproject_id' => $c->certificate_subproject_id,
                     'last_synced_at' => $c->last_synced_at?->toIso8601String(),
                 ]),
                 'message' => 'Contracts refreshed from Saras.',
@@ -110,10 +113,18 @@ class ContractController extends Controller
             ]);
         }
 
-        // Fetch download URL from Saras via /knowledges/urlStorage
+        // Fetch a scoped download URL from Saras.
         if ($contract->certificate_file_id) {
             try {
-                $response = $this->sarasClient->getFileUrls([$contract->certificate_file_id]);
+                $certificateSubProjectId = $contract->certificate_subproject_id
+                    ?? (data_get($contract->raw_saras_payload, 'fields.certificateOfCompletion')
+                        ? config('saras.subproject_ids.contract_ai')
+                        : config('saras.subproject_ids.project_progress'));
+
+                $response = $this->sarasClient->getFileUrl(
+                    subProjectId: $certificateSubProjectId,
+                    fileId: $contract->certificate_file_id,
+                );
 
                 $urls = $response['urls'] ?? $response['files'] ?? $response['data'] ?? [];
                 $url = $urls[0]['url'] ?? $urls[0]['downloadUrl'] ?? null;

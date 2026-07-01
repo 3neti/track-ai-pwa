@@ -119,6 +119,7 @@ class ProjectProgressService
                         ? array_values($input['tags'])
                         : ['progress', 'track-ai'],
                 ],
+                parentProcessId: $contractId,
             );
 
             if ($processResponse->success && $processResponse->processId) {
@@ -262,7 +263,7 @@ class ProjectProgressService
      */
     public function pollWorkflowStatus(ProjectProgressReport $report): ?WorkflowRunDTO
     {
-        if (! $report->saras_workflow_run_id) {
+        if (! $report->saras_process_id) {
             return null;
         }
 
@@ -271,15 +272,25 @@ class ProjectProgressService
                 page: 1,
                 perPage: 5,
                 filters: [
-                    'otherDetails__initiator' => 'INITIATOR_PROCESS',
-                    'otherDetails__processId' => $report->saras_process_id,
-                    'workflowId_id' => config('saras.workflows.completion_id'),
+                    'subProjectId' => config('saras.subproject_ids.project_progress'),
+                    'processId' => $report->saras_process_id,
+                    'workflowId' => config('saras.workflows.completion_id'),
                 ],
             );
 
-            $run = $response->findById($report->saras_workflow_run_id);
+            $run = $report->saras_workflow_run_id
+                ? $response->findById($report->saras_workflow_run_id)
+                : ($response->runs[0] ?? null);
 
             if ($run) {
+                if (! $report->saras_workflow_run_id) {
+                    $report->update([
+                        'saras_workflow_run_id' => $run->id,
+                        'progress_status' => ProjectProgressReport::STATUS_PROCESSING,
+                        'last_synced_at' => now(),
+                    ]);
+                }
+
                 $this->updateStatusFromRun($report, $run);
 
                 return $run;

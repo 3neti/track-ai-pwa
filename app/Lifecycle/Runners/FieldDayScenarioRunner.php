@@ -32,6 +32,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             'user' => ['id' => $context->user->id, 'name' => $context->user->name],
             'project' => ['id' => $context->project->id, 'name' => $context->project->name],
         ];
+        $workflowSucceeded = true;
 
         // Phase 0: Fetch contracts & milestones, resolve active contract ID
         $contractsResult = $this->phaseFetchContracts($context);
@@ -39,6 +40,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
 
         // Use the selected contract ID for all subsequent phases
         $activeContractId = $contractsResult['selected_contract_id'] ?? $context->contractId;
+        $activeMilestone = $contractsResult['selected_milestones'][0] ?? $context->currentMilestone();
 
         // Phase 1: Attendance Check-In
         $checkInResult = $this->phaseCheckIn($context, $activeContractId);
@@ -53,11 +55,11 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
         $payload['phases']['upload'] = $uploadResult;
 
         // Phase 2.5: Resolve previous progress photos
-        $previousProgressResult = $this->phaseResolvePreviousProgress($context, $activeContractId);
+        $previousProgressResult = $this->phaseResolvePreviousProgress($context, $activeContractId, $activeMilestone);
         $payload['phases']['previous_progress'] = $previousProgressResult;
 
         // Phase 3: Submit Progress with current file UUIDs (previous auto-resolved by service)
-        $progressResult = $this->phaseSubmitProgress($context, $uploadResult, $activeContractId);
+        $progressResult = $this->phaseSubmitProgress($context, $uploadResult, $activeContractId, $activeMilestone);
         $payload['phases']['progress'] = $progressResult;
 
         if (! $progressResult['success']) {
@@ -72,19 +74,20 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             $payload['phases']['stage_files'] = $stageFilesResult;
         }
 
-        // Phase 4 + 5: Trigger Workflow + Poll (only if we have a saras_process_id)
+        // Phase 4 + 5: Discover and poll the automatically triggered workflow.
         if (! empty($progressResult['saras_process_id'])) {
             $workflowResult = $this->phaseWorkflow($context, $progressResult['report_id']);
             $payload['phases']['workflow'] = $workflowResult;
+            $workflowSucceeded = $workflowResult['success'];
         }
 
         // Phase 6: Attendance Check-Out
         $checkOutResult = $this->phaseCheckOut($context, $payload, $activeContractId);
         $payload['phases']['check_out'] = $checkOutResult;
 
-        $payload['success'] = true;
+        $payload['success'] = $workflowSucceeded && $checkOutResult['success'];
 
-        return $this->result($context, $payload, true);
+        return $this->result($context, $payload, $payload['success']);
     }
 
     /**
@@ -163,6 +166,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             // Select the first contract (or from scenario config)
             $selectedContractId = null;
             $selectedContractName = null;
+            $selectedMilestones = [];
 
             if (! empty($contractEntries)) {
                 $scenarioContract = $context->scenario['contract_id'] ?? null;
@@ -170,12 +174,15 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 if ($scenarioContract) {
                     $match = collect($contractEntries)->firstWhere('id', $scenarioContract);
                 } else {
-                    $match = $contractEntries[0];
+                    $match = collect($contractEntries)->first(
+                        fn (array $contract): bool => ! empty($contract['milestones'])
+                    ) ?? $contractEntries[0];
                 }
 
                 if ($match) {
                     $selectedContractId = $match['id'];
                     $selectedContractName = $match['name'];
+                    $selectedMilestones = $match['milestones'];
 
                     if (! $context->output->isJson()) {
                         $context->output->info("  → Selected: {$selectedContractName} ({$selectedContractId})");
@@ -193,6 +200,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                 'contracts' => $contractEntries,
                 'selected_contract_id' => $selectedContractId,
                 'selected_contract_name' => $selectedContractName,
+                'selected_milestones' => $selectedMilestones,
             ];
         } catch (\Exception $e) {
             if (! $context->output->isJson()) {
@@ -398,13 +406,15 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     /**
      * @return array<string, mixed>
      */
-    private function phaseResolvePreviousProgress(ScenarioRunContext $context, string $contractId): array
-    {
+    private function phaseResolvePreviousProgress(
+        ScenarioRunContext $context,
+        string $contractId,
+        string $milestone,
+    ): array {
         if (! $context->output->isJson()) {
             $context->output->line('Phase 2.5: Resolving previous progress photos...');
         }
 
-        $milestone = $context->currentMilestone();
         $previousFileIds = $this->progressService->resolvePreviousProgressFileIds($contractId, $milestone);
 
         if (! $context->output->isJson()) {
@@ -430,8 +440,12 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
      * @param  array<string, mixed>  $uploadResult
      * @return array<string, mixed>
      */
-    private function phaseSubmitProgress(ScenarioRunContext $context, array $uploadResult, string $contractId): array
-    {
+    private function phaseSubmitProgress(
+        ScenarioRunContext $context,
+        array $uploadResult,
+        string $contractId,
+        string $milestone,
+    ): array {
         if (! $context->output->isJson()) {
             $context->output->line('Phase 3: Submitting progress report...');
         }
@@ -444,7 +458,7 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             project: $context->project,
             input: [
                 'contract_id' => $contractId,
-                'current_milestone' => $context->currentMilestone(),
+                'current_milestone' => $milestone,
                 'remarks' => $context->remarks(),
                 'current_progress_file_ids' => $fileIds['current'] ?? [],
                 'ip_address' => '127.0.0.1',
@@ -510,27 +524,12 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
     {
         $report = ProjectProgressReport::findOrFail($reportId);
 
-        // Phase 4: Trigger workflow
+        // Phase 4: Saras automatically starts the workflow after process creation.
         if (! $context->output->isJson()) {
-            $context->output->line('Phase 4: Triggering AI evaluation workflow...');
+            $context->output->line('Phase 4: Waiting for automatic AI evaluation...');
         }
 
-        $report = $this->progressService->triggerWorkflow($report);
-
-        if (! $report->isProcessing()) {
-            if (! $context->output->isJson()) {
-                $context->output->error('  ✗ Workflow trigger failed');
-            }
-
-            return ['success' => false, 'outcome' => 'workflow_trigger_failed'];
-        }
-
-        if (! $context->output->isJson()) {
-            $context->output->info("  ✓ Workflow triggered (run: {$report->saras_workflow_run_id})");
-            $context->output->line('Phase 5: Polling for completion...');
-        }
-
-        // Phase 5: Poll
+        // Phase 5: Discover and poll the workflow run by process ID.
         $pollCount = 0;
 
         while ($pollCount < $context->maxPolls) {
@@ -542,6 +541,10 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             if (! $context->output->isJson()) {
                 $state = $run ? $run->state : 'unknown';
                 $context->output->line("  Poll {$pollCount}/{$context->maxPolls}: {$state}");
+
+                if ($run && $pollCount === 1) {
+                    $context->output->info("  ✓ Automatic workflow found (run: {$run->id})");
+                }
 
                 // Enhanced failure diagnostics
                 if ($run && $run->isFailed()) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
 import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Award, Info, ChevronDown, ChevronUp } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
@@ -15,10 +15,23 @@ import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveContract } from '@/composables/useActiveContract';
 import { useGeolocation } from '@/composables/useGeolocation';
+import {
+    list as listProgressReports,
+    store as storeProgressReport,
+    workflowStatus,
+} from '@/actions/App/Http/Controllers/App/ProjectProgressController';
+import { milestoneProgress } from '@/routes/api/contracts';
 import axios from 'axios';
 
 interface Project { id: number; external_id: string; name: string; }
-interface Contract { id: string; name: string; milestones: string[]; display_number: string; }
+interface Contract {
+    id: string;
+    local_id: number;
+    saras_process_id: string;
+    name: string;
+    milestones: string[];
+    display_number: string;
+}
 interface ProgressReport {
     id: number; progress_status: string; current_milestone: string | null;
     contract_id: string | null; remarks: string | null; saras_process_id: string | null;
@@ -32,7 +45,7 @@ interface MilestoneStatus { has_progress: boolean; has_certificate: boolean; sta
 const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
-const { activeContractId } = useActiveContract();
+const { activeContractId, clearActiveContract } = useActiveContract();
 const { state: geoState, getCurrentPosition } = useGeolocation();
 
 // Resolve project internally (hidden from user)
@@ -40,7 +53,13 @@ const defaultProject = props.defaultProjectId
     ? props.projects.find(p => p.external_id === props.defaultProjectId)
     : null;
 const selectedProject = computed(() => defaultProject || props.projects[0]);
-const selectedContract = computed(() => props.contracts.find(c => String(c.id) === activeContractId.value));
+const selectedContract = computed(() => props.contracts.find((contract) =>
+    String(contract.id) === String(activeContractId.value) ||
+    String(contract.local_id) === String(activeContractId.value) ||
+    String(contract.saras_process_id) === String(activeContractId.value)
+));
+const selectedContractId = computed(() => selectedContract.value?.saras_process_id ?? null);
+const hasStaleActiveContract = computed(() => Boolean(activeContractId.value && !selectedContract.value));
 
 // State
 const reports = ref<ProgressReport[]>([]);
@@ -61,19 +80,42 @@ const submitStep = ref<Record<string, string | null>>({});
 
 // Load reports + milestone statuses
 async function loadData() {
-    if (!selectedProject.value || !activeContractId.value) return;
+    if (!selectedProject.value || !selectedContractId.value) return;
     isLoadingReports.value = true;
     try {
         const [reportsRes, statusRes] = await Promise.all([
-            axios.get(`/api/projects/${selectedProject.value.id}/progress-reports`),
-            axios.get(`/api/contracts/${encodeURIComponent(activeContractId.value)}/milestone-progress`),
+            axios.get(listProgressReports.url(selectedProject.value.id)),
+            axios.get(milestoneProgress.url(selectedContractId.value)),
         ]);
         if (reportsRes.data.success) reports.value = reportsRes.data.data;
         if (statusRes.data.success) milestoneStatuses.value = statusRes.data.milestones;
-    } catch { /* ignore */ } finally { isLoadingReports.value = false; }
+    } catch (error: any) {
+        console.error('[TrackAI] failed to load progress data:', {
+            contractId: selectedContractId.value,
+            status: error.response?.status,
+            response: error.response?.data,
+        });
+        message.value = {
+            type: 'error',
+            text: error.response?.data?.message || 'Unable to load milestone progress.',
+        };
+    } finally {
+        isLoadingReports.value = false;
+    }
 }
 
 onMounted(() => {
+    if (hasStaleActiveContract.value) {
+        clearActiveContract();
+        router.visit('/app/contracts');
+        return;
+    }
+
+    if (import.meta.env.DEV) {
+        console.log('[TrackAI] contracts:', props.contracts);
+        console.log('[TrackAI] resolved selected contract:', selectedContract.value);
+        console.log('[TrackAI] milestones/stages:', selectedContract.value?.milestones ?? []);
+    }
     loadData();
     getCurrentPosition();
 });
@@ -94,7 +136,7 @@ function removeTag(milestone: string, index: number) {
 // Reports grouped by milestone
 function reportsForMilestone(milestone: string): ProgressReport[] {
     return reports.value
-        .filter(r => r.current_milestone === milestone && r.contract_id === activeContractId.value)
+        .filter(r => r.current_milestone === milestone && r.contract_id === selectedContractId.value)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
@@ -117,7 +159,7 @@ async function handleFileUpload(event: Event, milestone: string) {
     for (const file of files) {
         try {
             const cr = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {
-                contract_id: activeContractId.value,
+                contract_id: selectedContractId.value,
                 client_request_id: crypto.randomUUID(),
                 title: file.name,
                 document_type: 'current_progress',
@@ -161,8 +203,8 @@ async function handleSubmit(milestone: string) {
 
     try {
         submitStep.value[milestone] = 'Creating progress report...';
-        const r = await axios.post(`/api/projects/${selectedProject.value.id}/progress-reports`, {
-            contract_id: activeContractId.value || null,
+        const r = await axios.post(storeProgressReport.url(selectedProject.value.id), {
+            contract_id: selectedContractId.value,
             current_milestone: milestone,
             remarks: uploadRemarks.value[milestone] || null,
             tags: uploadTags.value[milestone] ?? [],
@@ -170,14 +212,8 @@ async function handleSubmit(milestone: string) {
             current_progress_file_ids: currIds,
         });
         if (!r.data.success) throw new Error(r.data.message);
-        const report = r.data.report;
 
-        if (report.saras_process_id) {
-            submitStep.value[milestone] = 'Triggering AI evaluation...';
-            await axios.post(`/api/progress-reports/${report.id}/workflow`);
-        }
-
-        message.value = { type: 'success', text: `Progress report for ${milestone} submitted.` };
+        message.value = { type: 'success', text: `Progress report for ${milestone} submitted. AI evaluation will start automatically.` };
         uploadFiles.value[milestone] = [];
         uploadRemarks.value[milestone] = '';
         uploadTags.value[milestone] = [];
@@ -193,7 +229,7 @@ async function handleSubmit(milestone: string) {
 
 async function handlePollStatus(report: ProgressReport) {
     isPolling.value = true;
-    try { await axios.get(`/api/progress-reports/${report.id}/workflow`); await loadData(); }
+    try { await axios.get(workflowStatus.url(report.id)); await loadData(); }
     catch { /* ignore */ } finally { isPolling.value = false; }
 }
 
@@ -242,7 +278,9 @@ const canSubmitMilestone = (milestone: string) => {
             <Card v-else-if="!selectedContract">
                 <CardContent class="py-12 text-center">
                     <ClipboardCheck class="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                    <p class="text-muted-foreground">Select a contract to view milestones.</p>
+                    <p class="text-muted-foreground">
+                        {{ hasStaleActiveContract ? 'The previously selected contract is no longer available from Saras. Please select a current contract.' : 'Select a contract to view milestones.' }}
+                    </p>
                 </CardContent>
             </Card>
 
@@ -281,7 +319,7 @@ const canSubmitMilestone = (milestone: string) => {
                                     <Award class="h-3 w-3 text-green-600" />
                                     <span class="text-xs text-green-700 dark:text-green-300">Certificate available</span>
                                 </div>
-                                <Button v-if="report.progress_status === 'processing'" size="sm" variant="outline" class="h-7 text-xs" @click.stop="handlePollStatus(report)" :disabled="isPolling">
+                                <Button v-if="report.saras_process_id && ['submitted', 'processing'].includes(report.progress_status)" size="sm" variant="outline" class="h-7 text-xs" @click.stop="handlePollStatus(report)" :disabled="isPolling">
                                     <Loader2 v-if="isPolling" class="mr-1 h-3 w-3 animate-spin" /><Clock v-else class="mr-1 h-3 w-3" /> Check Status
                                 </Button>
                             </div>
