@@ -5,6 +5,7 @@ namespace App\Services\TrackAI;
 use App\Contracts\SarasClientInterface;
 use App\Exceptions\SarasApiException;
 use App\Models\AuditLog;
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
@@ -56,6 +57,32 @@ class ProjectProgressService
         return ! empty($fileIds) ? $fileIds : [];
     }
 
+    public function progressSubmissionBlocker(string $contractId, string $milestone): ?string
+    {
+        $orderBlocker = $this->milestoneOrderBlocker($contractId, $milestone);
+
+        if ($orderBlocker !== null) {
+            return $orderBlocker;
+        }
+
+        if ($this->isMilestoneLockedForProgress($contractId, $milestone)) {
+            return 'This milestone is already in progress and cannot be edited.';
+        }
+
+        return null;
+    }
+
+    public function uploadSubmissionBlocker(string $contractId, string $milestone): ?string
+    {
+        $blocker = $this->progressSubmissionBlocker($contractId, $milestone);
+
+        if ($blocker === 'This milestone is already in progress and cannot be edited.') {
+            return 'This milestone is already in progress and cannot accept new uploads.';
+        }
+
+        return $blocker;
+    }
+
     /**
      * Determine whether a milestone already has active progress and should no longer be edited.
      */
@@ -78,6 +105,85 @@ class ProjectProgressService
             return false;
         }
 
+        foreach ($this->remoteProgressProcesses() as $process) {
+            if (($process['fields']['contractId'] ?? null) !== $contractId) {
+                continue;
+            }
+
+            if (($process['fields']['currentMilestone'] ?? null) !== $milestone) {
+                continue;
+            }
+
+            if (empty($process['fields']['certificateOfCompletion'] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function milestoneOrderBlocker(string $contractId, string $milestone): ?string
+    {
+        $milestones = Contract::where('saras_process_id', $contractId)->first()?->milestones;
+
+        if (! is_array($milestones) || $milestones === []) {
+            return null;
+        }
+
+        $milestones = array_values(array_filter($milestones, fn (mixed $value): bool => is_string($value) && $value !== ''));
+        $targetIndex = array_search($milestone, $milestones, true);
+
+        if ($targetIndex === false) {
+            return null;
+        }
+
+        for ($index = 0; $index < $targetIndex; $index++) {
+            $previousMilestone = $milestones[$index];
+
+            if (! $this->hasMilestoneProgressStarted($contractId, $previousMilestone)) {
+                return "Submit {$previousMilestone} before submitting {$milestone}.";
+            }
+        }
+
+        return null;
+    }
+
+    protected function hasMilestoneProgressStarted(string $contractId, string $milestone): bool
+    {
+        $hasLocalProgress = ProjectProgressReport::where('contract_id', $contractId)
+            ->where('current_milestone', $milestone)
+            ->whereNotIn('progress_status', [
+                ProjectProgressReport::STATUS_DRAFT,
+                ProjectProgressReport::STATUS_FAILED,
+            ])
+            ->exists();
+
+        if ($hasLocalProgress) {
+            return true;
+        }
+
+        if (! $this->isProgressSyncEnabled()) {
+            return false;
+        }
+
+        foreach ($this->remoteProgressProcesses() as $process) {
+            if (($process['fields']['contractId'] ?? null) !== $contractId) {
+                continue;
+            }
+
+            if (($process['fields']['currentMilestone'] ?? null) === $milestone) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function remoteProgressProcesses(): array
+    {
         try {
             $response = $this->sarasClient->getProcesses(
                 config('saras.subproject_ids.project_progress'),
@@ -85,28 +191,14 @@ class ProjectProgressService
                 50,
             );
 
-            foreach ($response['processes'] ?? [] as $process) {
-                if (($process['fields']['contractId'] ?? null) !== $contractId) {
-                    continue;
-                }
-
-                if (($process['fields']['currentMilestone'] ?? null) !== $milestone) {
-                    continue;
-                }
-
-                if (empty($process['fields']['certificateOfCompletion'] ?? null)) {
-                    return true;
-                }
-            }
+            return $response['processes'] ?? [];
         } catch (\Throwable $e) {
-            Log::warning('ProjectProgress: Unable to check remote milestone lock', [
-                'contract_id' => $contractId,
-                'milestone' => $milestone,
+            Log::warning('ProjectProgress: Unable to check remote progress records', [
                 'error' => $e->getMessage(),
             ]);
-        }
 
-        return false;
+            return [];
+        }
     }
 
     /**
@@ -128,12 +220,9 @@ class ProjectProgressService
         $contractId = $input['contract_id'] ?? $project->contract_id ?: config('saras.default_contract_id');
         $milestone = $input['current_milestone'] ?? '';
 
-        // Auto-resolve previous progress file IDs if not explicitly provided
-        $previousFileIds = $input['previous_progress_file_ids'] ?? [];
-
-        if (empty($previousFileIds) && $contractId && $milestone) {
-            $previousFileIds = $this->resolvePreviousProgressFileIds($contractId, $milestone);
-        }
+        $previousFileIds = $contractId && $milestone
+            ? $this->resolvePreviousProgressFileIds($contractId, $milestone)
+            : [];
 
         $report = ProjectProgressReport::create([
             'project_id' => $project->id,

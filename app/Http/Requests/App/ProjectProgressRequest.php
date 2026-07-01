@@ -19,7 +19,7 @@ class ProjectProgressRequest extends FormRequest
         return [
             'contract_id' => ['nullable', 'string', 'max:255'],
             'current_milestone' => ['nullable', 'string', 'max:255'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            'remarks' => ['required', 'string', 'min:20', 'max:2000'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
             'previous_progress_file_ids' => ['nullable', 'array'],
@@ -37,6 +37,8 @@ class ProjectProgressRequest extends FormRequest
     {
         return [
             'remarks.max' => 'Engineer remarks cannot exceed 2000 characters.',
+            'remarks.min' => 'Engineer remarks should explain the observed progress in at least 20 characters.',
+            'remarks.required' => 'Engineer remarks are required.',
         ];
     }
 }

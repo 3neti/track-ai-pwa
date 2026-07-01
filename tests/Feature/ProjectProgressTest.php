@@ -60,6 +60,7 @@ test('progress report stores file IDs as arrays', function () {
     $response = $this->actingAs($this->user)
         ->postJson("/api/projects/{$this->project->id}/progress-reports", [
             'current_milestone' => 'Framing',
+            'remarks' => 'Framing photos show completed wall layout and inspected alignment.',
             'previous_progress_file_ids' => $previousFiles,
             'current_progress_file_ids' => $currentFiles,
         ]);
@@ -67,7 +68,7 @@ test('progress report stores file IDs as arrays', function () {
     $response->assertSuccessful();
 
     $report = ProjectProgressReport::latest()->first();
-    expect($report->previous_progress_file_ids)->toBe($previousFiles);
+    expect($report->previous_progress_file_ids)->toBe([]);
     expect($report->current_progress_file_ids)->toBe($currentFiles);
 });
 
@@ -132,6 +133,27 @@ test('validation rejects invalid remarks length', function () {
         ->assertJsonValidationErrors('remarks');
 });
 
+test('validation requires explanatory remarks', function () {
+    $missingResponse = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'current_milestone' => 'Foundation',
+            'current_progress_file_ids' => ['file-id'],
+        ]);
+
+    $missingResponse->assertStatus(422)
+        ->assertJsonValidationErrors('remarks');
+
+    $shortResponse = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'current_milestone' => 'Foundation',
+            'remarks' => 'Too short',
+            'current_progress_file_ids' => ['file-id'],
+        ]);
+
+    $shortResponse->assertStatus(422)
+        ->assertJsonValidationErrors('remarks');
+});
+
 test('progress report cannot be created for an in progress milestone', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
@@ -154,6 +176,78 @@ test('progress report cannot be created for an in progress milestone', function 
             'success' => false,
             'message' => 'This milestone is already in progress and cannot be edited.',
         ]);
+});
+
+test('later milestone cannot be submitted before previous milestone has progress', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-ordered',
+        'milestones' => ['Foundation', 'Framing'],
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'contract_id' => 'contract-ordered',
+            'current_milestone' => 'Framing',
+            'remarks' => 'Framing appears ready but foundation has not been submitted yet.',
+            'current_progress_file_ids' => ['new-file-id'],
+        ]);
+
+    $response->assertStatus(423)
+        ->assertJson([
+            'success' => false,
+            'message' => 'Submit Foundation before submitting Framing.',
+        ]);
+});
+
+test('later milestone can be submitted after previous milestone has progress', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-ordered',
+        'milestones' => ['Foundation', 'Framing'],
+    ]);
+
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-ordered',
+        'current_milestone' => 'Foundation',
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'contract_id' => 'contract-ordered',
+            'current_milestone' => 'Framing',
+            'remarks' => 'Framing installation started after foundation progress was submitted.',
+            'current_progress_file_ids' => ['new-file-id'],
+        ]);
+
+    $response->assertSuccessful()
+        ->assertJson(['success' => true]);
+});
+
+test('rejected milestone can be resubmitted', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-rejected',
+        'milestones' => ['Foundation', 'Framing'],
+    ]);
+
+    ProjectProgressReport::factory()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-rejected',
+        'current_milestone' => 'Foundation',
+        'progress_status' => ProjectProgressReport::STATUS_FAILED,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'contract_id' => 'contract-rejected',
+            'current_milestone' => 'Foundation',
+            'remarks' => 'Resubmitted foundation progress after Saras rejection with corrected photos.',
+            'current_progress_file_ids' => ['new-file-id'],
+        ]);
+
+    $response->assertSuccessful()
+        ->assertJson(['success' => true]);
 });
 
 test('progress report cannot be created when Saras has in progress milestone', function () {

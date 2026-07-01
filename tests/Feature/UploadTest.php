@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\Upload;
@@ -138,6 +139,28 @@ test('current progress upload cannot be created for an in progress milestone', f
         ->assertJson([
             'success' => false,
             'message' => 'This milestone is already in progress and cannot accept new uploads.',
+        ]);
+});
+
+test('current progress upload cannot be created before previous milestone has progress', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-ordered',
+        'milestones' => ['Foundation', 'Framing'],
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads", [
+            'client_request_id' => fake()->uuid(),
+            'contract_id' => 'contract-ordered',
+            'title' => 'Framing Progress Upload',
+            'document_type' => 'current_progress',
+            'tags' => ['progress', 'current_progress', 'Framing'],
+        ]);
+
+    $response->assertStatus(423)
+        ->assertJson([
+            'success' => false,
+            'message' => 'Submit Foundation before submitting Framing.',
         ]);
 });
 

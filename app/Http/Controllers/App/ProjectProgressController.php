@@ -69,10 +69,14 @@ class ProjectProgressController extends Controller
         $contractId = $validated['contract_id'] ?? $project->contract_id ?: config('saras.default_contract_id');
         $milestone = $validated['current_milestone'] ?? null;
 
-        if ($contractId && $milestone && $this->progressService->isMilestoneLockedForProgress($contractId, $milestone)) {
+        $blocker = $contractId && $milestone
+            ? $this->progressService->progressSubmissionBlocker($contractId, $milestone)
+            : null;
+
+        if ($blocker) {
             return response()->json([
                 'success' => false,
-                'message' => 'This milestone is already in progress and cannot be edited.',
+                'message' => $blocker,
             ], 423);
         }
 

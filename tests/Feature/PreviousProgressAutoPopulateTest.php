@@ -168,7 +168,7 @@ test('previous progress endpoint returns file count from last report', function 
         ]);
 });
 
-test('explicitly provided previous file IDs are not overridden', function () {
+test('explicitly provided previous file IDs are ignored in favor of auto resolution', function () {
     // Create an existing submitted report
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
@@ -185,12 +185,11 @@ test('explicitly provided previous file IDs are not overridden', function () {
         input: [
             'contract_id' => 'contract-abc',
             'current_milestone' => 'Foundation',
-            'remarks' => 'Explicit previous',
+            'remarks' => 'Explicit previous should be ignored by backend auto resolution.',
             'previous_progress_file_ids' => ['uuid-explicit-1'],
             'current_progress_file_ids' => ['uuid-curr-1'],
         ],
     );
 
-    // Should use explicit IDs, not auto-resolved
-    expect($report->previous_progress_file_ids)->toBe(['uuid-explicit-1']);
+    expect($report->previous_progress_file_ids)->toBe(['uuid-auto-1', 'uuid-auto-2']);
 });

@@ -108,10 +108,14 @@ class ProjectUploadController extends Controller
         $validated = $request->validated();
         $milestone = $this->currentProgressMilestone($validated);
 
-        if ($milestone && $this->progressService->isMilestoneLockedForProgress($validated['contract_id'], $milestone)) {
+        $blocker = $milestone
+            ? $this->progressService->uploadSubmissionBlocker($validated['contract_id'], $milestone)
+            : null;
+
+        if ($blocker) {
             return response()->json([
                 'success' => false,
-                'message' => 'This milestone is already in progress and cannot accept new uploads.',
+                'message' => $blocker,
             ], 423);
         }
 
