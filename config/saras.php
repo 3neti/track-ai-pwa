@@ -23,6 +23,7 @@ return [
     |
     */
 
+    'username' => env('SARAS_USERNAME'),
     'password' => env('SARAS_PASSWORD'),
 
     /*
