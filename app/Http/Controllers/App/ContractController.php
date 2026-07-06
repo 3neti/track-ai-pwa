@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App;
 
 use App\Contracts\SarasClientInterface;
+use App\Exceptions\SarasApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Contract;
 use App\Services\TrackAI\ContractService;
@@ -85,6 +86,20 @@ class ContractController extends Controller
                 ]),
                 'message' => 'Contracts refreshed from Saras.',
             ]);
+        } catch (SarasApiException $e) {
+            if ($e->type === SarasApiException::TYPE_AUTH_FAILED) {
+                return response()->json([
+                    'success' => false,
+                    'contracts' => [],
+                    'message' => $e->getMessage(),
+                ], 401);
+            }
+
+            return response()->json([
+                'success' => false,
+                'contracts' => [],
+                'message' => 'Saras is unavailable. Please try again.',
+            ], 503);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

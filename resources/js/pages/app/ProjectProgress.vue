@@ -15,6 +15,7 @@ import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveContract } from '@/composables/useActiveContract';
 import { useGeolocation } from '@/composables/useGeolocation';
+import { makeClientRequestId } from '@/lib/clientRequestId';
 import {
     list as listProgressReports,
     store as storeProgressReport,
@@ -215,7 +216,7 @@ async function handleFileUpload(event: Event, milestone: string) {
         try {
             const cr = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {
                 contract_id: selectedContractId.value,
-                client_request_id: crypto.randomUUID(),
+                client_request_id: makeClientRequestId(),
                 title: file.name,
                 document_type: 'current_progress',
                 tags: ['progress', 'current_progress', milestone],

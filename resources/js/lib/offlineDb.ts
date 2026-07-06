@@ -1,4 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { makeClientRequestId } from '@/lib/clientRequestId';
 
 export interface PendingJob {
     id: string;
@@ -72,10 +73,10 @@ export async function getDb(): Promise<IDBPDatabase<TrackAIDB>> {
 export async function addJob(job: Omit<PendingJob, 'id' | 'clientRequestId' | 'createdAt' | 'retryCount' | 'lastError' | 'status'>): Promise<PendingJob> {
     const db = await getDb();
     // Generate a stable client_request_id that will be used for idempotency on replay
-    const clientRequestId = crypto.randomUUID();
+    const clientRequestId = makeClientRequestId();
     const newJob: PendingJob = {
         ...job,
-        id: crypto.randomUUID(),
+        id: makeClientRequestId(),
         clientRequestId,
         // Include client_request_id in payload for backend idempotency
         payload: {

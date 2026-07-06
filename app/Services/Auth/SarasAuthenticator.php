@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Laravel\Fortify\Fortify;
 
 class SarasAuthenticator
 {
@@ -118,11 +120,50 @@ class SarasAuthenticator
                 'error' => $e->getMessage(),
             ]);
 
-            // Fallback to local auth if Saras is unavailable
-            Log::info('Falling back to local authentication');
+            Log::info('Falling back to local authentication with stored Saras token validation');
 
-            return $this->authenticateLocally($email, $password);
+            return $this->authenticateLocallyWithValidSarasToken($email, $password);
         }
+    }
+
+    /**
+     * Authenticate locally only when the user still has a usable Saras token.
+     *
+     * This allows short Saras outages without creating a broken session that
+     * cannot call Saras-backed contract/progress APIs.
+     */
+    protected function authenticateLocallyWithValidSarasToken(string $identifier, string $password): ?User
+    {
+        $user = User::where('email', $identifier)
+            ->orWhere('username', $identifier)
+            ->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
+            return null;
+        }
+
+        if (! $user->saras_access_token) {
+            Log::warning('Local fallback rejected because user has no Saras token', [
+                'user_id' => $user->id,
+            ]);
+
+            throw ValidationException::withMessages([
+                Fortify::username() => 'Saras login is currently unavailable, and this local account has no stored Saras token. Please try again when Saras auth is reachable.',
+            ]);
+        }
+
+        if ($user->saras_token_expires_at && now()->greaterThan($user->saras_token_expires_at)) {
+            Log::warning('Local fallback rejected because Saras token is expired', [
+                'user_id' => $user->id,
+                'expired_at' => $user->saras_token_expires_at,
+            ]);
+
+            throw ValidationException::withMessages([
+                Fortify::username() => 'Saras login is currently unavailable, and the stored Saras token is expired. Please try again when Saras auth is reachable.',
+            ]);
+        }
+
+        return $user;
     }
 
     /**

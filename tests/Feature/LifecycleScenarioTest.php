@@ -1,9 +1,13 @@
 <?php
 
+use App\Lifecycle\Scenarios\LifecycleScenarioRepository;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 
-uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -75,8 +79,35 @@ test('missing scenario argument shows error', function () {
         ->assertExitCode(1);
 });
 
+test('live lifecycle reports saras auth timeout without leaking credentials', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+        'saras.password' => 'secret-password',
+        'saras.timeout' => 1,
+    ]);
+
+    $this->user->forceFill([
+        'saras_access_token' => null,
+        'saras_token_expires_at' => null,
+    ])->save();
+
+    Http::fake(function () {
+        throw new ConnectionException('Connection timed out');
+    });
+
+    $this->artisan('trackai:lifecycle:run', [
+        'scenario' => 'dpwh_field_day',
+        '--user' => $this->user->id,
+        '--project' => $this->project->id,
+    ])
+        ->expectsOutputToContain('Saras auth endpoint timed out')
+        ->doesntExpectOutputToContain('secret-password')
+        ->assertExitCode(1);
+});
+
 test('repository returns all scenarios', function () {
-    $repo = app(App\Lifecycle\Scenarios\LifecycleScenarioRepository::class);
+    $repo = app(LifecycleScenarioRepository::class);
 
     $all = $repo->all();
 
@@ -86,14 +117,14 @@ test('repository returns all scenarios', function () {
 });
 
 test('repository findOrFail throws on unknown key', function () {
-    $repo = app(App\Lifecycle\Scenarios\LifecycleScenarioRepository::class);
+    $repo = app(LifecycleScenarioRepository::class);
 
     expect(fn () => $repo->findOrFail('nonexistent'))
         ->toThrow(InvalidArgumentException::class);
 });
 
 test('repository byCategory filters correctly', function () {
-    $repo = app(App\Lifecycle\Scenarios\LifecycleScenarioRepository::class);
+    $repo = app(LifecycleScenarioRepository::class);
 
     $smoke = $repo->byCategory('smoke');
 

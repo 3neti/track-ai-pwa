@@ -17,6 +17,12 @@ final class LifecycleReportRenderer
     {
         $phases = $payload['phases'] ?? [];
 
+        if ($this->isBootstrapFailure($payload, $phases)) {
+            $this->renderBootstrapFailureReport($command, $payload, $tracer);
+
+            return;
+        }
+
         $this->renderFlowDiagram($command, $payload, $phases);
         $this->renderContractsAndMilestones($command, $phases);
         $this->renderRunArtifacts($command, $payload, $phases);
@@ -28,6 +34,91 @@ final class LifecycleReportRenderer
         $this->renderIntegrationScorecard($command, $phases);
         $this->renderSarasTraceIds($command, $tracer);
         $this->renderExecutiveSummary($command, $phases);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $phases
+     */
+    private function isBootstrapFailure(array $payload, array $phases): bool
+    {
+        return ($payload['success'] ?? true) === false && $phases === [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function renderBootstrapFailureReport(Command $command, array $payload, SarasApiTracer $tracer): void
+    {
+        $message = (string) ($payload['message'] ?? 'Lifecycle bootstrap failed before the scenario started.');
+
+        $command->newLine();
+        $command->line('════════ Lifecycle Flow ════════');
+        $command->newLine();
+        $command->line('  [✗] Bootstrap');
+        $command->line("        {$message}");
+        $command->newLine();
+
+        $command->line('════════ Run Artifacts ════════');
+        $command->newLine();
+        $projectId = $payload['project']['id'] ?? '—';
+        $project = $payload['project']['name'] ?? '—';
+        $command->line("  Project:      {$projectId} ({$project})");
+        $command->line('  Contract:     —');
+        $command->line('  Milestone:    —');
+        $command->line('  Attendance:   not started');
+        $command->line('  TrackData:    not started');
+        $command->line('  Progress:     not started');
+        $command->line('  Workflow:     not started');
+        $command->newLine();
+
+        $command->line('════════ Saras Action Items ════════');
+        $command->newLine();
+        $command->line('  1. Saras auth endpoint timed out before the scenario could start.');
+        $command->line('  2. Confirm Track AI can reach /users/userLogin from this environment.');
+        $command->line('  3. After connectivity is restored, rerun the lifecycle scenario to test contracts, uploads, progress, and workflow.');
+        $command->newLine();
+
+        $command->line('════════ Developer Interpretation ════════');
+        $command->newLine();
+        $command->line('Track AI side:');
+        $command->line('  ✗ No lifecycle steps ran.');
+        $command->line('  ✗ No contract refresh, attendance, upload, progress, or workflow call was executed.');
+        $command->newLine();
+        $command->line('Saras side:');
+        $command->line('  ✗ Auth endpoint did not respond before timeout.');
+        $command->newLine();
+        $command->line('Conclusion:');
+        $command->line('  The current blocker is Saras auth connectivity, not the progress upload or workflow payload.');
+        $command->newLine();
+
+        $command->line('════════ Integration Scorecard ════════');
+        $command->newLine();
+        foreach ([
+            'Attendance Integration',
+            'TrackData Integration',
+            'ProjectProgress Integration',
+            'Workflow Triggering',
+            'Workflow Polling',
+            'Workflow Execution',
+            'Certificate Generation',
+        ] as $label) {
+            $command->line('  ⚠ '.str_pad($label, 28).'0%');
+        }
+        $command->newLine();
+        $command->line('  ⚠ '.str_pad('Overall Integration Health', 28).'0%');
+        $command->newLine();
+
+        $this->renderSarasTraceIds($command, $tracer);
+
+        $command->line('════════ Executive Summary ════════');
+        $command->newLine();
+        $command->line('The lifecycle scenario did not start because Saras authentication timed out.');
+        $command->newLine();
+        $command->line('Current readiness:  0%');
+        $command->line('Primary blocker:    Saras auth endpoint timeout.');
+        $command->line('Next action:        Restore access to /users/userLogin, then rerun the lifecycle scenario.');
+        $command->newLine();
     }
 
     /**

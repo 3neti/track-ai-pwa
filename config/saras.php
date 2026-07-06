@@ -15,6 +15,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Saras Login Credentials
+    |--------------------------------------------------------------------------
+    |
+    | Used by CLI lifecycle diagnostics to refresh a user's Saras token.
+    | Web login still uses the credentials submitted by the user.
+    |
+    */
+
+    'password' => env('SARAS_PASSWORD'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Saras Mode
     |--------------------------------------------------------------------------
     |

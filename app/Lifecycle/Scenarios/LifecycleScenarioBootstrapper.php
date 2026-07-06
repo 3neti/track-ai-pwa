@@ -6,6 +6,7 @@ namespace App\Lifecycle\Scenarios;
 
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -85,13 +86,26 @@ final class LifecycleScenarioBootstrapper
 
         $baseUrl = config('saras.base_url');
 
-        $response = Http::timeout(30)
-            ->acceptJson()
-            ->asJson()
-            ->post("{$baseUrl}/users/userLogin", [
-                'client_id' => $user->email,
-                'client_secret' => env('SARAS_PASSWORD'),
+        try {
+            $response = Http::timeout((int) config('saras.timeout', 30))
+                ->acceptJson()
+                ->asJson()
+                ->post("{$baseUrl}/users/userLogin", [
+                    'client_id' => $user->email,
+                    'client_secret' => config('saras.password'),
+                ]);
+        } catch (ConnectionException $e) {
+            Log::error('Lifecycle: Saras token refresh connection failed', [
+                'user_id' => $user->id,
+                'endpoint' => '/users/userLogin',
+                'error' => $e->getMessage(),
             ]);
+
+            throw new RuntimeException(
+                "Unable to refresh Saras token for user [{$user->id}]: Saras auth endpoint timed out.",
+                previous: $e,
+            );
+        }
 
         if (! $response->successful()) {
             throw new RuntimeException(

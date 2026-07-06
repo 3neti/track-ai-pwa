@@ -14,6 +14,7 @@ import UploadPreviewDrawer from '@/components/app/UploadPreviewDrawer.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useGeolocation } from '@/composables/useGeolocation';
 import { useActiveProject } from '@/composables/useActiveProject';
+import { makeClientRequestId } from '@/lib/clientRequestId';
 import type { Upload } from '@/composables/useProjectUploads';
 import axios from 'axios';
 
@@ -122,7 +123,7 @@ const handlePhotoCapture = async (index: number, event: Event) => {
 
     try {
         // Generate a client_request_id for idempotency
-        const clientRequestId = crypto.randomUUID();
+        const clientRequestId = makeClientRequestId();
 
         // Step 1: Create Upload record
         const createResponse = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {

@@ -19,6 +19,7 @@ import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import ContractIndicator from '@/components/app/ContractIndicator.vue';
 import { useOfflineQueue } from '@/composables/useOfflineQueue';
 import { useActiveContract } from '@/composables/useActiveContract';
+import { makeClientRequestId } from '@/lib/clientRequestId';
 import axios from 'axios';
 
 interface Project {
@@ -87,7 +88,7 @@ const handleSubmit = async () => {
 
     try {
         // Generate a client_request_id for idempotency
-        const clientRequestId = crypto.randomUUID();
+        const clientRequestId = makeClientRequestId();
 
         // Step 1: Create Upload record
         const createResponse = await axios.post(`/api/projects/${project.id}/uploads`, {

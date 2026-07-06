@@ -1,6 +1,7 @@
 <?php
 
 use App\Contracts\SarasClientInterface;
+use App\Exceptions\SarasApiException;
 use App\Models\Contract;
 use App\Models\User;
 use App\Services\TrackAI\ContractService;
@@ -62,6 +63,24 @@ test('contract refresh triggers sync from saras stub', function () {
     // Stub returns empty processes, so contracts will be empty but call succeeds
     $response->assertSuccessful()
         ->assertJson(['success' => true]);
+});
+
+test('contract refresh reports expired saras token clearly', function () {
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getProcesses')
+        ->once()
+        ->andThrow(SarasApiException::authFailed('Saras token expired. Please log in again.'));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->postJson('/api/contracts/refresh');
+
+    $response->assertUnauthorized()
+        ->assertJson([
+            'success' => false,
+            'message' => 'Saras token expired. Please log in again.',
+        ]);
 });
 
 test('contract sync returns only contracts present in latest saras response', function () {

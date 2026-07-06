@@ -3,6 +3,7 @@
 use App\Models\Contract;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -100,6 +101,93 @@ test('saras login refreshes contracts and removes stale cached contracts', funct
     $this->assertDatabaseMissing('contracts', [
         'saras_process_id' => 'stale-contract-id',
     ]);
+});
+
+test('live saras login outage does not authenticate with expired stored token', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    User::factory()->create([
+        'email' => 'lester@example.test',
+        'username' => 'lester@example.test',
+        'password' => bcrypt('password'),
+        'saras_access_token' => 'expired-saras-token',
+        'saras_token_expires_at' => now()->subMinute(),
+    ]);
+
+    Http::fake(function () {
+        throw new ConnectionException('Connection timed out');
+    });
+
+    $response = $this->from('/login')->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertRedirect('/login')
+        ->assertSessionHasErrors([
+            'username' => 'Saras login is currently unavailable, and the stored Saras token is expired. Please try again when Saras auth is reachable.',
+        ]);
+});
+
+test('live saras login outage reports missing stored token instead of invalid credentials', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    User::factory()->create([
+        'email' => 'lester@example.test',
+        'username' => 'lester@example.test',
+        'password' => bcrypt('password'),
+        'saras_access_token' => null,
+        'saras_token_expires_at' => null,
+    ]);
+
+    Http::fake(function () {
+        throw new ConnectionException('Connection timed out');
+    });
+
+    $response = $this->from('/login')->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertRedirect('/login')
+        ->assertSessionHasErrors([
+            'username' => 'Saras login is currently unavailable, and this local account has no stored Saras token. Please try again when Saras auth is reachable.',
+        ]);
+});
+
+test('live saras login outage can authenticate locally with valid stored token', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    User::factory()->create([
+        'email' => 'lester@example.test',
+        'username' => 'lester@example.test',
+        'password' => bcrypt('password'),
+        'saras_access_token' => 'valid-saras-token',
+        'saras_token_expires_at' => now()->addMinutes(30),
+    ]);
+
+    Http::fake(function () {
+        throw new ConnectionException('Connection timed out');
+    });
+
+    $response = $this->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect('/app/contracts');
 });
 
 test('users cannot authenticate with invalid username', function () {
