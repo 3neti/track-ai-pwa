@@ -2,8 +2,10 @@
 
 namespace App\Services\Auth;
 
+use App\Models\Project;
 use App\Models\User;
 use App\Services\TrackAI\ContractService;
+use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +19,7 @@ class SarasAuthenticator
 {
     public function __construct(
         protected ContractService $contractService,
+        protected ProjectProgressService $projectProgressService,
     ) {}
 
     /**
@@ -248,10 +251,16 @@ class SarasAuthenticator
         try {
             $guard->setUser($user);
             $contracts = $this->contractService->syncContractsFromSaras();
+            $project = Project::where('external_id', config('saras.project_id'))->first()
+                ?? Project::query()->first();
+            $progressCount = $project
+                ? $this->projectProgressService->syncProjectProgressFromSaras($user, $project)->count()
+                : 0;
 
             Log::info('Saras resources synced after login', [
                 'user_id' => $user->id,
                 'contract_count' => $contracts->count(),
+                'project_progress_count' => $progressCount,
             ]);
         } catch (\Throwable $e) {
             Log::warning('Saras resource sync after login failed', [

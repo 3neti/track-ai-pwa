@@ -10,6 +10,7 @@ use App\Models\ProjectProgressReport;
 use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,9 +26,10 @@ class ProjectProgressController extends Controller
     /**
      * Display the project progress page.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $projects = Project::orderBy('name')->get();
+        $defaultProject = $this->resolveDefaultProject();
 
         $contracts = $this->contractService->listContracts(refresh: true)
             ->map(fn ($contract) => [
@@ -38,6 +40,8 @@ class ProjectProgressController extends Controller
                 'milestones' => $contract->milestones ?? [],
                 'display_number' => $contract->display_number ?? '',
             ]);
+
+        $this->syncProjectProgressCache($request, $defaultProject);
 
         return Inertia::render('app/ProjectProgress', [
             'projects' => $projects,
@@ -149,10 +153,13 @@ class ProjectProgressController extends Controller
      */
     public function milestoneProgress(string $contractId): JsonResponse
     {
+        $this->syncProjectProgressCache(request(), $this->resolveDefaultProject());
+
         // Check local reports
         $localReports = ProjectProgressReport::where('contract_id', $contractId)
             ->whereNotIn('progress_status', ['draft', 'failed'])
             ->whereNotNull('current_milestone')
+            ->whereNull('remote_deleted_at')
             ->get(['current_milestone', 'progress_status', 'certificate_file_id']);
 
         $milestoneStatus = [];
@@ -162,35 +169,6 @@ class ProjectProgressController extends Controller
                 'has_certificate' => ! empty($report->certificate_file_id),
                 'status' => $report->progress_status,
             ];
-        }
-
-        // Also check Saras ProjectProgress records (covers reports not in local DB)
-        try {
-            $ppSubId = config('saras.subproject_ids.project_progress');
-            $ppResponse = $this->sarasClient->getProcesses($ppSubId, 1, 50);
-
-            foreach ($ppResponse['processes'] ?? [] as $pp) {
-                $ppContractId = $pp['fields']['contractId'] ?? null;
-                $ppMilestone = $pp['fields']['currentMilestone'] ?? null;
-
-                if ($ppContractId !== $contractId || ! $ppMilestone) {
-                    continue;
-                }
-
-                // Don't overwrite local data if already present
-                if (! isset($milestoneStatus[$ppMilestone])) {
-                    $milestoneStatus[$ppMilestone] = [
-                        'has_progress' => true,
-                        'has_certificate' => ! empty($pp['fields']['certificateOfCompletion'] ?? null),
-                        'status' => 'submitted',
-                    ];
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning('ProjectProgress: Saras milestone status unavailable', [
-                'contract_id' => $contractId,
-                'error' => $e->getMessage(),
-            ]);
         }
 
         return response()->json([
@@ -204,6 +182,8 @@ class ProjectProgressController extends Controller
      */
     public function previousProgress(string $contractId, string $milestone): JsonResponse
     {
+        $this->syncProjectProgressCache(request(), $this->resolveDefaultProject());
+
         $milestone = urldecode($milestone);
         $fileIds = $this->progressService->resolvePreviousProgressFileIds($contractId, $milestone);
 
@@ -213,5 +193,30 @@ class ProjectProgressController extends Controller
             'previousFileCount' => count($fileIds),
             'previousFileIds' => $fileIds,
         ]);
+    }
+
+    protected function resolveDefaultProject(): ?Project
+    {
+        return Project::where('external_id', config('saras.project_id'))->first()
+            ?? Project::query()->first();
+    }
+
+    protected function syncProjectProgressCache(Request $request, ?Project $project): void
+    {
+        $user = $request->user();
+
+        if (! $user || ! $project) {
+            return;
+        }
+
+        try {
+            $this->progressService->syncProjectProgressFromSaras($user, $project);
+        } catch (\Throwable $e) {
+            Log::warning('ProjectProgress: Saras progress cache sync failed', [
+                'user_id' => $user->id,
+                'project_id' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

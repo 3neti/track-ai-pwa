@@ -5,6 +5,7 @@ use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
+use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -251,22 +252,14 @@ test('rejected milestone can be resubmitted', function () {
 });
 
 test('progress report cannot be created when Saras has in progress milestone', function () {
-    config(['saras.feature_flags.progress_enabled' => true]);
-
-    $client = Mockery::mock(SarasClientInterface::class);
-    $client->shouldReceive('getProcesses')
-        ->with(config('saras.subproject_ids.project_progress'), 1, 50)
-        ->once()
-        ->andReturn([
-            'processes' => [[
-                'fields' => [
-                    'contractId' => 'contract-remote-locked',
-                    'currentMilestone' => 'Foundation',
-                ],
-            ]],
-        ]);
-
-    $this->app->instance(SarasClientInterface::class, $client);
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-remote-locked',
+        'current_milestone' => 'Foundation',
+        'source' => ProjectProgressReport::SOURCE_SARAS,
+        'remote_deleted_at' => null,
+    ]);
 
     $response = $this->actingAs($this->user)
         ->postJson("/api/projects/{$this->project->id}/progress-reports", [
@@ -281,6 +274,112 @@ test('progress report cannot be created when Saras has in progress milestone', f
             'success' => false,
             'message' => 'This milestone is already in progress and cannot be edited.',
         ]);
+});
+
+test('saras project progress sync creates local cache records', function () {
+    config(['saras.feature_flags.progress_enabled' => true]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('isStubMode')
+        ->once()
+        ->andReturnFalse();
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.project_progress'), 1, 50)
+        ->once()
+        ->andReturn([
+            'meta' => ['totalPages' => '1'],
+            'processes' => [[
+                'id' => 'remote-progress-1',
+                'createdAt' => '2026-07-01T08:00:00+08:00',
+                'fields' => [
+                    'contractId' => 'contract-from-saras',
+                    'currentMilestone' => 'Foundation',
+                    'remarks' => 'Remote progress from Saras with current files.',
+                    'previousProgressFiles' => [['id' => 'prev-file-1']],
+                    'currentProgressFiles' => [['id' => 'curr-file-1'], 'curr-file-2'],
+                ],
+            ]],
+        ]);
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $synced = app(ProjectProgressService::class)
+        ->syncProjectProgressFromSaras($this->user, $this->project);
+
+    expect($synced)->toHaveCount(1);
+    $this->assertDatabaseHas('project_progress_reports', [
+        'saras_process_id' => 'remote-progress-1',
+        'contract_id' => 'contract-from-saras',
+        'current_milestone' => 'Foundation',
+        'progress_status' => ProjectProgressReport::STATUS_SUBMITTED,
+        'source' => ProjectProgressReport::SOURCE_SARAS,
+        'remote_deleted_at' => null,
+    ]);
+
+    $report = ProjectProgressReport::where('saras_process_id', 'remote-progress-1')->first();
+    expect($report->previous_progress_file_ids)->toBe(['prev-file-1'])
+        ->and($report->current_progress_file_ids)->toBe(['curr-file-1', 'curr-file-2']);
+});
+
+test('saras project progress sync marks missing remote records as deleted', function () {
+    config(['saras.feature_flags.progress_enabled' => true]);
+
+    $stale = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-stale',
+        'current_milestone' => 'Foundation',
+        'saras_process_id' => 'remote-stale',
+        'source' => ProjectProgressReport::SOURCE_SARAS,
+        'remote_deleted_at' => null,
+    ]);
+
+    $localDraft = ProjectProgressReport::factory()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-local',
+        'current_milestone' => 'Foundation',
+        'source' => ProjectProgressReport::SOURCE_LOCAL,
+        'remote_deleted_at' => null,
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('isStubMode')
+        ->once()
+        ->andReturnFalse();
+    $client->shouldReceive('getProcesses')
+        ->with(config('saras.subproject_ids.project_progress'), 1, 50)
+        ->once()
+        ->andReturn([
+            'meta' => ['totalPages' => '1'],
+            'processes' => [],
+        ]);
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    app(ProjectProgressService::class)
+        ->syncProjectProgressFromSaras($this->user, $this->project);
+
+    expect($stale->fresh()->remote_deleted_at)->not->toBeNull()
+        ->and($stale->fresh()->progress_status)->toBe(ProjectProgressReport::STATUS_FAILED)
+        ->and($localDraft->fresh()->remote_deleted_at)->toBeNull();
+});
+
+test('remote deleted progress reports do not lock milestones or appear in previous progress', function () {
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-deleted-cache',
+        'current_milestone' => 'Foundation',
+        'current_progress_file_ids' => ['remote-deleted-file'],
+        'source' => ProjectProgressReport::SOURCE_SARAS,
+        'remote_deleted_at' => now(),
+    ]);
+
+    $service = app(ProjectProgressService::class);
+
+    expect($service->isMilestoneLockedForProgress('contract-deleted-cache', 'Foundation'))->toBeFalse()
+        ->and($service->resolvePreviousProgressFileIds('contract-deleted-cache', 'Foundation'))->toBe([]);
 });
 
 test('progress report page renders via inertia', function () {
@@ -322,7 +421,7 @@ test('progress page refreshes contracts and excludes stale local contract IDs', 
 
     $client = Mockery::mock(SarasClientInterface::class);
     $client->shouldReceive('isStubMode')
-        ->once()
+        ->twice()
         ->andReturnFalse();
     $client->shouldReceive('getProcesses')
         ->with(config('saras.subproject_ids.contract_ai'), 1, 50)
@@ -341,7 +440,7 @@ test('progress page refreshes contracts and excludes stale local contract IDs', 
         ]);
     $client->shouldReceive('getProcesses')
         ->with(config('saras.subproject_ids.project_progress'), 1, 50)
-        ->once()
+        ->twice()
         ->andReturn(['processes' => []]);
 
     $this->app->instance(SarasClientInterface::class, $client);

@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use Database\Factories\ProjectProgressReportFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProjectProgressReport extends Model
 {
-    /** @use HasFactory<\Database\Factories\ProjectProgressReportFactory> */
+    /** @use HasFactory<ProjectProgressReportFactory> */
     use HasFactory;
 
     public const STATUS_DRAFT = 'draft';
@@ -20,6 +21,10 @@ class ProjectProgressReport extends Model
     public const STATUS_EVALUATED = 'evaluated';
 
     public const STATUS_FAILED = 'failed';
+
+    public const SOURCE_LOCAL = 'local';
+
+    public const SOURCE_SARAS = 'saras';
 
     protected $fillable = [
         'project_id',
@@ -35,6 +40,8 @@ class ProjectProgressReport extends Model
         'completion_status',
         'certificate_file_id',
         'raw_saras_response',
+        'source',
+        'remote_deleted_at',
         'last_synced_at',
     ];
 
@@ -44,8 +51,14 @@ class ProjectProgressReport extends Model
             'previous_progress_file_ids' => 'array',
             'current_progress_file_ids' => 'array',
             'raw_saras_response' => 'array',
+            'remote_deleted_at' => 'datetime',
             'last_synced_at' => 'datetime',
         ];
+    }
+
+    public function isRemoteDeleted(): bool
+    {
+        return $this->remote_deleted_at !== null;
     }
 
     public function project(): BelongsTo

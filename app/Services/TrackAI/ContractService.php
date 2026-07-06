@@ -169,6 +169,7 @@ class ContractService
         if ($processId) {
             $hasProgress = ProjectProgressReport::where('contract_id', $processId)
                 ->whereNotIn('progress_status', ['draft', 'failed'])
+                ->whereNull('remote_deleted_at')
                 ->exists();
 
             if ($hasProgress) {

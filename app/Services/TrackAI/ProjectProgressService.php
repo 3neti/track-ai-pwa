@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Saras\DTO\WorkflowRunDTO;
 use App\Services\TrackAI\Mappers\ProjectProgressWorkflowPayloadMapper;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class ProjectProgressService
@@ -32,6 +33,7 @@ class ProjectProgressService
             ->where('current_milestone', $milestone)
             ->whereNotNull('current_progress_file_ids')
             ->where('progress_status', '!=', ProjectProgressReport::STATUS_DRAFT)
+            ->whereNull('remote_deleted_at')
             ->orderByDesc('created_at')
             ->get()
             ->first(fn (ProjectProgressReport $report): bool => ! empty($report->current_progress_file_ids ?? []));
@@ -88,38 +90,15 @@ class ProjectProgressService
      */
     public function isMilestoneLockedForProgress(string $contractId, string $milestone): bool
     {
-        $hasLocalProgress = ProjectProgressReport::where('contract_id', $contractId)
+        return ProjectProgressReport::where('contract_id', $contractId)
             ->where('current_milestone', $milestone)
             ->whereNotIn('progress_status', [
                 ProjectProgressReport::STATUS_DRAFT,
                 ProjectProgressReport::STATUS_FAILED,
             ])
             ->whereNull('certificate_file_id')
+            ->whereNull('remote_deleted_at')
             ->exists();
-
-        if ($hasLocalProgress) {
-            return true;
-        }
-
-        if (! $this->isProgressSyncEnabled()) {
-            return false;
-        }
-
-        foreach ($this->remoteProgressProcesses() as $process) {
-            if (($process['fields']['contractId'] ?? null) !== $contractId) {
-                continue;
-            }
-
-            if (($process['fields']['currentMilestone'] ?? null) !== $milestone) {
-                continue;
-            }
-
-            if (empty($process['fields']['certificateOfCompletion'] ?? null)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected function milestoneOrderBlocker(string $contractId, string $milestone): ?string
@@ -156,27 +135,10 @@ class ProjectProgressService
                 ProjectProgressReport::STATUS_DRAFT,
                 ProjectProgressReport::STATUS_FAILED,
             ])
+            ->whereNull('remote_deleted_at')
             ->exists();
 
-        if ($hasLocalProgress) {
-            return true;
-        }
-
-        if (! $this->isProgressSyncEnabled()) {
-            return false;
-        }
-
-        foreach ($this->remoteProgressProcesses() as $process) {
-            if (($process['fields']['contractId'] ?? null) !== $contractId) {
-                continue;
-            }
-
-            if (($process['fields']['currentMilestone'] ?? null) === $milestone) {
-                return true;
-            }
-        }
-
-        return false;
+        return $hasLocalProgress;
     }
 
     /**
@@ -211,6 +173,169 @@ class ProjectProgressService
     }
 
     /**
+     * Sync Saras ProjectProgress records into the local database as cache rows.
+     *
+     * @return Collection<int, ProjectProgressReport>
+     */
+    public function syncProjectProgressFromSaras(User $user, Project $project, bool $pruneMissing = true): Collection
+    {
+        if (! $this->isProgressSyncEnabled() || $this->sarasClient->isStubMode()) {
+            return new Collection;
+        }
+
+        $processes = $this->fetchAllRemoteProgressProcesses();
+        $syncedProcessIds = [];
+
+        foreach ($processes as $process) {
+            $processId = $process['id'] ?? null;
+
+            if (! is_string($processId) || $processId === '') {
+                continue;
+            }
+
+            $fields = is_array($process['fields'] ?? null) ? $process['fields'] : [];
+            $contractId = $this->normalizeProcessReference($fields['contractId'] ?? null);
+            $milestone = $this->normalizeProcessReference($fields['currentMilestone'] ?? null);
+
+            if ($contractId === null || $milestone === null) {
+                continue;
+            }
+
+            $syncedProcessIds[] = $processId;
+            $certificateFileId = $this->normalizeFirstFileId($fields['certificateOfCompletion'] ?? null);
+
+            ProjectProgressReport::updateOrCreate(
+                ['saras_process_id' => $processId],
+                [
+                    'project_id' => $project->id,
+                    'user_id' => $user->id,
+                    'contract_id' => $contractId,
+                    'current_milestone' => $milestone,
+                    'remarks' => is_string($fields['remarks'] ?? null) ? $fields['remarks'] : null,
+                    'previous_progress_file_ids' => $this->normalizeFileIds($fields['previousProgressFiles'] ?? []),
+                    'current_progress_file_ids' => $this->normalizeFileIds($fields['currentProgressFiles'] ?? []),
+                    'progress_status' => $certificateFileId
+                        ? ProjectProgressReport::STATUS_EVALUATED
+                        : ProjectProgressReport::STATUS_SUBMITTED,
+                    'completion_status' => $certificateFileId ? 'SUCCESS' : null,
+                    'certificate_file_id' => $certificateFileId,
+                    'raw_saras_response' => $process,
+                    'source' => ProjectProgressReport::SOURCE_SARAS,
+                    'remote_deleted_at' => null,
+                    'last_synced_at' => now(),
+                    'created_at' => $this->parseRemoteTimestamp($process) ?? now(),
+                ],
+            );
+        }
+
+        if ($pruneMissing) {
+            ProjectProgressReport::where('source', ProjectProgressReport::SOURCE_SARAS)
+                ->whereNull('remote_deleted_at')
+                ->whereNotNull('saras_process_id')
+                ->when(
+                    $syncedProcessIds !== [],
+                    fn ($query) => $query->whereNotIn('saras_process_id', $syncedProcessIds),
+                    fn ($query) => $query
+                )
+                ->update([
+                    'remote_deleted_at' => now(),
+                    'progress_status' => ProjectProgressReport::STATUS_FAILED,
+                    'last_synced_at' => now(),
+                ]);
+        }
+
+        return ProjectProgressReport::where('source', ProjectProgressReport::SOURCE_SARAS)
+            ->whereNull('remote_deleted_at')
+            ->whereIn('saras_process_id', $syncedProcessIds)
+            ->get();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function fetchAllRemoteProgressProcesses(): array
+    {
+        $page = 1;
+        $perPage = 50;
+        $processes = [];
+
+        do {
+            $response = $this->sarasClient->getProcesses(
+                config('saras.subproject_ids.project_progress'),
+                $page,
+                $perPage,
+            );
+
+            $processes = array_merge($processes, $response['processes'] ?? []);
+            $totalPages = (int) ($response['meta']['totalPages'] ?? $response['totalPages'] ?? $page);
+            $page++;
+        } while ($page <= max(1, $totalPages));
+
+        return $processes;
+    }
+
+    protected function normalizeProcessReference(mixed $value): ?string
+    {
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+
+        if (is_array($value)) {
+            $id = $value['id'] ?? $value['value'] ?? $value['title'] ?? null;
+
+            return is_string($id) && $id !== '' ? $id : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string>
+     */
+    protected function normalizeFileIds(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return is_string($value) && $value !== '' ? [$value] : [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn (mixed $item): ?string => $this->normalizeFirstFileId($item),
+            $value,
+        )));
+    }
+
+    protected function normalizeFirstFileId(mixed $value): ?string
+    {
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+
+        if (is_array($value)) {
+            if (isset($value['id']) && is_string($value['id']) && $value['id'] !== '') {
+                return $value['id'];
+            }
+
+            if (array_is_list($value)) {
+                return $this->normalizeFirstFileId($value[0] ?? null);
+            }
+        }
+
+        return null;
+    }
+
+    protected function parseRemoteTimestamp(array $process): ?Carbon
+    {
+        $timestamp = $process['createdTs']
+            ?? $process['createdAt']
+            ?? $process['created_at']
+            ?? null;
+
+        return is_string($timestamp) && $timestamp !== ''
+            ? Carbon::parse($timestamp)
+            : null;
+    }
+
+    /**
      * Create a new ProjectProgress report and sync to Saras.
      *
      * @param  array{current_milestone?: string, remarks?: string, previous_progress_file_ids?: array<string>, current_progress_file_ids?: array<string>}  $input
@@ -233,6 +358,7 @@ class ProjectProgressService
             'previous_progress_file_ids' => $previousFileIds,
             'current_progress_file_ids' => $input['current_progress_file_ids'] ?? [],
             'progress_status' => ProjectProgressReport::STATUS_DRAFT,
+            'source' => ProjectProgressReport::SOURCE_LOCAL,
         ]);
 
         if (! $this->isProgressSyncEnabled()) {
@@ -269,6 +395,8 @@ class ProjectProgressService
                 $report->update([
                     'saras_process_id' => $processResponse->processId,
                     'progress_status' => ProjectProgressReport::STATUS_SUBMITTED,
+                    'source' => ProjectProgressReport::SOURCE_SARAS,
+                    'remote_deleted_at' => null,
                     'raw_saras_response' => $processResponse->toArray(),
                     'last_synced_at' => now(),
                 ]);
@@ -456,6 +584,7 @@ class ProjectProgressService
     public function getProgressForProject(Project $project): Collection
     {
         return ProjectProgressReport::where('project_id', $project->id)
+            ->whereNull('remote_deleted_at')
             ->orderByDesc('created_at')
             ->get();
     }

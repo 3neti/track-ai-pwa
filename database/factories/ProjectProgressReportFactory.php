@@ -2,10 +2,13 @@
 
 namespace Database\Factories;
 
+use App\Models\Project;
+use App\Models\ProjectProgressReport;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ProjectProgressReport>
+ * @extends Factory<ProjectProgressReport>
  */
 class ProjectProgressReportFactory extends Factory
 {
@@ -17,14 +20,15 @@ class ProjectProgressReportFactory extends Factory
     public function definition(): array
     {
         return [
-            'project_id' => \App\Models\Project::factory(),
-            'user_id' => \App\Models\User::factory(),
+            'project_id' => Project::factory(),
+            'user_id' => User::factory(),
             'contract_id' => fake()->uuid(),
             'current_milestone' => 'Foundation',
             'remarks' => fake()->sentence(),
             'progress_status' => 'draft',
             'previous_progress_file_ids' => [],
             'current_progress_file_ids' => [],
+            'source' => 'local',
         ];
     }
 
@@ -33,6 +37,7 @@ class ProjectProgressReportFactory extends Factory
         return $this->state(fn () => [
             'progress_status' => 'submitted',
             'saras_process_id' => 'process_'.fake()->uuid(),
+            'source' => 'saras',
         ]);
     }
 
@@ -42,6 +47,7 @@ class ProjectProgressReportFactory extends Factory
             'progress_status' => 'processing',
             'saras_process_id' => 'process_'.fake()->uuid(),
             'saras_workflow_run_id' => 'run_'.fake()->uuid(),
+            'source' => 'saras',
         ]);
     }
 
@@ -52,6 +58,7 @@ class ProjectProgressReportFactory extends Factory
             'saras_process_id' => 'process_'.fake()->uuid(),
             'saras_workflow_run_id' => 'run_'.fake()->uuid(),
             'completion_status' => 'SUCCESS',
+            'source' => 'saras',
         ]);
     }
 }
