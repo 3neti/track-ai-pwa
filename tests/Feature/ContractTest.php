@@ -35,6 +35,47 @@ test('contracts API lists locally cached contracts', function () {
         ->assertJsonCount(3, 'contracts');
 });
 
+test('contracts API lists duplicate contract names in stable display order', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'process-c',
+        'name' => '2025-GSIS-PB-130',
+        'display_number' => '7',
+    ]);
+    Contract::factory()->create([
+        'saras_process_id' => 'process-a',
+        'name' => '2025-GSIS-PB-130',
+        'display_number' => '6',
+    ]);
+    Contract::factory()->create([
+        'saras_process_id' => 'process-b',
+        'name' => '2025-GSIS-PB-130',
+        'display_number' => '6',
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->getJson('/api/contracts');
+
+    $response->assertSuccessful();
+
+    expect($response->json('contracts'))->sequence(
+        fn ($contract) => $contract
+            ->toMatchArray([
+                'display_number' => '6',
+                'saras_process_id' => 'process-a',
+            ]),
+        fn ($contract) => $contract
+            ->toMatchArray([
+                'display_number' => '6',
+                'saras_process_id' => 'process-b',
+            ]),
+        fn ($contract) => $contract
+            ->toMatchArray([
+                'display_number' => '7',
+                'saras_process_id' => 'process-c',
+            ]),
+    );
+});
+
 test('contracts API returns contract fields correctly', function () {
     $contract = Contract::factory()->create([
         'name' => 'DPWH Bridge Project',

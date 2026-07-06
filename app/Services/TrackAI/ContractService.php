@@ -5,6 +5,7 @@ namespace App\Services\TrackAI;
 use App\Contracts\SarasClientInterface;
 use App\Models\Contract;
 use App\Models\ProjectProgressReport;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -68,8 +69,8 @@ class ContractService
             Contract::whereNotIn('saras_process_id', $syncedProcessIds)->delete();
         }
 
-        return Contract::whereIn('saras_process_id', $syncedProcessIds)
-            ->orderBy('name')
+        return $this->orderedContractsQuery()
+            ->whereIn('saras_process_id', $syncedProcessIds)
             ->get();
     }
 
@@ -80,7 +81,7 @@ class ContractService
      */
     public function listContracts(bool $refresh = false): Collection
     {
-        $contracts = Contract::orderBy('name')->get();
+        $contracts = $this->orderedContractsQuery()->get();
 
         if ($refresh && ! $this->sarasClient->isStubMode()) {
             try {
@@ -105,6 +106,17 @@ class ContractService
         }
 
         return $contracts;
+    }
+
+    /**
+     * @return Builder<Contract>
+     */
+    protected function orderedContractsQuery(): Builder
+    {
+        return Contract::query()
+            ->orderBy('name')
+            ->orderBy('display_number')
+            ->orderBy('saras_process_id');
     }
 
     /**
