@@ -24,10 +24,14 @@ class AttendanceSession extends Model
         'check_in_at',
         'check_in_latitude',
         'check_in_longitude',
+        'check_in_location_status',
+        'check_in_location_evidence',
         'check_in_remarks',
         'check_out_at',
         'check_out_latitude',
         'check_out_longitude',
+        'check_out_location_status',
+        'check_out_location_evidence',
         'check_out_remarks',
         'status',
         'auto_closed_reason',
@@ -40,8 +44,10 @@ class AttendanceSession extends Model
             'check_out_at' => 'datetime',
             'check_in_latitude' => 'decimal:7',
             'check_in_longitude' => 'decimal:7',
+            'check_in_location_evidence' => 'array',
             'check_out_latitude' => 'decimal:7',
             'check_out_longitude' => 'decimal:7',
+            'check_out_location_evidence' => 'array',
         ];
     }
 

@@ -357,6 +357,8 @@ class ProjectProgressService
             'remarks' => $input['remarks'] ?? null,
             'previous_progress_file_ids' => $previousFileIds,
             'current_progress_file_ids' => $input['current_progress_file_ids'] ?? [],
+            'location_status' => $input['location_assessment']['status'] ?? null,
+            'location_evidence' => $input['location_assessment']['evidence'] ?? null,
             'progress_status' => ProjectProgressReport::STATUS_DRAFT,
             'source' => ProjectProgressReport::SOURCE_LOCAL,
         ]);
@@ -371,23 +373,33 @@ class ProjectProgressService
         }
 
         try {
+            $fields = [
+                'contractId' => $contractId,
+                'currentMilestone' => $input['current_milestone'] ?? '',
+                'remarks' => $input['remarks'] ?? '',
+                'previousProgressFiles' => $previousFileIds,
+                'currentProgressFiles' => $input['current_progress_file_ids'] ?? [],
+                'geoLocation' => $input['geo_location'] ?? '',
+                'ipAddress' => $input['ip_address'] ?? '',
+                'date' => now('Asia/Manila')->toDateString(),
+                'time' => now('Asia/Manila')->toIso8601String(),
+                'name' => 'Progress Report - '.now('Asia/Manila')->toDateString(),
+                'tags' => ! empty($input['tags'])
+                    ? array_values($input['tags'])
+                    : ['progress', 'track-ai'],
+            ];
+
+            if (config('saras.location_trust.send_to_saras', false)) {
+                $fields += [
+                    'geoAccuracy' => $input['location_assessment']['evidence']['accuracy_meters'] ?? '',
+                    'locationTrust' => $input['location_assessment']['status'] ?? '',
+                    'locationTrustReasons' => implode(',', $input['location_assessment']['reasons'] ?? []),
+                ];
+            }
+
             $processResponse = $this->sarasClient->createProcess(
                 subProjectId: config('saras.subproject_ids.project_progress'),
-                fields: [
-                    'contractId' => $contractId,
-                    'currentMilestone' => $input['current_milestone'] ?? '',
-                    'remarks' => $input['remarks'] ?? '',
-                    'previousProgressFiles' => $previousFileIds,
-                    'currentProgressFiles' => $input['current_progress_file_ids'] ?? [],
-                    'geoLocation' => $input['geo_location'] ?? '',
-                    'ipAddress' => $input['ip_address'] ?? '',
-                    'date' => now('Asia/Manila')->toDateString(),
-                    'time' => now('Asia/Manila')->toIso8601String(),
-                    'name' => 'Progress Report - '.now('Asia/Manila')->toDateString(),
-                    'tags' => ! empty($input['tags'])
-                        ? array_values($input['tags'])
-                        : ['progress', 'track-ai'],
-                ],
+                fields: $fields,
                 parentProcessId: $contractId,
             );
 
@@ -501,11 +513,17 @@ class ProjectProgressService
             // Extract runId from response - live API returns nested runId.id
             $runId = $response->executionId;
 
-            $report->update([
-                'saras_workflow_run_id' => $runId,
+            $updates = [
                 'progress_status' => ProjectProgressReport::STATUS_PROCESSING,
+                'completion_status' => $runId ? $response->status : 'WORKFLOW_TRIGGERED_NO_RUN_ID',
                 'last_synced_at' => now(),
-            ]);
+            ];
+
+            if ($runId) {
+                $updates['saras_workflow_run_id'] = $runId;
+            }
+
+            $report->update($updates);
 
             AuditLog::log($report->user_id, 'project_progress_workflow_triggered', $report->contract_id, [
                 'report_id' => $report->id,
@@ -539,19 +557,7 @@ class ProjectProgressService
         }
 
         try {
-            $response = $this->sarasClient->getWorkflowRuns(
-                page: 1,
-                perPage: 5,
-                filters: [
-                    'subProjectId' => config('saras.subproject_ids.project_progress'),
-                    'processId' => $report->saras_process_id,
-                    'workflowId' => config('saras.workflows.completion_id'),
-                ],
-            );
-
-            $run = $report->saras_workflow_run_id
-                ? $response->findById($report->saras_workflow_run_id)
-                : ($response->runs[0] ?? null);
+            $run = $this->findWorkflowRun($report);
 
             if ($run) {
                 if (! $report->saras_workflow_run_id) {
@@ -566,6 +572,23 @@ class ProjectProgressService
 
                 return $run;
             }
+
+            if ($this->shouldTriggerMissingWorkflowRun($report)) {
+                Log::warning('ProjectProgress: No Saras workflow run found; triggering explicit workflow fallback', [
+                    'report_id' => $report->id,
+                    'process_id' => $report->saras_process_id,
+                    'workflow_id' => config('saras.workflows.completion_id'),
+                ]);
+
+                $report = $this->triggerWorkflow($report);
+                $run = $this->findWorkflowRun($report);
+
+                if ($run) {
+                    $this->updateStatusFromRun($report, $run);
+
+                    return $run;
+                }
+            }
         } catch (SarasApiException $e) {
             Log::error('ProjectProgress: Failed to poll workflow status', [
                 'report_id' => $report->id,
@@ -574,6 +597,36 @@ class ProjectProgressService
         }
 
         return null;
+    }
+
+    protected function findWorkflowRun(ProjectProgressReport $report): ?WorkflowRunDTO
+    {
+        $filters = [
+            'subProjectId' => config('saras.subproject_ids.project_progress'),
+            'processId' => $report->saras_process_id,
+            'workflowId' => config('saras.workflows.completion_id'),
+        ];
+
+        if ($report->saras_workflow_run_id) {
+            $filters['runId'] = $report->saras_workflow_run_id;
+        }
+
+        $response = $this->sarasClient->getWorkflowRuns(
+            page: 1,
+            perPage: 5,
+            filters: $filters,
+        );
+
+        return $report->saras_workflow_run_id
+            ? $response->findById($report->saras_workflow_run_id)
+            : ($response->runs[0] ?? null);
+    }
+
+    protected function shouldTriggerMissingWorkflowRun(ProjectProgressReport $report): bool
+    {
+        return (bool) config('saras.workflows.trigger_missing_run_on_poll', true)
+            && ! $report->saras_workflow_run_id
+            && $report->isSubmitted();
     }
 
     /**

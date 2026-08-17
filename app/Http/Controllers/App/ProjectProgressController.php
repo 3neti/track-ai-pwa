@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\App\ProjectProgressRequest;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
+use App\Services\Location\LocationTrustService;
 use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class ProjectProgressController extends Controller
         protected ProjectProgressService $progressService,
         protected ContractService $contractService,
         protected SarasClientInterface $sarasClient,
+        protected LocationTrustService $locationTrustService,
     ) {}
 
     /**
@@ -84,17 +86,29 @@ class ProjectProgressController extends Controller
             ], 423);
         }
 
+        $locationAssessment = $this->locationTrustService->assess($user, $this->locationEvidenceFrom($validated));
+
+        if ($locationAssessment['status'] === 'rejected') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Location verification failed. Please disable mock location tools and try again.',
+                'location_assessment' => $locationAssessment,
+            ], 422);
+        }
+
         $report = $this->progressService->createProgress(
             user: $user,
             project: $project,
             input: array_merge($validated, [
                 'ip_address' => $request->ip(),
+                'location_assessment' => $locationAssessment,
             ]),
         );
 
         return response()->json([
             'success' => true,
             'report' => $report,
+            'location_assessment' => $locationAssessment,
             'message' => $report->saras_process_id
                 ? 'Progress report submitted to Saras.'
                 : 'Progress report saved locally.',
@@ -218,5 +232,29 @@ class ProjectProgressController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function locationEvidenceFrom(array $validated): array
+    {
+        $latitude = $validated['latitude'] ?? null;
+        $longitude = $validated['longitude'] ?? null;
+
+        $hasCoordinates = $latitude !== null && $latitude !== '' && $longitude !== null && $longitude !== '';
+
+        if (! $hasCoordinates && isset($validated['geo_location']) && is_string($validated['geo_location'])) {
+            [$latitude, $longitude] = array_pad(explode(',', $validated['geo_location'], 2), 2, null);
+        }
+
+        return [
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'accuracy' => $validated['accuracy'] ?? null,
+            'timestamp' => $validated['location_timestamp'] ?? null,
+            'client' => $validated['location_evidence'] ?? null,
+        ];
     }
 }

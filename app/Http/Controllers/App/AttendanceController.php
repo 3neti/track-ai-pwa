@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\App\CheckInRequest;
 use App\Http\Requests\App\CheckOutRequest;
+use App\Models\Project;
 use App\Services\TrackAI\AttendanceService;
 use App\Services\TrackAI\AttendanceSessionService;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +25,7 @@ class AttendanceController extends Controller
      */
     public function index(): Response
     {
-        $projects = \App\Models\Project::orderBy('name')->get();
+        $projects = Project::orderBy('name')->get();
 
         return Inertia::render('app/Attendance', [
             'projects' => $projects,
@@ -82,6 +83,7 @@ class AttendanceController extends Controller
             remarks: $validated['remarks'] ?? null,
             ipAddress: $request->ip(),
             clientRequestId: $validated['client_request_id'] ?? null,
+            locationEvidence: $this->locationEvidenceFrom($validated),
         );
 
         $response = $result['response'];
@@ -91,11 +93,12 @@ class AttendanceController extends Controller
             'entry_id' => $response->entryId,
             'message' => $response->message,
             'attendance_status' => $result['attendance_status'],
+            'location_assessment' => $result['location_assessment'] ?? null,
             'session' => $result['session'] ? [
                 'id' => $result['session']->id,
                 'check_in_at' => $result['session']->check_in_at->toIso8601String(),
             ] : null,
-        ]);
+        ], $this->responseStatusFor($result));
     }
 
     /**
@@ -114,6 +117,7 @@ class AttendanceController extends Controller
             remarks: $validated['remarks'] ?? null,
             ipAddress: $request->ip(),
             clientRequestId: $validated['client_request_id'] ?? null,
+            locationEvidence: $this->locationEvidenceFrom($validated),
         );
 
         $response = $result['response'];
@@ -123,12 +127,34 @@ class AttendanceController extends Controller
             'entry_id' => $response->entryId,
             'message' => $response->message,
             'attendance_status' => $result['attendance_status'],
+            'location_assessment' => $result['location_assessment'] ?? null,
             'session' => $result['session'] ? [
                 'id' => $result['session']->id,
                 'check_in_at' => $result['session']->check_in_at->toIso8601String(),
                 'check_out_at' => $result['session']->check_out_at?->toIso8601String(),
                 'duration_minutes' => $result['session']->getDurationMinutes(),
             ] : null,
-        ]);
+        ], $this->responseStatusFor($result));
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function responseStatusFor(array $result): int
+    {
+        return ($result['location_assessment']['status'] ?? null) === 'rejected' ? 422 : 200;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function locationEvidenceFrom(array $validated): array
+    {
+        return [
+            'accuracy' => $validated['accuracy'] ?? null,
+            'timestamp' => $validated['location_timestamp'] ?? null,
+            'client' => $validated['location_evidence'] ?? null,
+        ];
     }
 }

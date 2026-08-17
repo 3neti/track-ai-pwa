@@ -124,6 +124,27 @@ test('contract refresh reports expired saras token clearly', function () {
         ]);
 });
 
+test('contract refresh reports saras permission errors clearly', function () {
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getProcesses')
+        ->once()
+        ->andThrow(SarasApiException::forbidden(
+            '/process/getProcess',
+            'Access Denied by IAM Engine.'
+        ));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->postJson('/api/contracts/refresh');
+
+    $response->assertForbidden()
+        ->assertJson([
+            'success' => false,
+            'message' => 'Access Denied by IAM Engine.',
+        ]);
+});
+
 test('contract sync returns only contracts present in latest saras response', function () {
     Contract::factory()->create([
         'saras_process_id' => 'stale-contract-id',

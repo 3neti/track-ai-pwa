@@ -22,6 +22,24 @@ function sarasTestTokenManager(): SarasTokenManagerInterface
     };
 }
 
+function sarasCountingTokenManager(): SarasTokenManagerInterface
+{
+    return new class implements SarasTokenManagerInterface
+    {
+        public int $invalidations = 0;
+
+        public function getAccessToken(): string
+        {
+            return 'test-token';
+        }
+
+        public function invalidateToken(): void
+        {
+            $this->invalidations++;
+        }
+    };
+}
+
 test('Saras validation responses are translated without escaping as request exceptions', function () {
     Http::fake([
         'https://saras.test/process/workflows/executeWorkflow*' => Http::response([
@@ -37,6 +55,57 @@ test('Saras validation responses are translated without escaping as request exce
         otherDetails: ['processId' => 'process-id'],
         payload: ['engineersRemarks' => 'Test'],
     ))->toThrow(SarasApiException::class, 'Request body does not match the schema.');
+});
+
+test('Saras forbidden responses do not invalidate a valid token', function () {
+    Http::fake([
+        'https://saras.test/process/projects/getProjectsForUser*' => Http::response([
+            'errorCode' => 915,
+            'msg' => 'Access Denied by IAM Engine.',
+        ], 403),
+    ]);
+
+    $tokenManager = sarasCountingTokenManager();
+    $client = new SarasLiveClient($tokenManager, 'https://saras.test', 10, 1, 0);
+
+    expect(fn () => $client->getProjectsForUser())
+        ->toThrow(SarasApiException::class, 'Access Denied by IAM Engine.')
+        ->and($tokenManager->invalidations)->toBe(0);
+});
+
+test('Saras unauthorized responses invalidate the token', function () {
+    Http::fake([
+        'https://saras.test/process/projects/getProjectsForUser*' => Http::response([
+            'msg' => 'Unauthorized',
+        ], 401),
+    ]);
+
+    $tokenManager = sarasCountingTokenManager();
+    $client = new SarasLiveClient($tokenManager, 'https://saras.test', 10, 1, 0);
+
+    expect(fn () => $client->getProjectsForUser())
+        ->toThrow(SarasApiException::class, 'Unauthorized')
+        ->and($tokenManager->invalidations)->toBe(1);
+});
+
+test('Saras parent process errors are treated as validation without invalidating the token', function () {
+    Http::fake([
+        'https://saras.test/process/createProcess' => Http::response([
+            'errorCode' => 1221,
+            'msg' => 'We could not find relevant process for the provided ID',
+        ], 401),
+    ]);
+
+    $tokenManager = sarasCountingTokenManager();
+    $client = new SarasLiveClient($tokenManager, 'https://saras.test', 10, 1, 0);
+
+    expect(fn () => $client->createProcess(
+        subProjectId: 'attendance-subproject-id',
+        fields: ['contractId' => 'project-id'],
+        parentProcessId: 'project-id',
+    ))
+        ->toThrow(SarasApiException::class, 'We could not find relevant process for the provided ID')
+        ->and($tokenManager->invalidations)->toBe(0);
 });
 
 test('workflow requests use the current Saras process workflow schema', function () {

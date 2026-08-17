@@ -70,6 +70,17 @@ class SarasApiXrayController extends Controller
     }
 
     /**
+     * API: intended Saras payload map for joint confirmation.
+     */
+    public function payloadMap(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => config('saras.payload_map', []),
+        ]);
+    }
+
+    /**
      * API: get single trace detail.
      */
     public function show(ApiTrace $apiTrace): JsonResponse

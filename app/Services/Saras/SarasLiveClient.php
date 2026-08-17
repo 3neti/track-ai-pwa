@@ -445,10 +445,17 @@ class SarasLiveClient implements SarasClientInterface
             'message' => $message,
         ]);
 
-        if ($status === 401 || $status === 403) {
-            // Invalidate token and throw auth error
+        if ($status === 401) {
+            if (($data['errorCode'] ?? null) === 1221) {
+                throw SarasApiException::validationError($endpoint, $message, $data);
+            }
+
             $this->tokenManager->invalidateToken();
             throw SarasApiException::authFailed($message);
+        }
+
+        if ($status === 403) {
+            throw SarasApiException::forbidden($endpoint, $message);
         }
 
         if ($status === 400 || $status === 422) {

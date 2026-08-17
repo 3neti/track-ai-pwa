@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { ref, watch, onMounted } from 'vue';
-import { Search, X, Radio, Loader2 } from 'lucide-vue-next';
+import { Search, Radio, Loader2, MapPinned } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -26,9 +26,18 @@ interface Trace {
     created_at: string;
 }
 
+interface PayloadMapEntry {
+    method: string;
+    endpoint: string;
+    config_keys: string[];
+    request_shape: any;
+    response_fields_used: string[];
+}
+
 const traces = ref<Trace[]>([]);
 const isLoading = ref(false);
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
+const payloadMap = ref<Record<string, PayloadMapEntry>>({});
 
 // Filters
 const search = ref('');
@@ -62,7 +71,19 @@ watch([search, statusFilter, operationFilter], () => {
     searchTimeout = window.setTimeout(() => fetchTraces(), 300);
 });
 
-onMounted(() => fetchTraces());
+async function fetchPayloadMap() {
+    try {
+        const r = await axios.get('/developer/api/payload-map');
+        if (r.data.success) {
+            payloadMap.value = r.data.data;
+        }
+    } catch { /* ignore */ }
+}
+
+onMounted(() => {
+    fetchTraces();
+    fetchPayloadMap();
+});
 
 function openDetail(trace: Trace) {
     selectedTrace.value = trace;
@@ -114,6 +135,33 @@ function formatJson(data: any): string {
         </header>
 
         <main class="p-6 space-y-4">
+            <Card v-if="Object.keys(payloadMap).length">
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2 text-base">
+                        <MapPinned class="h-4 w-4 text-primary" />
+                        Payload Confirmation Map
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <div
+                            v-for="(entry, operation) in payloadMap"
+                            :key="operation"
+                            class="rounded-md border p-3"
+                        >
+                            <div class="flex items-center justify-between gap-2">
+                                <Badge variant="outline" class="font-mono text-xs">{{ operation }}</Badge>
+                                <Badge :variant="entry.method === 'POST' ? 'default' : 'secondary'" class="text-xs">{{ entry.method }}</Badge>
+                            </div>
+                            <p class="mt-2 truncate font-mono text-xs text-muted-foreground">{{ entry.endpoint }}</p>
+                            <p v-if="entry.config_keys.length" class="mt-2 text-xs text-muted-foreground">
+                                Config: {{ entry.config_keys.join(', ') }}
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             <!-- Filters -->
             <div class="flex gap-3 flex-wrap">
                 <div class="relative flex-1 min-w-[200px]">

@@ -2,8 +2,9 @@
 
 use App\Models\AttendanceSession;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 test('guests cannot access attendance page', function () {
     $response = $this->get('/app/attendance');
@@ -48,6 +49,74 @@ test('authenticated users can check in', function () {
         'user_id' => $user->id,
         'project_external_id' => 'CONTRACT-001',
         'status' => 'open',
+    ]);
+});
+
+test('check in records location trust warnings in audit mode', function () {
+    config([
+        'saras.location_trust.mode' => 'audit',
+        'saras.location_trust.max_accuracy_meters' => 100,
+    ]);
+
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson('/api/attendance/check-in', [
+        'contract_id' => 'CONTRACT-LOCATION-AUDIT',
+        'latitude' => 14.5995,
+        'longitude' => 120.9842,
+        'accuracy' => 250,
+        'location_timestamp' => now()->toIso8601String(),
+        'location_evidence' => ['source' => 'browser-geolocation'],
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'success' => true,
+            'attendance_status' => 'checked_in',
+            'location_assessment' => [
+                'status' => 'warning',
+                'reasons' => ['poor_accuracy'],
+            ],
+        ]);
+
+    $session = AttendanceSession::where('project_external_id', 'CONTRACT-LOCATION-AUDIT')->first();
+
+    expect($session)->not->toBeNull()
+        ->and($session->check_in_location_status)->toBe('warning')
+        ->and($session->check_in_location_evidence['accuracy_meters'])->toEqual(250.0)
+        ->and($session->check_in_location_evidence['client'])->toBe(['source' => 'browser-geolocation']);
+});
+
+test('check in rejects weak location evidence in enforce mode', function () {
+    config([
+        'saras.location_trust.mode' => 'enforce',
+        'saras.location_trust.max_accuracy_meters' => 100,
+    ]);
+
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson('/api/attendance/check-in', [
+        'contract_id' => 'CONTRACT-LOCATION-ENFORCE',
+        'latitude' => 14.5995,
+        'longitude' => 120.9842,
+        'accuracy' => 250,
+        'location_timestamp' => now()->toIso8601String(),
+        'location_evidence' => ['source' => 'browser-geolocation'],
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJson([
+            'success' => false,
+            'attendance_status' => 'checked_out',
+            'location_assessment' => [
+                'status' => 'rejected',
+                'reasons' => ['poor_accuracy'],
+            ],
+        ]);
+
+    $this->assertDatabaseMissing('attendance_sessions', [
+        'user_id' => $user->id,
+        'project_external_id' => 'CONTRACT-LOCATION-ENFORCE',
     ]);
 });
 

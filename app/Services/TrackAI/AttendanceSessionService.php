@@ -4,6 +4,7 @@ namespace App\Services\TrackAI;
 
 use App\Models\AttendanceSession;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 
 class AttendanceSessionService
 {
@@ -59,6 +60,7 @@ class AttendanceSessionService
         float $longitude,
         ?string $remarks = null,
         ?string $sarasProcessId = null,
+        ?array $locationAssessment = null,
     ): AttendanceSession {
         return AttendanceSession::create([
             'user_id' => $userId,
@@ -67,6 +69,8 @@ class AttendanceSessionService
             'check_in_at' => now(),
             'check_in_latitude' => $latitude,
             'check_in_longitude' => $longitude,
+            'check_in_location_status' => $locationAssessment['status'] ?? null,
+            'check_in_location_evidence' => $locationAssessment['evidence'] ?? null,
             'check_in_remarks' => $remarks,
             'status' => AttendanceSession::STATUS_OPEN,
         ]);
@@ -79,12 +83,15 @@ class AttendanceSessionService
         AttendanceSession $session,
         float $latitude,
         float $longitude,
-        ?string $remarks = null
+        ?string $remarks = null,
+        ?array $locationAssessment = null,
     ): AttendanceSession {
         $session->update([
             'check_out_at' => now(),
             'check_out_latitude' => $latitude,
             'check_out_longitude' => $longitude,
+            'check_out_location_status' => $locationAssessment['status'] ?? null,
+            'check_out_location_evidence' => $locationAssessment['evidence'] ?? null,
             'check_out_remarks' => $remarks,
             'status' => AttendanceSession::STATUS_CLOSED,
         ]);
@@ -134,9 +141,9 @@ class AttendanceSessionService
     /**
      * Get all open sessions that should be auto-closed (checked in before cutoff time).
      *
-     * @return \Illuminate\Database\Eloquent\Collection<AttendanceSession>
+     * @return Collection<AttendanceSession>
      */
-    public function getSessionsForAutoClose(Carbon $cutoffTime): \Illuminate\Database\Eloquent\Collection
+    public function getSessionsForAutoClose(Carbon $cutoffTime): Collection
     {
         return AttendanceSession::query()
             ->open()

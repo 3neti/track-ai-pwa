@@ -10,6 +10,8 @@ class SarasApiException extends Exception
 
     public const TYPE_AUTH_FAILED = 'saras_auth_failed';
 
+    public const TYPE_FORBIDDEN = 'saras_forbidden';
+
     public const TYPE_VALIDATION_ERROR = 'saras_validation_error';
 
     public const TYPE_TIMEOUT = 'saras_timeout';
@@ -43,6 +45,16 @@ class SarasApiException extends Exception
             message: $message ?? 'Saras authentication failed',
             type: self::TYPE_AUTH_FAILED,
             endpoint: '/users/userLogin',
+        );
+    }
+
+    public static function forbidden(string $endpoint, ?string $message = null): self
+    {
+        return new self(
+            message: $message ?? 'Saras permission denied',
+            type: self::TYPE_FORBIDDEN,
+            endpoint: $endpoint,
+            statusCode: 403,
         );
     }
 

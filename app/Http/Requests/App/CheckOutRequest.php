@@ -20,6 +20,9 @@ class CheckOutRequest extends FormRequest
             'contract_id' => ['required', 'string', 'max:255'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'],
+            'location_timestamp' => ['nullable', 'date'],
+            'location_evidence' => ['nullable', 'array'],
             'remarks' => ['nullable', 'string', 'max:1000'],
             'client_request_id' => ['nullable', 'string', 'uuid', 'max:100'],
         ];

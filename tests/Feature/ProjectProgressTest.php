@@ -5,6 +5,8 @@ use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
+use App\Services\Saras\DTO\WorkflowResponse;
+use App\Services\Saras\DTO\WorkflowRunsResponse;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -37,6 +39,40 @@ test('progress report can be created', function () {
         'current_milestone' => 'Foundation',
         'remarks' => 'Concrete pouring completed for sector A.',
     ]);
+});
+
+test('progress report records location trust evidence', function () {
+    config([
+        'saras.location_trust.mode' => 'audit',
+        'saras.location_trust.max_accuracy_meters' => 100,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'current_milestone' => 'Foundation',
+            'remarks' => 'Concrete pouring completed for sector A with geotagged photo evidence.',
+            'latitude' => 0,
+            'longitude' => 0,
+            'accuracy' => 275,
+            'location_timestamp' => now()->toIso8601String(),
+            'location_evidence' => ['source' => 'browser-geolocation'],
+        ]);
+
+    $response->assertSuccessful()
+        ->assertJson([
+            'success' => true,
+            'location_assessment' => [
+                'status' => 'warning',
+                'reasons' => ['poor_accuracy'],
+            ],
+        ]);
+
+    $report = ProjectProgressReport::latest()->first();
+
+    expect($report->location_status)->toBe('warning')
+        ->and($report->location_evidence['latitude'])->toEqual(0.0)
+        ->and($report->location_evidence['longitude'])->toEqual(0.0)
+        ->and($report->location_evidence['accuracy_meters'])->toEqual(275.0);
 });
 
 test('progress reports can be listed for a project', function () {
@@ -122,6 +158,100 @@ test('automatically triggered workflow can be discovered by process ID', functio
     $report->refresh();
     expect($report->saras_workflow_run_id)->toBe('run_stub_success_001')
         ->and($report->progress_status)->toBe(ProjectProgressReport::STATUS_EVALUATED);
+});
+
+test('workflow polling explicitly triggers Saras workflow when no automatic run is found', function () {
+    config(['saras.workflows.trigger_missing_run_on_poll' => true]);
+
+    $report = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => $this->project->external_id,
+        'saras_workflow_run_id' => null,
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getWorkflowRuns')
+        ->once()
+        ->with(1, 5, [
+            'subProjectId' => config('saras.subproject_ids.project_progress'),
+            'processId' => $report->saras_process_id,
+            'workflowId' => config('saras.workflows.completion_id'),
+        ])
+        ->andReturn(WorkflowRunsResponse::fromArray([
+            'meta' => ['page' => '1', 'totalCount' => '0', 'totalPages' => '1'],
+            'runs' => [],
+        ]));
+    $client->shouldReceive('executeWorkflow')
+        ->once()
+        ->andReturn(WorkflowResponse::fromArray([
+            'workflowId' => config('saras.workflows.completion_id'),
+            'runId' => [
+                'id' => 'explicit-run-id',
+                'state' => 'INITIALISED',
+            ],
+        ]));
+    $client->shouldReceive('getWorkflowRuns')
+        ->once()
+        ->with(1, 5, [
+            'subProjectId' => config('saras.subproject_ids.project_progress'),
+            'processId' => $report->saras_process_id,
+            'workflowId' => config('saras.workflows.completion_id'),
+            'runId' => 'explicit-run-id',
+        ])
+        ->andReturn(WorkflowRunsResponse::fromArray([
+            'meta' => ['page' => '1', 'totalCount' => '1', 'totalPages' => '1'],
+            'runs' => [[
+                'id' => 'explicit-run-id',
+                'state' => 'INITIALISED',
+                'flowState' => '0.0',
+            ]],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->getJson("/api/progress-reports/{$report->id}/workflow");
+
+    $response->assertSuccessful()
+        ->assertJsonPath('workflow_run.id', 'explicit-run-id');
+
+    $report->refresh();
+    expect($report->saras_workflow_run_id)->toBe('explicit-run-id')
+        ->and($report->progress_status)->toBe(ProjectProgressReport::STATUS_PROCESSING)
+        ->and($report->completion_status)->toBe('INITIALISED');
+});
+
+test('workflow polling does not explicitly trigger Saras workflow when fallback is disabled', function () {
+    config(['saras.workflows.trigger_missing_run_on_poll' => false]);
+
+    $report = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => $this->project->external_id,
+        'saras_workflow_run_id' => null,
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getWorkflowRuns')
+        ->once()
+        ->andReturn(WorkflowRunsResponse::fromArray([
+            'meta' => ['page' => '1', 'totalCount' => '0', 'totalPages' => '1'],
+            'runs' => [],
+        ]));
+    $client->shouldNotReceive('executeWorkflow');
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->getJson("/api/progress-reports/{$report->id}/workflow");
+
+    $response->assertSuccessful()
+        ->assertJsonPath('workflow_run', null);
+
+    $report->refresh();
+    expect($report->saras_workflow_run_id)->toBeNull()
+        ->and($report->progress_status)->toBe(ProjectProgressReport::STATUS_SUBMITTED);
 });
 
 test('validation rejects invalid remarks length', function () {

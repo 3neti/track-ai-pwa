@@ -69,8 +69,8 @@ async function handleRefresh() {
         } else {
             error.value = r.data.message || 'Unable to load contracts. Please try again.';
         }
-    } catch {
-        error.value = 'Unable to load contracts. Please try again.';
+    } catch (err: any) {
+        error.value = err.response?.data?.message || 'Unable to load contracts. Please try again.';
     } finally {
         isRefreshing.value = false;
     }

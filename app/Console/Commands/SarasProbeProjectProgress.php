@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
 class SarasProbeProjectProgress extends Command
@@ -319,11 +320,8 @@ class SarasProbeProjectProgress extends Command
         $this->newLine();
         $this->info('=== Probe 7: Execute Completion Workflow ===');
 
-        // Correct workflow ID from ProjectProgress schema (not the old spec doc one)
-        $workflowId = 'd702fb25-51ae-4d7f-88fc-132d555b2f00';
-
-        // Correct stageKey from ProjectProgress schema
-        $stageKey = 'stage_1779863565116_eqt6';
+        $workflowId = config('saras.workflows.completion_id');
+        $stageKey = config('saras.workflows.completion_stage_key');
 
         $payload = [
             'workflowId' => $workflowId,
@@ -359,7 +357,7 @@ class SarasProbeProjectProgress extends Command
         $this->newLine();
         $this->info('=== Probe 8: Poll Workflow Runs ===');
 
-        $workflowId = 'd702fb25-51ae-4d7f-88fc-132d555b2f00';
+        $workflowId = config('saras.workflows.completion_id');
 
         // Probe 8a: Unfiltered (works, already confirmed)
         $this->info('  8a: Unfiltered getWorkflowRuns (page=1, perPageCount=3)');
@@ -413,7 +411,7 @@ class SarasProbeProjectProgress extends Command
         }
     }
 
-    protected function authedRequest(): \Illuminate\Http\Client\PendingRequest
+    protected function authedRequest(): PendingRequest
     {
         return Http::baseUrl($this->baseUrl)
             ->timeout(30)

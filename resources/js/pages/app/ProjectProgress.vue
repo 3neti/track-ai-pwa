@@ -277,11 +277,18 @@ async function handleSubmit(milestone: string) {
             remarks: uploadRemarks.value[milestone] || null,
             tags: uploadTags.value[milestone] ?? [],
             geo_location: geoLocation,
+            latitude: geoState.value.latitude,
+            longitude: geoState.value.longitude,
+            accuracy: geoState.value.accuracy,
+            location_timestamp: geoState.value.timestamp ? new Date(geoState.value.timestamp).toISOString() : null,
+            location_evidence: {
+                source: 'browser-geolocation',
+            },
             current_progress_file_ids: currIds,
         });
         if (!r.data.success) throw new Error(r.data.message);
 
-        message.value = { type: 'success', text: `Progress report for ${milestone} submitted. AI evaluation will start automatically.` };
+        message.value = { type: 'success', text: `Progress report for ${milestone} submitted. AI evaluation will be verified against Saras.` };
         uploadFiles.value[milestone] = [];
         uploadRemarks.value[milestone] = '';
         uploadTags.value[milestone] = [];

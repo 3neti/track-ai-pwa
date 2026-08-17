@@ -95,6 +95,14 @@ class ContractController extends Controller
                 ], 401);
             }
 
+            if ($e->type === SarasApiException::TYPE_FORBIDDEN) {
+                return response()->json([
+                    'success' => false,
+                    'contracts' => [],
+                    'message' => $e->getMessage(),
+                ], 403);
+            }
+
             return response()->json([
                 'success' => false,
                 'contracts' => [],

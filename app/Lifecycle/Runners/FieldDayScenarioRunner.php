@@ -105,11 +105,11 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             $context->output->line('Phase 0: Fetching modules & contracts...');
         }
 
+        $modules = [];
+        $selectedModule = null;
+
         try {
             $response = $this->sarasClient->getProjectsForUser(page: 1, perPage: 50);
-
-            $modules = [];
-            $selectedModule = null;
 
             foreach ($response->projects as $project) {
                 $modules[] = [
@@ -131,90 +131,88 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
                     $context->output->line("    {$m['name']} ({$m['id']}){$marker}");
                 }
             }
-
-            // Fetch contracts from Contract AI subproject via getProcess (singular) + filters
-            $contractEntries = [];
-            $contractsAvailable = false;
-
-            try {
-                $contractAiId = 'acfdb45a-f4fd-4e25-8e52-de8ae6ff5b99';
-                $contractResponse = $this->sarasClient->getProcesses($contractAiId, 1, 20);
-                $contractsAvailable = true;
-
-                foreach (($contractResponse['processes'] ?? []) as $c) {
-                    $name = $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?');
-                    $milestones = $c['fields']['milestone'] ?? [];
-
-                    $contractEntries[] = [
-                        'id' => $c['id'] ?? '',
-                        'name' => $name,
-                        'milestones' => $milestones,
-                        'display_number' => $c['metaDetails']['displayNumber'] ?? '',
-                    ];
-                }
-
-                if (! $context->output->isJson()) {
-                    $context->output->info('  ✓ '.count($contractEntries).' contract(s) available');
-
-                    foreach ($contractEntries as $c) {
-                        $cId = substr($c['id'], 0, 8);
-                        $milestoneStr = ! empty($c['milestones']) ? implode(', ', $c['milestones']) : 'no milestones';
-                        $context->output->line("    {$c['name']} ({$cId}...)");
-                        $context->output->line("      Milestones: {$milestoneStr}");
-                    }
-                }
-            } catch (\Exception $e) {
-                if (! $context->output->isJson()) {
-                    $context->output->warn('  ⚠ Contracts: '.$e->getMessage());
-                }
-            }
-
-            // Select the first contract (or from scenario config)
-            $selectedContractId = null;
-            $selectedContractName = null;
-            $selectedMilestones = [];
-
-            if (! empty($contractEntries)) {
-                $scenarioContract = $context->scenario['contract_id'] ?? null;
-
-                if ($scenarioContract) {
-                    $match = collect($contractEntries)->firstWhere('id', $scenarioContract);
-                } else {
-                    $match = collect($contractEntries)->first(
-                        fn (array $contract): bool => ! empty($contract['milestones'])
-                    ) ?? $contractEntries[0];
-                }
-
-                if ($match) {
-                    $selectedContractId = $match['id'];
-                    $selectedContractName = $match['name'];
-                    $selectedMilestones = $match['milestones'];
-
-                    if (! $context->output->isJson()) {
-                        $context->output->info("  → Selected: {$selectedContractName} ({$selectedContractId})");
-                    }
-                }
-            }
-
-            return [
-                'success' => true,
-                'module_count' => count($modules),
-                'modules' => $modules,
-                'selected' => $selectedModule?->name,
-                'contracts_available' => $contractsAvailable,
-                'contract_count' => count($contractEntries),
-                'contracts' => $contractEntries,
-                'selected_contract_id' => $selectedContractId,
-                'selected_contract_name' => $selectedContractName,
-                'selected_milestones' => $selectedMilestones,
-            ];
         } catch (\Exception $e) {
             if (! $context->output->isJson()) {
-                $context->output->warn('  ⚠ Failed to fetch modules: '.$e->getMessage());
+                $context->output->warn('  ⚠ Modules: '.$e->getMessage());
+            }
+        }
+
+        // Fetch contracts from Contract AI subproject via getProcess (singular) + filters
+        $contractEntries = [];
+        $contractsAvailable = false;
+
+        try {
+            $contractAiId = config('saras.subproject_ids.contract_ai');
+            $contractResponse = $this->sarasClient->getProcesses($contractAiId, 1, 20);
+            $contractsAvailable = true;
+
+            foreach (($contractResponse['processes'] ?? []) as $c) {
+                $name = $c['fields']['legalName1'] ?? $c['metaDetails']['title'] ?? 'Contract #'.($c['metaDetails']['displayNumber'] ?? '?');
+                $milestones = $c['fields']['milestone'] ?? [];
+
+                $contractEntries[] = [
+                    'id' => $c['id'] ?? '',
+                    'name' => $name,
+                    'milestones' => $milestones,
+                    'display_number' => $c['metaDetails']['displayNumber'] ?? '',
+                ];
             }
 
-            return ['success' => false, 'message' => $e->getMessage()];
+            if (! $context->output->isJson()) {
+                $context->output->info('  ✓ '.count($contractEntries).' contract(s) available');
+
+                foreach ($contractEntries as $c) {
+                    $cId = substr($c['id'], 0, 8);
+                    $milestoneStr = ! empty($c['milestones']) ? implode(', ', $c['milestones']) : 'no milestones';
+                    $context->output->line("    {$c['name']} ({$cId}...)");
+                    $context->output->line("      Milestones: {$milestoneStr}");
+                }
+            }
+        } catch (\Exception $e) {
+            if (! $context->output->isJson()) {
+                $context->output->warn('  ⚠ Contracts: '.$e->getMessage());
+            }
         }
+
+        // Select the first contract (or from scenario config)
+        $selectedContractId = null;
+        $selectedContractName = null;
+        $selectedMilestones = [];
+
+        if (! empty($contractEntries)) {
+            $scenarioContract = $context->scenario['contract_id'] ?? null;
+
+            if ($scenarioContract) {
+                $match = collect($contractEntries)->firstWhere('id', $scenarioContract);
+            } else {
+                $match = collect($contractEntries)->first(
+                    fn (array $contract): bool => ! empty($contract['milestones'])
+                ) ?? $contractEntries[0];
+            }
+
+            if ($match) {
+                $selectedContractId = $match['id'];
+                $selectedContractName = $match['name'];
+                $selectedMilestones = $match['milestones'];
+
+                if (! $context->output->isJson()) {
+                    $context->output->info("  → Selected: {$selectedContractName} ({$selectedContractId})");
+                }
+            }
+        }
+
+        return [
+            'success' => $contractsAvailable || $modules !== [],
+            'module_count' => count($modules),
+            'modules' => $modules,
+            'selected' => $selectedModule?->name,
+            'contracts_available' => $contractsAvailable,
+            'contract_count' => count($contractEntries),
+            'contracts' => $contractEntries,
+            'selected_contract_id' => $selectedContractId,
+            'selected_contract_name' => $selectedContractName,
+            'selected_milestones' => $selectedMilestones,
+        ];
     }
 
     /**

@@ -418,7 +418,10 @@ final class LifecycleReportRenderer
         }
 
         // Certificate
-        $items[] = 'certificateOfCompletion field empty — certificate workflow not yet deployed (3406f390 returns 404).';
+        $certificateWorkflowId = config('saras.workflows.certificate_id');
+        $certificateWorkflowShortId = substr((string) $certificateWorkflowId, 0, 8);
+
+        $items[] = "certificateOfCompletion field empty — certificate workflow not yet deployed ({$certificateWorkflowShortId} returns 404).";
 
         // Stage files
         $stageFiles = $phases['stage_files'] ?? null;
@@ -429,7 +432,7 @@ final class LifecycleReportRenderer
         }
 
         // Certificate workflow
-        $items[] = 'Certificate workflow 3406f390-ce85-4b32-8531-8b90c837dcb4 returns 404 — confirm deployment for DPWH tenant.';
+        $items[] = "Certificate workflow {$certificateWorkflowId} returns 404 — confirm deployment for DPWH tenant.";
 
         // Workflow diagnostics
         $items[] = 'getWorkflowRuns currently returns only id/state/flowState — confirm endpoint, query option, or response expansion needed to retrieve full workflow error/output details.';

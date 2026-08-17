@@ -15,6 +15,7 @@ readonly class ProjectDTO
         public ?string $endDate,
         public ?string $tenantId = null,
         public ?string $tenantName = null,
+        public array $metadata = [],
     ) {}
 
     /**
@@ -48,6 +49,7 @@ readonly class ProjectDTO
                 endDate: null,
                 tenantId: $tenant['id'] ?? null,
                 tenantName: $tenant['name'] ?? null,
+                metadata: $data,
             );
         }
 
@@ -63,6 +65,7 @@ readonly class ProjectDTO
             endDate: $data['end_date'] ?? null,
             tenantId: null,
             tenantName: null,
+            metadata: $data,
         );
     }
 
@@ -79,6 +82,7 @@ readonly class ProjectDTO
             'end_date' => $this->endDate,
             'tenant_id' => $this->tenantId,
             'tenant_name' => $this->tenantName,
+            'metadata' => $this->metadata,
         ];
     }
 }

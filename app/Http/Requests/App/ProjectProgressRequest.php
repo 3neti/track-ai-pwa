@@ -27,6 +27,11 @@ class ProjectProgressRequest extends FormRequest
             'current_progress_file_ids' => ['nullable', 'array'],
             'current_progress_file_ids.*' => ['string', 'max:255'],
             'geo_location' => ['nullable', 'string', 'max:100'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'],
+            'location_timestamp' => ['nullable', 'date'],
+            'location_evidence' => ['nullable', 'array'],
         ];
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Branding\BrandingResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
@@ -39,6 +40,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'branding' => app(BrandingResolver::class)->resolve($request->user()),
             'auth' => [
                 'user' => $request->user(),
             ],

@@ -36,6 +36,8 @@ class ProjectProgressReport extends Model
         'previous_progress_file_ids',
         'current_progress_file_ids',
         'remarks',
+        'location_status',
+        'location_evidence',
         'progress_status',
         'completion_status',
         'certificate_file_id',
@@ -50,6 +52,7 @@ class ProjectProgressReport extends Model
         return [
             'previous_progress_file_ids' => 'array',
             'current_progress_file_ids' => 'array',
+            'location_evidence' => 'array',
             'raw_saras_response' => 'array',
             'remote_deleted_at' => 'datetime',
             'last_synced_at' => 'datetime',

@@ -145,6 +145,11 @@ const submitAttendance = async (type: 'check-in' | 'check-out') => {
         contract_id: selectedProject.value,
         latitude: geoState.value.latitude,
         longitude: geoState.value.longitude,
+        accuracy: geoState.value.accuracy,
+        location_timestamp: geoState.value.timestamp ? new Date(geoState.value.timestamp).toISOString() : null,
+        location_evidence: {
+            source: 'browser-geolocation',
+        },
         remarks: remarks.value || null,
     };
 

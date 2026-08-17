@@ -10,6 +10,7 @@ use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
 use App\Http\Controllers\Auth\FaceAuthController;
 use App\Http\Controllers\Auth\FaceLoginController;
+use App\Http\Controllers\Developer\SarasApiXrayController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -66,9 +67,10 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
 */
 
 Route::middleware(['auth'])->prefix('developer')->group(function () {
-    Route::get('/saras-api-xray', [App\Http\Controllers\Developer\SarasApiXrayController::class, 'index'])->name('developer.saras-api-xray');
-    Route::get('/api/traces', [App\Http\Controllers\Developer\SarasApiXrayController::class, 'traces'])->name('developer.api.traces');
-    Route::get('/api/traces/{apiTrace}', [App\Http\Controllers\Developer\SarasApiXrayController::class, 'show'])->name('developer.api.traces.show');
+    Route::get('/saras-api-xray', [SarasApiXrayController::class, 'index'])->name('developer.saras-api-xray');
+    Route::get('/api/payload-map', [SarasApiXrayController::class, 'payloadMap'])->name('developer.api.payload-map');
+    Route::get('/api/traces', [SarasApiXrayController::class, 'traces'])->name('developer.api.traces');
+    Route::get('/api/traces/{apiTrace}', [SarasApiXrayController::class, 'show'])->name('developer.api.traces.show');
 });
 
 require __DIR__.'/settings.php';
