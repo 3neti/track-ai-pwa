@@ -18,6 +18,7 @@ import { useGeolocation } from '@/composables/useGeolocation';
 import { makeClientRequestId } from '@/lib/clientRequestId';
 import {
     files as progressReportFiles,
+    downloadCertificate as downloadProgressCertificate,
     list as listProgressReports,
     store as storeProgressReport,
     workflowStatus,
@@ -586,10 +587,7 @@ const canSubmitMilestone = (milestone: string) => {
                                                             <span class="block truncate font-medium text-green-900 dark:text-green-100">{{ displayFileTitle(file) }}</span>
                                                             <span class="block truncate text-[10px] text-green-700 dark:text-green-300">Saras file: {{ file.file_id }}</span>
                                                             <a
-                                                                v-if="file.url"
-                                                                :href="file.url"
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                                :href="downloadProgressCertificate.url(report.id)"
                                                                 download
                                                                 class="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-green-300 bg-background px-2 text-[11px] font-medium text-green-800 transition hover:bg-green-100 dark:border-green-800 dark:text-green-200 dark:hover:bg-green-900"
                                                             >

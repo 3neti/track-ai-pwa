@@ -11,6 +11,7 @@ use App\Services\Saras\DTO\WorkflowResponse;
 use App\Services\Saras\DTO\WorkflowRunsResponse;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
@@ -235,6 +236,46 @@ test('progress report files remain renderable when Saras URL lookup fails', func
         ->assertJsonPath('success', true)
         ->assertJsonPath('files.current.0.file_id', 'current-file-id')
         ->assertJsonPath('files.current.0.url', null);
+});
+
+test('progress certificate downloads as an attachment through Saras url storage', function () {
+    $report = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'certificate_file_id' => 'certificate-file-id',
+        'raw_saras_response' => [
+            'fields' => [
+                'certificateOfCompletion' => [
+                    'id' => 'certificate-file-id',
+                    'fileName' => 'certificateOfCompletion.pdf',
+                ],
+            ],
+        ],
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getFileUrl')
+        ->once()
+        ->with(config('saras.subproject_ids.project_progress'), 'certificate-file-id')
+        ->andReturn([
+            'urls' => [[
+                'fileId' => 'certificate-file-id',
+                'url' => 'https://storage.test/certificate-file-id',
+            ]],
+        ]);
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    Http::fake([
+        'https://storage.test/certificate-file-id' => Http::response('%PDF-1.4 certificate content', 200, [
+            'Content-Type' => 'application/pdf',
+        ]),
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->get("/api/progress-reports/{$report->id}/certificate/download");
+
+    $response->assertSuccessful()
+        ->assertDownload('certificateOfCompletion.pdf');
 });
 
 test('progress report stores file IDs as arrays', function () {

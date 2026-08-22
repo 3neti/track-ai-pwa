@@ -12,9 +12,11 @@ use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectProgressController extends Controller
 {
@@ -171,6 +173,53 @@ class ProjectProgressController extends Controller
     }
 
     /**
+     * Download the certificate of completion as an attachment.
+     */
+    public function downloadCertificate(ProjectProgressReport $progressReport): JsonResponse|StreamedResponse
+    {
+        $certificate = $this->progressService->resolveCertificateFileReference($progressReport)[0] ?? null;
+
+        if (! $certificate || ! $certificate['url']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Certificate download is not available yet.',
+            ], 404);
+        }
+
+        $filename = $this->sanitizeDownloadFilename($certificate['title'] ?? 'certificateOfCompletion.pdf');
+
+        try {
+            $fileResponse = Http::timeout((int) config('saras.timeout', 30))
+                ->get($certificate['url'])
+                ->throw();
+        } catch (\Throwable $e) {
+            Log::warning('ProjectProgress: Unable to download Saras certificate', [
+                'report_id' => $progressReport->id,
+                'file_id' => $certificate['file_id'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Certificate file exists but could not be downloaded from Saras.',
+            ], 502);
+        }
+
+        $content = $fileResponse->body();
+
+        return response()->streamDownload(
+            static function () use ($content): void {
+                echo $content;
+            },
+            $filename,
+            [
+                'Content-Type' => $certificate['mime'] ?? 'application/pdf',
+                'Cache-Control' => 'private, max-age=300',
+            ],
+        );
+    }
+
+    /**
      * Attach stage files to a progress report.
      */
     public function attachStageFiles(ProjectProgressReport $progressReport): JsonResponse
@@ -178,6 +227,13 @@ class ProjectProgressController extends Controller
         $result = $this->progressService->attachStageFiles($progressReport);
 
         return response()->json($result);
+    }
+
+    protected function sanitizeDownloadFilename(string $filename): string
+    {
+        $sanitized = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $filename);
+
+        return $sanitized ?: 'certificateOfCompletion.pdf';
     }
 
     /**
