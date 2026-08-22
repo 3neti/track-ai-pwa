@@ -239,7 +239,11 @@ function hasReportFileIds(report: ProgressReport): boolean {
 }
 
 async function loadFilesForMilestone(milestone: string) {
-    await Promise.all(reportsForMilestone(milestone).map(loadReportFiles));
+    const latestReport = latestReportForMilestone(milestone);
+
+    if (latestReport) {
+        await loadReportFiles(latestReport);
+    }
 }
 
 async function loadReportFiles(report: ProgressReport) {
@@ -288,6 +292,14 @@ function filesForReport(report: ProgressReport, kind: 'previous' | 'current'): R
 
 function displayFileTitle(file: RenderedProgressFile): string {
     return file.title || file.file_id;
+}
+
+function latestReportForMilestone(milestone: string): ProgressReport | null {
+    return reportsForMilestone(milestone)[0] ?? null;
+}
+
+function shouldRenderReportFiles(report: ProgressReport, milestone: string): boolean {
+    return latestReportForMilestone(milestone)?.id === report.id && hasReportFileIds(report);
 }
 
 // File upload per milestone
@@ -491,7 +503,7 @@ const canSubmitMilestone = (milestone: string) => {
                                     <span v-if="report.previous_progress_file_ids?.length">{{ report.previous_progress_file_ids.length }} prev</span>
                                     <span v-if="report.current_progress_file_ids?.length">{{ report.current_progress_file_ids.length }} current</span>
                                 </div>
-                                <div v-if="hasReportFileIds(report)" class="space-y-3">
+                                <div v-if="shouldRenderReportFiles(report, milestone)" class="space-y-3">
                                     <div v-if="isLoadingReportFiles[report.id]" class="grid grid-cols-2 gap-2">
                                         <div v-for="i in 2" :key="i" class="h-28 rounded-md bg-muted animate-pulse"></div>
                                     </div>
@@ -500,44 +512,52 @@ const canSubmitMilestone = (milestone: string) => {
                                         <div v-if="filesForReport(report, 'previous').length" class="space-y-1.5">
                                             <p class="text-[11px] font-medium uppercase text-muted-foreground">Previous Progress Files</p>
                                             <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                                <a
+                                                <div
                                                     v-for="file in filesForReport(report, 'previous')"
                                                     :key="`previous-${report.id}-${file.file_id}`"
-                                                    :href="file.url || undefined"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    class="min-w-0 rounded-md border bg-background p-2 text-xs transition hover:bg-muted/60"
-                                                    :class="!file.url ? 'pointer-events-none' : ''"
+                                                    class="min-w-0 rounded-md border bg-background p-2 text-xs"
                                                 >
-                                                    <div class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
-                                                        <img v-if="file.url" :src="file.url" :alt="displayFileTitle(file)" class="h-full w-full object-cover" loading="lazy" />
-                                                        <Camera v-else class="h-6 w-6 text-muted-foreground" />
+                                                    <a
+                                                        v-if="file.url"
+                                                        :href="file.url"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted transition hover:opacity-90"
+                                                    >
+                                                        <img :src="file.url" :alt="displayFileTitle(file)" class="h-full w-full object-cover" loading="lazy" />
+                                                    </a>
+                                                    <div v-else class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
+                                                        <Camera class="h-6 w-6 text-muted-foreground" />
                                                     </div>
                                                     <span class="mt-1.5 block truncate font-medium">{{ displayFileTitle(file) }}</span>
                                                     <span class="block truncate text-[10px] text-muted-foreground">Saras file: {{ file.file_id }}</span>
-                                                </a>
+                                                </div>
                                             </div>
                                         </div>
 
                                         <div v-if="filesForReport(report, 'current').length" class="space-y-1.5">
                                             <p class="text-[11px] font-medium uppercase text-muted-foreground">Current Progress Files</p>
                                             <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                                <a
+                                                <div
                                                     v-for="file in filesForReport(report, 'current')"
                                                     :key="`current-${report.id}-${file.file_id}`"
-                                                    :href="file.url || undefined"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    class="min-w-0 rounded-md border bg-background p-2 text-xs transition hover:bg-muted/60"
-                                                    :class="!file.url ? 'pointer-events-none' : ''"
+                                                    class="min-w-0 rounded-md border bg-background p-2 text-xs"
                                                 >
-                                                    <div class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
-                                                        <img v-if="file.url" :src="file.url" :alt="displayFileTitle(file)" class="h-full w-full object-cover" loading="lazy" />
-                                                        <Camera v-else class="h-6 w-6 text-muted-foreground" />
+                                                    <a
+                                                        v-if="file.url"
+                                                        :href="file.url"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted transition hover:opacity-90"
+                                                    >
+                                                        <img :src="file.url" :alt="displayFileTitle(file)" class="h-full w-full object-cover" loading="lazy" />
+                                                    </a>
+                                                    <div v-else class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
+                                                        <Camera class="h-6 w-6 text-muted-foreground" />
                                                     </div>
                                                     <span class="mt-1.5 block truncate font-medium">{{ displayFileTitle(file) }}</span>
                                                     <span class="block truncate text-[10px] text-muted-foreground">Saras file: {{ file.file_id }}</span>
-                                                </a>
+                                                </div>
                                             </div>
                                         </div>
                                     </template>
