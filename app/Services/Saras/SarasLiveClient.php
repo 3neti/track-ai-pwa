@@ -461,13 +461,13 @@ class SarasLiveClient implements SarasClientInterface
 
         Log::info('Saras API: getFileUrls', [
             'request_id' => $requestId,
-            'endpoint' => '/process/knowledges/urlStorage',
+            'endpoint' => '/knowledges/urlStorage',
             'file_count' => count($fileIds),
         ]);
 
         return $this->makeRequest(
             method: 'POST',
-            endpoint: '/process/knowledges/urlStorage',
+            endpoint: '/knowledges/urlStorage',
             requestId: $requestId,
             data: [
                 'fileIds' => $fileIds,
