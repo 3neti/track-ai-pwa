@@ -458,6 +458,9 @@ const canSubmitMilestone = (milestone: string) => {
                             <p class="text-xs text-muted-foreground">
                                 Explain what changed, where it happened, and any quality/safety observation. Minimum 20 characters.
                             </p>
+                            <p v-if="(uploadRemarks[milestone] ?? '').trim().length > 0 && !hasExplanatoryRemarks(milestone)" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                                Remarks are short. Add a little more detail before submitting so Saras receives a useful progress note.
+                            </p>
                         </div>
 
                         <!-- Tags -->
