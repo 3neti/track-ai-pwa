@@ -108,6 +108,23 @@ test('Saras parent process errors are treated as validation without invalidating
         ->and($tokenManager->invalidations)->toBe(0);
 });
 
+test('Saras file permission filter errors do not invalidate the token', function () {
+    Http::fake([
+        'https://saras.test/process/knowledges/urlStorage' => Http::response([
+            'errorCode' => 1210,
+            'msg' => 'You are not allowed to call this method through the filters.',
+            'addMsg' => 'You do not have permission to access this file',
+        ], 401),
+    ]);
+
+    $tokenManager = sarasCountingTokenManager();
+    $client = new SarasLiveClient($tokenManager, 'https://saras.test', 10, 1, 0);
+
+    expect(fn () => $client->getFileUrl('project-progress-subproject-id', 'certificate-file-id'))
+        ->toThrow(SarasApiException::class, 'You are not allowed to call this method through the filters.')
+        ->and($tokenManager->invalidations)->toBe(0);
+});
+
 test('workflow requests use the current Saras process workflow schema', function () {
     Http::fake([
         'https://saras.test/process/workflows/executeWorkflow*' => Http::response([

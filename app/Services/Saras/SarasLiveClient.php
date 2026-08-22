@@ -585,7 +585,7 @@ class SarasLiveClient implements SarasClientInterface
         ]);
 
         if ($status === 401) {
-            if (($data['errorCode'] ?? null) === 1221) {
+            if (in_array($data['errorCode'] ?? null, [1210, 1221], true)) {
                 throw SarasApiException::validationError($endpoint, $message, $data);
             }
 
