@@ -86,6 +86,7 @@ class SarasStubClient implements SarasClientInterface
         array $fields,
         ?string $idempotencyKey = null,
         ?string $parentProcessId = null,
+        ?string $processTitle = null,
     ): ProcessResponse {
         $entryId = 'entry_'.Str::random(12);
 

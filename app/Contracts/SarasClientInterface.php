@@ -44,6 +44,7 @@ interface SarasClientInterface
         array $fields,
         ?string $idempotencyKey = null,
         ?string $parentProcessId = null,
+        ?string $processTitle = null,
     ): ProcessResponse;
 
     /**

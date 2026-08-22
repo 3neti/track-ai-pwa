@@ -377,6 +377,8 @@ class ProjectProgressService
         }
 
         try {
+            $progressReportName = $this->progressReportName($contractId, $milestone);
+
             $fields = [
                 'contractId' => $contractId,
                 'currentMilestone' => $input['current_milestone'] ?? '',
@@ -387,7 +389,7 @@ class ProjectProgressService
                 'ipAddress' => $input['ip_address'] ?? '',
                 'date' => now('Asia/Manila')->toDateString(),
                 'time' => now('Asia/Manila')->toIso8601String(),
-                'name' => $this->progressReportName($contractId, $milestone),
+                'name' => $progressReportName,
                 'tags' => ! empty($input['tags'])
                     ? array_values($input['tags'])
                     : ['progress', 'track-ai'],
@@ -405,6 +407,7 @@ class ProjectProgressService
                 subProjectId: config('saras.subproject_ids.project_progress'),
                 fields: $fields,
                 parentProcessId: $contractId,
+                processTitle: $progressReportName,
             );
 
             if ($processResponse->success && $processResponse->processId) {

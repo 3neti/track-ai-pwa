@@ -83,6 +83,7 @@ class SarasLiveClient implements SarasClientInterface
         array $fields,
         ?string $idempotencyKey = null,
         ?string $parentProcessId = null,
+        ?string $processTitle = null,
     ): ProcessResponse {
         $requestId = Str::uuid()->toString();
 
@@ -103,8 +104,11 @@ class SarasLiveClient implements SarasClientInterface
             'fields' => $fields,
         ];
 
-        if ($parentProcessId) {
-            $data['metaDetails'] = ['parentId' => $parentProcessId];
+        if ($parentProcessId || $processTitle) {
+            $data['metaDetails'] = array_filter([
+                'parentId' => $parentProcessId,
+                'title' => $processTitle,
+            ], fn (?string $value): bool => $value !== null && $value !== '');
         }
 
         $response = $this->makeRequest(

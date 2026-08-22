@@ -88,9 +88,10 @@ test('project progress Saras payload uses contract name and milestone as the nam
     $client = Mockery::mock(SarasClientInterface::class);
     $client->shouldReceive('createProcess')
         ->once()
-        ->withArgs(function (string $subProjectId, array $fields, ?string $idempotencyKey, ?string $parentProcessId): bool {
+        ->withArgs(function (string $subProjectId, array $fields, ?string $idempotencyKey, ?string $parentProcessId, ?string $processTitle): bool {
             return $subProjectId === config('saras.subproject_ids.project_progress')
                 && $parentProcessId === 'contract-process-id'
+                && $processTitle === 'P00916650LZ-1-Floor3'
                 && ($fields['name'] ?? null) === 'P00916650LZ-1-Floor3'
                 && ! array_key_exists('title', $fields);
         })

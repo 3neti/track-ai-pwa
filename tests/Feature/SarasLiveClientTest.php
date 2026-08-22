@@ -185,6 +185,29 @@ test('child processes include the contract process as parent metadata', function
         && $request['metaDetails'] === ['parentId' => 'contract-process-id']);
 });
 
+test('child processes can include a visible Saras title in metadata', function () {
+    Http::fake([
+        'https://saras.test/process/createProcess' => Http::response([
+            'process' => ['id' => 'child-process-id'],
+        ]),
+    ]);
+
+    $client = new SarasLiveClient(sarasTestTokenManager(), 'https://saras.test', 10, 1, 0);
+
+    $client->createProcess(
+        subProjectId: 'progress-subproject-id',
+        fields: ['name' => 'P00916650LZ-1-Floor3'],
+        parentProcessId: 'contract-process-id',
+        processTitle: 'P00916650LZ-1-Floor3',
+    );
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://saras.test/process/createProcess'
+        && $request['metaDetails'] === [
+            'parentId' => 'contract-process-id',
+            'title' => 'P00916650LZ-1-Floor3',
+        ]);
+});
+
 test('storage uploads use Saras signed storage lifecycle', function () {
     $policy = base64_encode(json_encode([
         'conditions' => [
