@@ -51,6 +51,8 @@ final class ApiTraceRecorder
             str_contains($path, '/getProcess') => 'getProcess',
             str_contains($path, '/updateFiles') => 'updateFiles',
             str_contains($path, '/updateProcessField') => 'updateProcessField',
+            str_contains($path, '/createSignedStorage') => 'createSignedStorage',
+            str_contains($path, '/closeSignedStorage') => 'closeSignedStorage',
             str_contains($path, '/createStorage') => 'uploadFiles',
             str_contains($path, '/executeWorkflow') => 'executeWorkflow',
             str_contains($path, '/getWorkflowRuns') => 'getWorkflowRuns',

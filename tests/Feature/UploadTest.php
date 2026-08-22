@@ -1,10 +1,12 @@
 <?php
 
+use App\Contracts\SarasClientInterface;
 use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\Upload;
 use App\Models\User;
+use App\Services\Saras\DTO\FileUploadResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 
@@ -541,6 +543,49 @@ test('new file endpoint uploads and updates status', function () {
     expect($upload->status)->toBe('uploaded');
     expect($upload->entry_id)->not->toBeNull();
     expect($upload->remote_file_id)->not->toBeNull();
+});
+
+test('current progress file endpoint stores images in the project progress Saras subproject', function () {
+    config([
+        'saras.subproject_ids.project_progress' => 'project-progress-subproject',
+        'saras.subproject_ids.trackdata' => 'trackdata-subproject',
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('uploadFiles')
+        ->once()
+        ->with(Mockery::type('array'), 'project-progress-subproject')
+        ->andReturn(new FileUploadResponse(
+            success: true,
+            fileIds: ['progress-file-id'],
+            message: 'Uploaded',
+        ));
+    $client->shouldNotReceive('createProcess');
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $upload = Upload::create([
+        'user_id' => $this->user->id,
+        'project_id' => $this->project->id,
+        'contract_id' => $this->project->external_id,
+        'title' => 'DPWH Contract-Foundation',
+        'document_type' => 'current_progress',
+        'status' => 'pending',
+        'client_request_id' => fake()->uuid(),
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads/{$upload->id}/file", [
+            'file' => UploadedFile::fake()->image('progress.jpg', 200, 200),
+        ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('upload.remote_file_id', 'progress-file-id')
+        ->assertJsonPath('upload.entry_id', null);
+
+    $upload->refresh();
+    expect($upload->status)->toBe('uploaded')
+        ->and($upload->remote_file_id)->toBe('progress-file-id')
+        ->and($upload->entry_id)->toBeNull();
 });
 
 test('uploads from legacy endpoint appear in project uploads list', function () {

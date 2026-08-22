@@ -156,9 +156,10 @@ class UploadService
 
         try {
             // Step 1: Upload file to Saras storage
+            $storageSubProjectId = $this->storageSubProjectId($upload);
             $fileResponse = $this->sarasClient->uploadFiles(
                 files: [$file],
-                subProjectId: config('saras.subproject_ids.trackdata'),
+                subProjectId: $storageSubProjectId,
             );
 
             if (! $fileResponse->success || ! $fileResponse->getFirstFileId()) {
@@ -168,6 +169,23 @@ class UploadService
             }
 
             $remoteFileId = $fileResponse->getFirstFileId();
+
+            if ($upload->document_type === 'current_progress') {
+                $upload->update([
+                    'remote_file_id' => $remoteFileId,
+                    'status' => Upload::STATUS_UPLOADED,
+                ]);
+
+                AuditLog::log($upload->user_id, 'upload_synced', $upload->contract_id, [
+                    'upload_id' => $upload->id,
+                    'file_id' => $remoteFileId,
+                    'storage_subproject_id' => $storageSubProjectId,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize(),
+                ]);
+
+                return $upload->fresh();
+            }
 
             // Step 2: Create process entry with file UUID
             $idempotencyKey = $upload->client_request_id ?? $this->generateIdempotencyKey(
@@ -234,6 +252,15 @@ class UploadService
         }
 
         return $upload->fresh();
+    }
+
+    protected function storageSubProjectId(Upload $upload): string
+    {
+        if ($upload->document_type === 'current_progress') {
+            return config('saras.subproject_ids.project_progress');
+        }
+
+        return config('saras.subproject_ids.trackdata');
     }
 
     /**

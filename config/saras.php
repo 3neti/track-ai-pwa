@@ -170,10 +170,14 @@ return [
         ],
         'uploadFiles' => [
             'method' => 'POST',
-            'endpoint' => '/process/knowledges/createStorage',
-            'config_keys' => ['saras.subproject_ids.trackdata'],
-            'request_shape' => ['subProjectId' => 'uuid', 'files[]' => 'multipart files'],
-            'response_fields_used' => ['files[].id', 'data[].id', 'id'],
+            'endpoint' => '/process/knowledges/createSignedStorage + S3 POST + /process/knowledges/closeSignedStorage',
+            'config_keys' => ['saras.subproject_ids.trackdata', 'saras.subproject_ids.project_progress'],
+            'request_shape' => [
+                'createSignedStorage' => ['subProjectId' => 'uuid', 'fileName' => 'string', 'mimeType' => 'string'],
+                's3' => ['url' => 'aws.url', 'fields' => 'aws.fields + file multipart field'],
+                'closeSignedStorage' => ['fileId' => 'uuid', 'subProjectId' => 'uuid'],
+            ],
+            'response_fields_used' => ['file.id', 'aws.url', 'aws.fields'],
         ],
         'updateFiles' => [
             'method' => 'POST',

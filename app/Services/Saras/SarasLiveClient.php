@@ -124,76 +124,154 @@ class SarasLiveClient implements SarasClientInterface
 
         Log::info('Saras API: uploadFiles', [
             'request_id' => $requestId,
-            'endpoint' => '/process/knowledges/createStorage',
+            'endpoint' => '/process/knowledges/createSignedStorage',
             'file_count' => count($files),
             'sub_project_id' => $subProjectId,
         ]);
 
         try {
-            $token = $this->tokenManager->getAccessToken();
+            $uploadedFiles = [];
 
-            $request = Http::baseUrl($this->baseUrl)
-                ->timeout($this->timeout)
-                ->withToken($token)
-                ->acceptJson();
-
-            // Attach each file - Saras expects 'files[]' field name
             foreach ($files as $file) {
                 /** @var UploadedFile $file */
-                $request = $request->attach(
-                    'files[]',
-                    fopen($file->getRealPath(), 'r'),
-                    $file->getClientOriginalName()
+                $signedStorage = $this->createSignedStorage(
+                    subProjectId: $subProjectId,
+                    fileName: $file->getClientOriginalName(),
+                    mimeType: $file->getMimeType() ?: 'application/octet-stream',
                 );
+
+                $this->uploadToSignedStorage($signedStorage, $file);
+
+                $fileId = $signedStorage['file']['id'] ?? null;
+
+                if (! is_string($fileId) || $fileId === '') {
+                    throw SarasApiException::uploadFailed('Signed storage response returned no file ID.');
+                }
+
+                $this->closeSignedStorage($subProjectId, $fileId);
+
+                $uploadedFiles[] = $signedStorage['file'];
             }
 
-            $uploadEndpoint = '/process/knowledges/createStorage?'.http_build_query([
-                'subProjectId' => $subProjectId,
+            return FileUploadResponse::fromArray([
+                'success' => true,
+                'files' => $uploadedFiles,
+                'message' => 'Files uploaded successfully.',
             ]);
-            $startTime = microtime(true);
-            $response = $request->post($uploadEndpoint);
-            $durationMs = (microtime(true) - $startTime) * 1000;
-
-            $fileNames = array_map(fn ($f) => $f->getClientOriginalName(), $files);
-
-            Log::info('Saras API: uploadFiles response', [
-                'request_id' => $requestId,
-                'status' => $response->status(),
-            ]);
-
-            $responseData = $response->json() ?? [];
-
-            $this->recordTrace(
-                'POST',
-                $uploadEndpoint,
-                [
-                    'subProjectId' => $subProjectId,
-                    'files' => $fileNames,
-                ],
-                $response->status(),
-                $responseData,
-                $durationMs,
-                requestSummaryOverride: [
-                    'subProjectId' => $subProjectId,
-                    'files' => $fileNames,
-                ],
-            );
-
-            if (! $response->successful()) {
-                $this->handleErrorResponse($response, '/process/knowledges/createStorage', $requestId);
-            }
-
-            return FileUploadResponse::fromArray($responseData);
 
         } catch (ConnectionException $e) {
             Log::error('Saras API: Connection failed', [
                 'request_id' => $requestId,
-                'endpoint' => '/process/knowledges/createStorage',
+                'endpoint' => '/process/knowledges/createSignedStorage',
                 'error' => $e->getMessage(),
             ]);
 
-            throw SarasApiException::unavailable('/process/knowledges/createStorage', 'Connection failed', $e);
+            throw SarasApiException::unavailable('/process/knowledges/createSignedStorage', 'Connection failed', $e);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function createSignedStorage(string $subProjectId, string $fileName, string $mimeType): array
+    {
+        $requestId = Str::uuid()->toString();
+
+        return $this->makeRequest(
+            method: 'POST',
+            endpoint: '/process/knowledges/createSignedStorage',
+            requestId: $requestId,
+            data: [
+                'subProjectId' => $subProjectId,
+                'fileName' => $fileName,
+                'mimeType' => $mimeType,
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $signedStorage
+     *
+     * @throws SarasApiException
+     */
+    protected function uploadToSignedStorage(array $signedStorage, UploadedFile $file): void
+    {
+        $url = $signedStorage['aws']['url'] ?? null;
+        $fields = $signedStorage['aws']['fields'] ?? null;
+
+        if (! is_string($url) || $url === '' || ! is_array($fields)) {
+            throw SarasApiException::uploadFailed('Signed storage response returned no AWS upload configuration.');
+        }
+
+        $startTime = microtime(true);
+        $response = Http::timeout($this->timeout)
+            ->asMultipart()
+            ->attach('file', fopen($file->getRealPath(), 'r'), $file->getClientOriginalName())
+            ->post($url, $this->normalizeSignedStorageFields($fields));
+        $durationMs = (microtime(true) - $startTime) * 1000;
+
+        $this->recordTrace(
+            'POST',
+            $url,
+            [
+                'fileName' => $file->getClientOriginalName(),
+                'mimeType' => $file->getMimeType(),
+                'awsFields' => array_keys($fields),
+            ],
+            $response->status(),
+            [],
+            $durationMs,
+            $response->successful() ? null : $response->body(),
+            requestSummaryOverride: [
+                'fileName' => $file->getClientOriginalName(),
+                'awsFields' => '{'.implode(', ', array_keys($fields)).'}',
+            ],
+        );
+
+        if (! $response->successful()) {
+            throw SarasApiException::uploadFailed(
+                'Signed storage upload failed with status '.$response->status()
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @return array<string, string>
+     */
+    protected function normalizeSignedStorageFields(array $fields): array
+    {
+        $normalized = [];
+
+        foreach ($fields as $name => $value) {
+            if ($name === 'contentType') {
+                $normalized['Content-Type'] = (string) $value;
+
+                continue;
+            }
+
+            $normalized[(string) $name] = (string) $value;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function closeSignedStorage(string $subProjectId, string $fileId): array
+    {
+        $requestId = Str::uuid()->toString();
+
+        return $this->makeRequest(
+            method: 'POST',
+            endpoint: '/process/knowledges/closeSignedStorage',
+            requestId: $requestId,
+            data: [
+                'fileId' => $fileId,
+                'subProjectId' => $subProjectId,
+            ],
+        );
     }
 
     public function executeWorkflow(?string $workflowId = null, array $otherDetails = [], array $payload = []): WorkflowResponse

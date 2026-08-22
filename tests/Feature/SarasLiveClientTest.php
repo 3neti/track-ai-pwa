@@ -185,20 +185,50 @@ test('child processes include the contract process as parent metadata', function
         && $request['metaDetails'] === ['parentId' => 'contract-process-id']);
 });
 
-test('storage uploads are scoped to a Saras subproject', function () {
+test('storage uploads use Saras signed storage lifecycle', function () {
     Http::fake([
-        'https://saras.test/process/knowledges/createStorage*' => Http::response([
-            'files' => [['id' => 'file-id']],
+        'https://saras.test/process/knowledges/createSignedStorage' => Http::response([
+            'file' => [
+                'id' => 'file-id',
+                'fileName' => 'progress.jpg',
+                'contentType' => 'image/jpeg',
+            ],
+            'aws' => [
+                'url' => 'https://storage.test/',
+                'fields' => [
+                    'key' => 'storage/progress.jpg',
+                    'policy' => 'policy-value',
+                    'signature' => 'signature-value',
+                    'contentType' => 'image/jpeg',
+                ],
+            ],
+        ]),
+        'https://storage.test/' => Http::response('', 204),
+        'https://saras.test/process/knowledges/closeSignedStorage' => Http::response([
+            'success' => true,
         ]),
     ]);
 
     $client = new SarasLiveClient(sarasTestTokenManager(), 'https://saras.test', 10, 1, 0);
     $file = UploadedFile::fake()->image('progress.jpg');
 
-    $client->uploadFiles([$file], 'trackdata-subproject-id');
+    $response = $client->uploadFiles([$file], 'trackdata-subproject-id');
+
+    expect($response->getFirstFileId())->toBe('file-id');
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
-        && $request->url() === 'https://saras.test/process/knowledges/createStorage?subProjectId=trackdata-subproject-id');
+        && $request->url() === 'https://saras.test/process/knowledges/createSignedStorage'
+        && $request['subProjectId'] === 'trackdata-subproject-id'
+        && $request['fileName'] === 'progress.jpg'
+        && $request['mimeType'] === 'image/jpeg');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && $request->url() === 'https://storage.test/');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && $request->url() === 'https://saras.test/process/knowledges/closeSignedStorage'
+        && $request['subProjectId'] === 'trackdata-subproject-id'
+        && $request['fileId'] === 'file-id');
 });
 
 test('file URLs are requested through the scoped Saras storage endpoint', function () {
