@@ -33,7 +33,10 @@ class ProjectProgressService
         return ProjectProgressReport::where('contract_id', $contractId)
             ->where('current_milestone', $milestone)
             ->whereNotNull('current_progress_file_ids')
-            ->where('progress_status', '!=', ProjectProgressReport::STATUS_DRAFT)
+            ->whereNotIn('progress_status', [
+                ProjectProgressReport::STATUS_DRAFT,
+                ProjectProgressReport::STATUS_FAILED,
+            ])
             ->whereNull('remote_deleted_at')
             ->orderByDesc('created_at')
             ->get()
@@ -49,7 +52,7 @@ class ProjectProgressService
         string $contractId,
         string $milestone,
     ): array {
-        $latest = $this->findLatestProgressForContractMilestone($contractId, $milestone);
+        $latest = $this->findLatestPreviousMilestoneProgress($contractId, $milestone);
 
         if (! $latest) {
             return [];
@@ -58,6 +61,41 @@ class ProjectProgressService
         $fileIds = $latest->current_progress_file_ids ?? [];
 
         return ! empty($fileIds) ? $fileIds : [];
+    }
+
+    public function findLatestPreviousMilestoneProgress(
+        string $contractId,
+        string $milestone,
+    ): ?ProjectProgressReport {
+        $previousMilestone = $this->previousMilestoneFor($contractId, $milestone);
+
+        if (! $previousMilestone) {
+            return null;
+        }
+
+        return $this->findLatestProgressForContractMilestone($contractId, $previousMilestone);
+    }
+
+    private function previousMilestoneFor(string $contractId, string $milestone): ?string
+    {
+        $milestones = Contract::where('saras_process_id', $contractId)->first()?->milestones;
+
+        if (! is_array($milestones) || $milestones === []) {
+            return null;
+        }
+
+        $milestones = array_values(array_filter(
+            $milestones,
+            fn (mixed $value): bool => is_string($value) && trim($value) !== '',
+        ));
+
+        $currentIndex = array_search($milestone, $milestones, true);
+
+        if ($currentIndex === false || $currentIndex === 0) {
+            return null;
+        }
+
+        return $milestones[$currentIndex - 1];
     }
 
     /**

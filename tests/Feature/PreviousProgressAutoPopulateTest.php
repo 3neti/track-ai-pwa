@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
@@ -15,6 +16,11 @@ beforeEach(function () {
         'name' => 'Auto-Populate Test Project',
         'description' => 'Test project for auto-populate previous progress',
         'status' => 'active',
+    ]);
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-abc',
+        'name' => 'Contract ABC',
+        'milestones' => ['Foundation', 'Floor1', 'Floor2', 'Roofing'],
     ]);
     $this->service = app(ProjectProgressService::class);
 });
@@ -35,8 +41,7 @@ test('first report has empty previous progress files', function () {
     expect($report->current_progress_file_ids)->toBe(['uuid-curr-1', 'uuid-curr-2']);
 });
 
-test('second report auto-populates previous files from first report current files', function () {
-    // Create first report (submitted status so it qualifies)
+test('next milestone auto-populates previous files from previous milestone current files', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -45,21 +50,50 @@ test('second report auto-populates previous files from first report current file
         'current_progress_file_ids' => ['uuid-r1-curr-1', 'uuid-r1-curr-2', 'uuid-r1-curr-3'],
     ]);
 
-    // Create second report without previous_progress_file_ids
     $report2 = $this->service->createProgress(
         user: $this->user,
         project: $this->project,
         input: [
             'contract_id' => 'contract-abc',
-            'current_milestone' => 'Foundation',
-            'remarks' => 'Second report',
+            'current_milestone' => 'Floor1',
+            'remarks' => 'Floor1 report',
             'current_progress_file_ids' => ['uuid-r2-curr-1'],
         ],
     );
 
-    // Previous should be auto-populated from report 1's current files
     expect($report2->previous_progress_file_ids)->toBe(['uuid-r1-curr-1', 'uuid-r1-curr-2', 'uuid-r1-curr-3']);
     expect($report2->current_progress_file_ids)->toBe(['uuid-r2-curr-1']);
+});
+
+test('repeat report for same milestone does not use same milestone files as previous files', function () {
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-abc',
+        'current_milestone' => 'Foundation',
+        'current_progress_file_ids' => ['uuid-foundation-current'],
+    ]);
+
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-abc',
+        'current_milestone' => 'Floor1',
+        'current_progress_file_ids' => ['uuid-floor1-first-current'],
+    ]);
+
+    $report = $this->service->createProgress(
+        user: $this->user,
+        project: $this->project,
+        input: [
+            'contract_id' => 'contract-abc',
+            'current_milestone' => 'Floor1',
+            'remarks' => 'Second Floor1 report still compares against Foundation.',
+            'current_progress_file_ids' => ['uuid-floor1-second-current'],
+        ],
+    );
+
+    expect($report->previous_progress_file_ids)->toBe(['uuid-foundation-current']);
 });
 
 test('resolvePreviousProgressFileIds returns empty for unknown contract', function () {
@@ -77,7 +111,7 @@ test('resolvePreviousProgressFileIds returns empty for unknown milestone', funct
         'current_progress_file_ids' => ['uuid-1'],
     ]);
 
-    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Roofing');
+    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Unknown');
 
     expect($fileIds)->toBe([]);
 });
@@ -92,12 +126,12 @@ test('resolvePreviousProgressFileIds skips draft reports', function () {
         'current_progress_file_ids' => ['uuid-draft-1'],
     ]);
 
-    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Foundation');
+    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Floor1');
 
     expect($fileIds)->toBe([]);
 });
 
-test('resolvePreviousProgressFileIds includes failed reports (files are still valid)', function () {
+test('resolvePreviousProgressFileIds skips failed reports', function () {
     ProjectProgressReport::factory()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -107,9 +141,9 @@ test('resolvePreviousProgressFileIds includes failed reports (files are still va
         'current_progress_file_ids' => ['uuid-failed-1'],
     ]);
 
-    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Foundation');
+    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Floor1');
 
-    expect($fileIds)->toBe(['uuid-failed-1']);
+    expect($fileIds)->toBe([]);
 });
 
 test('resolvePreviousProgressFileIds skips newer reports without current files', function () {
@@ -131,7 +165,7 @@ test('resolvePreviousProgressFileIds skips newer reports without current files',
         'created_at' => now(),
     ]);
 
-    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Foundation');
+    $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Floor1');
 
     expect($fileIds)->toBe(['uuid-previous-1', 'uuid-previous-2']);
 });
@@ -149,6 +183,12 @@ test('previous progress endpoint returns first report status', function () {
 });
 
 test('previous progress endpoint returns file count from last report', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-xyz',
+        'name' => 'Contract XYZ',
+        'milestones' => ['Floor1', 'Floor2'],
+    ]);
+
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -158,7 +198,7 @@ test('previous progress endpoint returns file count from last report', function 
     ]);
 
     $response = $this->actingAs($this->user)
-        ->getJson('/api/contracts/contract-xyz/milestones/Floor1/previous-progress');
+        ->getJson('/api/contracts/contract-xyz/milestones/Floor2/previous-progress');
 
     $response->assertSuccessful()
         ->assertJson([
@@ -168,8 +208,7 @@ test('previous progress endpoint returns file count from last report', function 
         ]);
 });
 
-test('explicitly provided previous file IDs are ignored in favor of auto resolution', function () {
-    // Create an existing submitted report
+test('explicitly provided previous file IDs are ignored in favor of previous milestone auto resolution', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -178,13 +217,12 @@ test('explicitly provided previous file IDs are ignored in favor of auto resolut
         'current_progress_file_ids' => ['uuid-auto-1', 'uuid-auto-2'],
     ]);
 
-    // Submit with explicit previous file IDs
     $report = $this->service->createProgress(
         user: $this->user,
         project: $this->project,
         input: [
             'contract_id' => 'contract-abc',
-            'current_milestone' => 'Foundation',
+            'current_milestone' => 'Floor1',
             'remarks' => 'Explicit previous should be ignored by backend auto resolution.',
             'previous_progress_file_ids' => ['uuid-explicit-1'],
             'current_progress_file_ids' => ['uuid-curr-1'],

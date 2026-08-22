@@ -425,9 +425,10 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             if (empty($previousFileIds)) {
                 $context->output->info('  First report: no previous photos found');
             } else {
-                $latestReport = $this->progressService->findLatestProgressForContractMilestone($contractId, $milestone);
+                $latestReport = $this->progressService->findLatestPreviousMilestoneProgress($contractId, $milestone);
                 $sourceId = $latestReport?->id ?? '?';
-                $context->output->info("  ✓ Found previous progress from report ID {$sourceId}");
+                $sourceMilestone = $latestReport?->current_milestone ?? 'previous milestone';
+                $context->output->info("  ✓ Found previous progress from {$sourceMilestone} report ID {$sourceId}");
                 $context->output->line('  Previous files: '.count($previousFileIds));
             }
         }
