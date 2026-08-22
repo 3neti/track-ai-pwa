@@ -180,7 +180,7 @@ class ProjectProgressService
 
         return [[
             'file_id' => $progressReport->certificate_file_id,
-            'url' => $this->resolveProgressFileUrl($progressReport->certificate_file_id),
+            'url' => $this->resolveGenericFileUrl($progressReport->certificate_file_id),
             'title' => $this->normalizeFirstFileName($certificate) ?? 'certificateOfCompletion.pdf',
             'mime' => 'application/pdf',
             'source' => 'saras',
@@ -196,6 +196,27 @@ class ProjectProgressService
             );
         } catch (\Throwable $e) {
             Log::warning('ProjectProgress: Unable to resolve Saras progress file URL', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $urls = $response['urls'] ?? $response['files'] ?? $response['data'] ?? [];
+        $first = is_array($urls) ? ($urls[0] ?? null) : null;
+
+        return is_array($first) && is_string($first['url'] ?? null)
+            ? $first['url']
+            : null;
+    }
+
+    private function resolveGenericFileUrl(string $fileId): ?string
+    {
+        try {
+            $response = $this->sarasClient->getFileUrls([$fileId]);
+        } catch (\Throwable $e) {
+            Log::warning('ProjectProgress: Unable to resolve Saras generic file URL', [
                 'file_id' => $fileId,
                 'error' => $e->getMessage(),
             ]);

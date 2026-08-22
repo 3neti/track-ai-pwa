@@ -158,6 +158,20 @@ class SarasStubClient implements SarasClientInterface
         ];
     }
 
+    public function getFileUrls(array $fileIds): array
+    {
+        return [
+            'urls' => array_map(
+                fn (string $fileId): array => [
+                    'fileId' => $fileId,
+                    'id' => $fileId,
+                    'url' => "https://stub.saras.test/files/{$fileId}",
+                ],
+                array_values($fileIds),
+            ),
+        ];
+    }
+
     public function updateProcessField(string $processId, string $subProjectId, array $updates): array
     {
         return [

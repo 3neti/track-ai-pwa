@@ -337,6 +337,28 @@ test('file URLs are requested through the scoped Saras storage endpoint', functi
         && $request['fileId'] === 'file-id');
 });
 
+test('generic file URLs are requested through Saras fileIds payload', function () {
+    Http::fake([
+        'https://saras.test/process/knowledges/urlStorage' => Http::response([
+            'urls' => [[
+                'fileId' => 'certificate-file-id',
+                'url' => 'https://storage.test/certificate-file-id',
+            ]],
+        ]),
+    ]);
+
+    $client = new SarasLiveClient(sarasTestTokenManager(), 'https://saras.test', 10, 1, 0);
+
+    $response = $client->getFileUrls(['certificate-file-id']);
+
+    expect($response['urls'][0]['url'])->toBe('https://storage.test/certificate-file-id');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://saras.test/process/knowledges/urlStorage'
+        && $request['fileIds'] === ['certificate-file-id']
+        && ! isset($request['subProjectId'])
+        && ! isset($request['fileId']));
+});
+
 test('workflow runs use direct Saras query parameters instead of filters JSON', function () {
     Http::fake([
         'https://saras.test/process/workflows/getWorkflowRuns*' => Http::response([

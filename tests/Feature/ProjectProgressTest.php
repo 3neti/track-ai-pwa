@@ -186,9 +186,9 @@ test('progress report files are resolved for rendering', function () {
                 'url' => 'https://storage.test/current-file-id',
             ]],
         ]);
-    $client->shouldReceive('getFileUrl')
+    $client->shouldReceive('getFileUrls')
         ->once()
-        ->with(config('saras.subproject_ids.project_progress'), 'certificate-file-id')
+        ->with(['certificate-file-id'])
         ->andReturn([
             'urls' => [[
                 'fileId' => 'certificate-file-id',
@@ -254,9 +254,9 @@ test('progress certificate downloads as an attachment through Saras url storage'
     ]);
 
     $client = Mockery::mock(SarasClientInterface::class);
-    $client->shouldReceive('getFileUrl')
+    $client->shouldReceive('getFileUrls')
         ->once()
-        ->with(config('saras.subproject_ids.project_progress'), 'certificate-file-id')
+        ->with(['certificate-file-id'])
         ->andReturn([
             'urls' => [[
                 'fileId' => 'certificate-file-id',

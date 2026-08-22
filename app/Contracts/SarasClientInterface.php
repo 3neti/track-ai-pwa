@@ -112,4 +112,14 @@ interface SarasClientInterface
      * @throws SarasApiException
      */
     public function getFileUrl(string $subProjectId, string $fileId): array;
+
+    /**
+     * Get temporary download URLs through Saras' generic process file opener.
+     *
+     * @param  array<string>  $fileIds
+     * @return array<string, mixed>
+     *
+     * @throws SarasApiException
+     */
+    public function getFileUrls(array $fileIds): array;
 }
