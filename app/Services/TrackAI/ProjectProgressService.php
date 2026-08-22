@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
+use App\Models\Upload;
 use App\Models\User;
 use App\Services\Saras\DTO\WorkflowRunDTO;
 use App\Services\TrackAI\Mappers\ProjectProgressWorkflowPayloadMapper;
@@ -57,6 +58,67 @@ class ProjectProgressService
         $fileIds = $latest->current_progress_file_ids ?? [];
 
         return ! empty($fileIds) ? $fileIds : [];
+    }
+
+    /**
+     * Resolve Saras progress file IDs into renderable metadata for the PWA.
+     *
+     * @param  array<string>  $fileIds
+     * @return array<int, array{file_id: string, url: ?string, title: ?string, mime: ?string, source: string}>
+     */
+    public function resolveProgressFileReferences(array $fileIds): array
+    {
+        $fileIds = array_values(array_unique(array_filter(
+            $fileIds,
+            fn (mixed $fileId): bool => is_string($fileId) && trim($fileId) !== '',
+        )));
+
+        if ($fileIds === []) {
+            return [];
+        }
+
+        $uploads = Upload::query()
+            ->whereIn('remote_file_id', $fileIds)
+            ->get(['remote_file_id', 'title', 'mime'])
+            ->keyBy('remote_file_id');
+
+        return collect($fileIds)
+            ->map(function (string $fileId) use ($uploads): array {
+                $upload = $uploads->get($fileId);
+
+                return [
+                    'file_id' => $fileId,
+                    'url' => $this->resolveProgressFileUrl($fileId),
+                    'title' => $upload?->title,
+                    'mime' => $upload?->mime,
+                    'source' => 'saras',
+                ];
+            })
+            ->all();
+    }
+
+    private function resolveProgressFileUrl(string $fileId): ?string
+    {
+        try {
+            $response = $this->sarasClient->getFileUrl(
+                subProjectId: config('saras.subproject_ids.project_progress'),
+                fileId: $fileId,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('ProjectProgress: Unable to resolve Saras progress file URL', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $urls = $response['urls'] ?? $response['files'] ?? $response['data'] ?? [];
+        $first = is_array($urls) ? ($urls[0] ?? null) : null;
+
+        return is_array($first) && is_string($first['url'] ?? null)
+            ? $first['url']
+            : null;
     }
 
     public function progressSubmissionBlocker(string $contractId, string $milestone): ?string

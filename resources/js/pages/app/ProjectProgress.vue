@@ -17,6 +17,7 @@ import { useActiveContract } from '@/composables/useActiveContract';
 import { useGeolocation } from '@/composables/useGeolocation';
 import { makeClientRequestId } from '@/lib/clientRequestId';
 import {
+    files as progressReportFiles,
     list as listProgressReports,
     store as storeProgressReport,
     workflowStatus,
@@ -42,6 +43,17 @@ interface ProgressReport {
 }
 interface UploadedFile { id: number; remote_file_id: string | null; title: string; status: string; }
 interface MilestoneStatus { has_progress: boolean; has_certificate: boolean; status: string; }
+interface RenderedProgressFile {
+    file_id: string;
+    url: string | null;
+    title: string | null;
+    mime: string | null;
+    source: string;
+}
+interface RenderedReportFiles {
+    previous: RenderedProgressFile[];
+    current: RenderedProgressFile[];
+}
 
 const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; relaxedMilestoneRules?: boolean; }>();
 
@@ -68,6 +80,8 @@ const isLoadingReports = ref(false);
 const milestoneStatuses = ref<Record<string, MilestoneStatus>>({});
 const isPolling = ref(false);
 const message = ref<{ type: 'success' | 'error'; text: string } | null>(null);
+const renderedReportFiles = ref<Record<number, RenderedReportFiles>>({});
+const isLoadingReportFiles = ref<Record<number, boolean>>({});
 
 // Per-milestone upload state
 const expandedMilestone = ref<string | null>(null);
@@ -90,6 +104,9 @@ async function loadData() {
         ]);
         if (reportsRes.data.success) reports.value = reportsRes.data.data;
         if (statusRes.data.success) milestoneStatuses.value = statusRes.data.milestones;
+        if (expandedMilestone.value) {
+            await loadFilesForMilestone(expandedMilestone.value);
+        }
     } catch (error: any) {
         console.error('[TrackAI] failed to load progress data:', {
             contractId: selectedContractId.value,
@@ -120,7 +137,10 @@ onMounted(() => {
     loadData();
     getCurrentPosition();
 });
-watch(activeContractId, loadData);
+watch(activeContractId, () => {
+    renderedReportFiles.value = {};
+    void loadData();
+});
 
 function addTag(milestone: string) {
     if (!canEditMilestone(milestone)) return;
@@ -205,6 +225,69 @@ function progressUploadTitle(milestone: string): string {
 
 function toggleMilestone(milestone: string) {
     expandedMilestone.value = expandedMilestone.value === milestone ? null : milestone;
+
+    if (expandedMilestone.value === milestone) {
+        void loadFilesForMilestone(milestone);
+    }
+}
+
+function hasReportFileIds(report: ProgressReport): boolean {
+    return Boolean(
+        report.previous_progress_file_ids?.length ||
+        report.current_progress_file_ids?.length,
+    );
+}
+
+async function loadFilesForMilestone(milestone: string) {
+    await Promise.all(reportsForMilestone(milestone).map(loadReportFiles));
+}
+
+async function loadReportFiles(report: ProgressReport) {
+    if (!hasReportFileIds(report) || renderedReportFiles.value[report.id] || isLoadingReportFiles.value[report.id]) {
+        return;
+    }
+
+    isLoadingReportFiles.value[report.id] = true;
+
+    try {
+        const response = await axios.get(progressReportFiles.url(report.id));
+
+        if (response.data.success) {
+            renderedReportFiles.value[report.id] = response.data.files;
+        }
+    } catch (error: any) {
+        console.warn('[TrackAI] failed to resolve progress file URLs:', {
+            reportId: report.id,
+            status: error.response?.status,
+            response: error.response?.data,
+        });
+        renderedReportFiles.value[report.id] = {
+            previous: fallbackFileReferences(report.previous_progress_file_ids),
+            current: fallbackFileReferences(report.current_progress_file_ids),
+        };
+    } finally {
+        isLoadingReportFiles.value[report.id] = false;
+    }
+}
+
+function fallbackFileReferences(fileIds: string[] | null): RenderedProgressFile[] {
+    return (fileIds ?? []).map((fileId) => ({
+        file_id: fileId,
+        url: null,
+        title: null,
+        mime: null,
+        source: 'saras',
+    }));
+}
+
+function filesForReport(report: ProgressReport, kind: 'previous' | 'current'): RenderedProgressFile[] {
+    return renderedReportFiles.value[report.id]?.[kind] ?? fallbackFileReferences(
+        kind === 'previous' ? report.previous_progress_file_ids : report.current_progress_file_ids,
+    );
+}
+
+function displayFileTitle(file: RenderedProgressFile): string {
+    return file.title || file.file_id;
 }
 
 // File upload per milestone
@@ -407,6 +490,57 @@ const canSubmitMilestone = (milestone: string) => {
                                 <div class="flex gap-3 text-xs text-muted-foreground">
                                     <span v-if="report.previous_progress_file_ids?.length">{{ report.previous_progress_file_ids.length }} prev</span>
                                     <span v-if="report.current_progress_file_ids?.length">{{ report.current_progress_file_ids.length }} current</span>
+                                </div>
+                                <div v-if="hasReportFileIds(report)" class="space-y-3">
+                                    <div v-if="isLoadingReportFiles[report.id]" class="grid grid-cols-2 gap-2">
+                                        <div v-for="i in 2" :key="i" class="h-28 rounded-md bg-muted animate-pulse"></div>
+                                    </div>
+
+                                    <template v-else>
+                                        <div v-if="filesForReport(report, 'previous').length" class="space-y-1.5">
+                                            <p class="text-[11px] font-medium uppercase text-muted-foreground">Previous Progress Files</p>
+                                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                                <a
+                                                    v-for="file in filesForReport(report, 'previous')"
+                                                    :key="`previous-${report.id}-${file.file_id}`"
+                                                    :href="file.url || undefined"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="min-w-0 rounded-md border bg-background p-2 text-xs transition hover:bg-muted/60"
+                                                    :class="!file.url ? 'pointer-events-none' : ''"
+                                                >
+                                                    <div class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
+                                                        <img v-if="file.url" :src="file.url" :alt="displayFileTitle(file)" class="h-full w-full object-cover" loading="lazy" />
+                                                        <Camera v-else class="h-6 w-6 text-muted-foreground" />
+                                                    </div>
+                                                    <span class="mt-1.5 block truncate font-medium">{{ displayFileTitle(file) }}</span>
+                                                    <span class="block truncate text-[10px] text-muted-foreground">Saras file: {{ file.file_id }}</span>
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        <div v-if="filesForReport(report, 'current').length" class="space-y-1.5">
+                                            <p class="text-[11px] font-medium uppercase text-muted-foreground">Current Progress Files</p>
+                                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                                <a
+                                                    v-for="file in filesForReport(report, 'current')"
+                                                    :key="`current-${report.id}-${file.file_id}`"
+                                                    :href="file.url || undefined"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="min-w-0 rounded-md border bg-background p-2 text-xs transition hover:bg-muted/60"
+                                                    :class="!file.url ? 'pointer-events-none' : ''"
+                                                >
+                                                    <div class="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted">
+                                                        <img v-if="file.url" :src="file.url" :alt="displayFileTitle(file)" class="h-full w-full object-cover" loading="lazy" />
+                                                        <Camera v-else class="h-6 w-6 text-muted-foreground" />
+                                                    </div>
+                                                    <span class="mt-1.5 block truncate font-medium">{{ displayFileTitle(file) }}</span>
+                                                    <span class="block truncate text-[10px] text-muted-foreground">Saras file: {{ file.file_id }}</span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
                                 <div v-if="report.certificate_file_id" class="flex items-center gap-2 p-2 rounded bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
                                     <Award class="h-3 w-3 text-green-600" />

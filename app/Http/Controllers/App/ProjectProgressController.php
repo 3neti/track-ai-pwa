@@ -152,6 +152,24 @@ class ProjectProgressController extends Controller
     }
 
     /**
+     * Resolve renderable file metadata for a progress report.
+     */
+    public function files(ProjectProgressReport $progressReport): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'files' => [
+                'previous' => $this->progressService->resolveProgressFileReferences(
+                    $progressReport->previous_progress_file_ids ?? [],
+                ),
+                'current' => $this->progressService->resolveProgressFileReferences(
+                    $progressReport->current_progress_file_ids ?? [],
+                ),
+            ],
+        ]);
+    }
+
+    /**
      * Attach stage files to a progress report.
      */
     public function attachStageFiles(ProjectProgressReport $progressReport): JsonResponse

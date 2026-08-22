@@ -4,6 +4,7 @@ use App\Contracts\SarasClientInterface;
 use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
+use App\Models\Upload;
 use App\Models\User;
 use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\WorkflowResponse;
@@ -134,6 +135,84 @@ test('progress reports can be listed for a project', function () {
     $response->assertSuccessful()
         ->assertJson(['success' => true])
         ->assertJsonCount(3, 'data');
+});
+
+test('progress report files are resolved for rendering', function () {
+    $report = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'previous_progress_file_ids' => ['previous-file-id'],
+        'current_progress_file_ids' => ['current-file-id'],
+    ]);
+
+    Upload::create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-id',
+        'remote_file_id' => 'current-file-id',
+        'title' => 'Demo Contract-Foundation',
+        'document_type' => 'current_progress',
+        'mime' => 'image/png',
+        'status' => 'uploaded',
+        'client_request_id' => fake()->uuid(),
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getFileUrl')
+        ->once()
+        ->with(config('saras.subproject_ids.project_progress'), 'previous-file-id')
+        ->andReturn([
+            'urls' => [[
+                'fileId' => 'previous-file-id',
+                'url' => 'https://storage.test/previous-file-id',
+            ]],
+        ]);
+    $client->shouldReceive('getFileUrl')
+        ->once()
+        ->with(config('saras.subproject_ids.project_progress'), 'current-file-id')
+        ->andReturn([
+            'urls' => [[
+                'fileId' => 'current-file-id',
+                'url' => 'https://storage.test/current-file-id',
+            ]],
+        ]);
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->getJson("/api/progress-reports/{$report->id}/files");
+
+    $response->assertSuccessful()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('files.previous.0.file_id', 'previous-file-id')
+        ->assertJsonPath('files.previous.0.url', 'https://storage.test/previous-file-id')
+        ->assertJsonPath('files.current.0.file_id', 'current-file-id')
+        ->assertJsonPath('files.current.0.url', 'https://storage.test/current-file-id')
+        ->assertJsonPath('files.current.0.title', 'Demo Contract-Foundation')
+        ->assertJsonPath('files.current.0.mime', 'image/png');
+});
+
+test('progress report files remain renderable when Saras URL lookup fails', function () {
+    $report = ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'previous_progress_file_ids' => [],
+        'current_progress_file_ids' => ['current-file-id'],
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('getFileUrl')
+        ->once()
+        ->with(config('saras.subproject_ids.project_progress'), 'current-file-id')
+        ->andThrow(new RuntimeException('Saras storage unavailable'));
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->getJson("/api/progress-reports/{$report->id}/files");
+
+    $response->assertSuccessful()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('files.current.0.file_id', 'current-file-id')
+        ->assertJsonPath('files.current.0.url', null);
 });
 
 test('progress report stores file IDs as arrays', function () {
