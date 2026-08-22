@@ -1,6 +1,7 @@
 <?php
 
 use App\Lifecycle\Scenarios\LifecycleScenarioRepository;
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,6 +39,47 @@ test('run basic_progress scenario', function () {
         'user_id' => $this->user->id,
         'current_milestone' => 'Foundation',
     ]);
+});
+
+test('run basic_progress scenario with contract override without changing project config', function () {
+    $this->project->forceFill([
+        'contract_id' => 'project-contract-id',
+    ])->save();
+
+    Contract::factory()->create([
+        'saras_process_id' => 'override-contract-process-id',
+        'name' => 'Demo Contract',
+    ]);
+
+    $this->artisan('trackai:lifecycle:run', [
+        'scenario' => 'basic_progress',
+        '--user' => $this->user->id,
+        '--project' => $this->project->id,
+        '--contract' => 'override-contract-process-id',
+    ])->assertExitCode(0);
+
+    $this->assertDatabaseHas('projects', [
+        'id' => $this->project->id,
+        'contract_id' => 'project-contract-id',
+    ]);
+
+    $this->assertDatabaseHas('project_progress_reports', [
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'override-contract-process-id',
+        'current_milestone' => 'Foundation',
+    ]);
+});
+
+test('contract override must exist in cached contracts', function () {
+    $this->artisan('trackai:lifecycle:run', [
+        'scenario' => 'basic_progress',
+        '--user' => $this->user->id,
+        '--project' => $this->project->id,
+        '--contract' => 'missing-contract-process-id',
+    ])
+        ->expectsOutputToContain('Unable to resolve lifecycle contract [missing-contract-process-id]')
+        ->assertExitCode(1);
 });
 
 test('run full_lifecycle scenario', function () {

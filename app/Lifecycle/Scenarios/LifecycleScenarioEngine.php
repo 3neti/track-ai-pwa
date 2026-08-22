@@ -66,6 +66,7 @@ final class LifecycleScenarioEngine
                 scenario: $resolution->scenario,
                 userIdOption: $options->userId,
                 projectIdOption: $options->projectId,
+                contractIdOption: $options->contractId,
                 timeoutOption: $options->timeout,
                 pollOption: $options->poll,
             );

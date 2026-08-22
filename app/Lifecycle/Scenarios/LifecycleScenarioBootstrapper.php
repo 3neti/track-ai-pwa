@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Lifecycle\Scenarios;
 
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
@@ -21,6 +22,7 @@ final class LifecycleScenarioBootstrapper
         array $scenario,
         ?int $userIdOption = null,
         ?int $projectIdOption = null,
+        ?string $contractIdOption = null,
         ?int $timeoutOption = null,
         ?int $pollOption = null,
     ): LifecycleScenarioBootstrapResult {
@@ -57,7 +59,10 @@ final class LifecycleScenarioBootstrapper
         }
 
         $project = $this->resolveProject($projectId);
-        $contractId = $project->contract_id ?: config('saras.default_contract_id', '');
+        $contractId = $this->resolveContractId(
+            project: $project,
+            contractIdOverride: $contractIdOption ?? data_get($scenario, 'contract_id'),
+        );
 
         return new LifecycleScenarioBootstrapResult(
             user: $user,
@@ -151,5 +156,24 @@ final class LifecycleScenarioBootstrapper
         }
 
         return $project;
+    }
+
+    private function resolveContractId(Project $project, mixed $contractIdOverride): string
+    {
+        if (is_string($contractIdOverride) && trim($contractIdOverride) !== '') {
+            $contractId = trim($contractIdOverride);
+
+            $exists = Contract::where('saras_process_id', $contractId)->exists();
+
+            if (! $exists) {
+                throw new RuntimeException(
+                    "Unable to resolve lifecycle contract [{$contractId}]. Sync contracts first or choose a cached Saras contract process ID."
+                );
+            }
+
+            return $contractId;
+        }
+
+        return $project->contract_id ?: config('saras.default_contract_id', '');
     }
 }

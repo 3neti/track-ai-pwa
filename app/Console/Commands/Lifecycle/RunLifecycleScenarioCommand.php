@@ -19,6 +19,7 @@ class RunLifecycleScenarioCommand extends Command
         {--list : List available scenarios}
         {--user= : User ID to run as}
         {--project= : Project ID to use}
+        {--contract= : Saras contract process ID to use for this run without changing the project}
         {--timeout= : Poll timeout in seconds}
         {--poll= : Poll interval in seconds}
         {--json : Output JSON}

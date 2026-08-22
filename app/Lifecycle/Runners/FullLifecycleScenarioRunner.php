@@ -25,6 +25,7 @@ final class FullLifecycleScenarioRunner implements ScenarioRunnerContract
             user: $context->user,
             project: $context->project,
             input: [
+                'contract_id' => $context->contractId,
                 'current_milestone' => $context->currentMilestone(),
                 'remarks' => $context->remarks(),
             ],

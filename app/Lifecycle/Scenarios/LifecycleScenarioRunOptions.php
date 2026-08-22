@@ -9,6 +9,7 @@ final readonly class LifecycleScenarioRunOptions
     public function __construct(
         public ?int $userId = null,
         public ?int $projectId = null,
+        public ?string $contractId = null,
         public ?int $timeout = null,
         public ?int $poll = null,
         public bool $json = false,
@@ -25,6 +26,7 @@ final readonly class LifecycleScenarioRunOptions
         return new self(
             userId: self::intOrNull($options['user'] ?? null),
             projectId: self::intOrNull($options['project'] ?? null),
+            contractId: self::stringOrNull($options['contract'] ?? null),
             timeout: self::intOrNull($options['timeout'] ?? null),
             poll: self::intOrNull($options['poll'] ?? null),
             json: (bool) ($options['json'] ?? false),
