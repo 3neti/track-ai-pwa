@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
-import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Award, Info, ChevronDown, ChevronUp } from 'lucide-vue-next';
+import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Info, ChevronDown, ChevronUp, FileText, Download } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,6 +53,7 @@ interface RenderedProgressFile {
 interface RenderedReportFiles {
     previous: RenderedProgressFile[];
     current: RenderedProgressFile[];
+    certificate: RenderedProgressFile[];
 }
 
 const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; relaxedMilestoneRules?: boolean; }>();
@@ -234,7 +235,8 @@ function toggleMilestone(milestone: string) {
 function hasReportFileIds(report: ProgressReport): boolean {
     return Boolean(
         report.previous_progress_file_ids?.length ||
-        report.current_progress_file_ids?.length,
+        report.current_progress_file_ids?.length ||
+        report.certificate_file_id,
     );
 }
 
@@ -268,6 +270,7 @@ async function loadReportFiles(report: ProgressReport) {
         renderedReportFiles.value[report.id] = {
             previous: fallbackFileReferences(report.previous_progress_file_ids),
             current: fallbackFileReferences(report.current_progress_file_ids),
+            certificate: fallbackFileReferences(report.certificate_file_id ? [report.certificate_file_id] : []),
         };
     } finally {
         isLoadingReportFiles.value[report.id] = false;
@@ -284,9 +287,15 @@ function fallbackFileReferences(fileIds: string[] | null): RenderedProgressFile[
     }));
 }
 
-function filesForReport(report: ProgressReport, kind: 'previous' | 'current'): RenderedProgressFile[] {
+function filesForReport(report: ProgressReport, kind: 'previous' | 'current' | 'certificate'): RenderedProgressFile[] {
     return renderedReportFiles.value[report.id]?.[kind] ?? fallbackFileReferences(
-        kind === 'previous' ? report.previous_progress_file_ids : report.current_progress_file_ids,
+        kind === 'previous'
+            ? report.previous_progress_file_ids
+            : kind === 'current'
+                ? report.current_progress_file_ids
+                : report.certificate_file_id
+                    ? [report.certificate_file_id]
+                    : [],
     );
 }
 
@@ -560,11 +569,39 @@ const canSubmitMilestone = (milestone: string) => {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        <div v-if="filesForReport(report, 'certificate').length" class="space-y-1.5">
+                                            <p class="text-[11px] font-medium uppercase text-muted-foreground">Certificate of Completion</p>
+                                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                <div
+                                                    v-for="file in filesForReport(report, 'certificate')"
+                                                    :key="`certificate-${report.id}-${file.file_id}`"
+                                                    class="min-w-0 rounded-md border border-green-200 bg-green-50 p-2 text-xs dark:border-green-800 dark:bg-green-950"
+                                                >
+                                                    <div class="flex items-start gap-2">
+                                                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-background">
+                                                            <FileText class="h-5 w-5 text-green-700 dark:text-green-300" />
+                                                        </div>
+                                                        <div class="min-w-0 flex-1">
+                                                            <span class="block truncate font-medium text-green-900 dark:text-green-100">{{ displayFileTitle(file) }}</span>
+                                                            <span class="block truncate text-[10px] text-green-700 dark:text-green-300">Saras file: {{ file.file_id }}</span>
+                                                            <a
+                                                                v-if="file.url"
+                                                                :href="file.url"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                download
+                                                                class="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-green-300 bg-background px-2 text-[11px] font-medium text-green-800 transition hover:bg-green-100 dark:border-green-800 dark:text-green-200 dark:hover:bg-green-900"
+                                                            >
+                                                                <Download class="h-3 w-3" />
+                                                                Download
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </template>
-                                </div>
-                                <div v-if="report.certificate_file_id" class="flex items-center gap-2 p-2 rounded bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
-                                    <Award class="h-3 w-3 text-green-600" />
-                                    <span class="text-xs text-green-700 dark:text-green-300">Certificate available</span>
                                 </div>
                                 <Button v-if="report.saras_process_id && ['submitted', 'processing'].includes(report.progress_status)" size="sm" variant="outline" class="h-7 text-xs" @click.stop="handlePollStatus(report)" :disabled="isPolling">
                                     <Loader2 v-if="isPolling" class="mr-1 h-3 w-3 animate-spin" /><Clock v-else class="mr-1 h-3 w-3" /> Check Status

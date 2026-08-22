@@ -165,6 +165,28 @@ class ProjectProgressService
             ->all();
     }
 
+    /**
+     * Resolve a Saras certificate file into renderable metadata for the PWA.
+     *
+     * @return array<int, array{file_id: string, url: ?string, title: ?string, mime: ?string, source: string}>
+     */
+    public function resolveCertificateFileReference(ProjectProgressReport $progressReport): array
+    {
+        if (! $progressReport->certificate_file_id) {
+            return [];
+        }
+
+        $certificate = data_get($progressReport->raw_saras_response, 'fields.certificateOfCompletion');
+
+        return [[
+            'file_id' => $progressReport->certificate_file_id,
+            'url' => $this->resolveProgressFileUrl($progressReport->certificate_file_id),
+            'title' => $this->normalizeFirstFileName($certificate) ?? 'certificateOfCompletion.pdf',
+            'mime' => 'application/pdf',
+            'source' => 'saras',
+        ]];
+    }
+
     private function resolveProgressFileUrl(string $fileId): ?string
     {
         try {
@@ -451,6 +473,21 @@ class ProjectProgressService
 
             if (array_is_list($value)) {
                 return $this->normalizeFirstFileId($value[0] ?? null);
+            }
+        }
+
+        return null;
+    }
+
+    protected function normalizeFirstFileName(mixed $value): ?string
+    {
+        if (is_array($value)) {
+            if (isset($value['fileName']) && is_string($value['fileName']) && $value['fileName'] !== '') {
+                return $value['fileName'];
+            }
+
+            if (array_is_list($value)) {
+                return $this->normalizeFirstFileName($value[0] ?? null);
             }
         }
 

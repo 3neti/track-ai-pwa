@@ -165,6 +165,7 @@ class ProjectProgressController extends Controller
                 'current' => $this->progressService->resolveProgressFileReferences(
                     $progressReport->current_progress_file_ids ?? [],
                 ),
+                'certificate' => $this->progressService->resolveCertificateFileReference($progressReport),
             ],
         ]);
     }

@@ -143,6 +143,15 @@ test('progress report files are resolved for rendering', function () {
         'user_id' => $this->user->id,
         'previous_progress_file_ids' => ['previous-file-id'],
         'current_progress_file_ids' => ['current-file-id'],
+        'certificate_file_id' => 'certificate-file-id',
+        'raw_saras_response' => [
+            'fields' => [
+                'certificateOfCompletion' => [
+                    'id' => 'certificate-file-id',
+                    'fileName' => 'certificateOfCompletion.pdf',
+                ],
+            ],
+        ],
     ]);
 
     Upload::create([
@@ -176,6 +185,15 @@ test('progress report files are resolved for rendering', function () {
                 'url' => 'https://storage.test/current-file-id',
             ]],
         ]);
+    $client->shouldReceive('getFileUrl')
+        ->once()
+        ->with(config('saras.subproject_ids.project_progress'), 'certificate-file-id')
+        ->andReturn([
+            'urls' => [[
+                'fileId' => 'certificate-file-id',
+                'url' => 'https://storage.test/certificate-file-id',
+            ]],
+        ]);
     $this->app->instance(SarasClientInterface::class, $client);
 
     $response = $this->actingAs($this->user)
@@ -188,7 +206,11 @@ test('progress report files are resolved for rendering', function () {
         ->assertJsonPath('files.current.0.file_id', 'current-file-id')
         ->assertJsonPath('files.current.0.url', 'https://storage.test/current-file-id')
         ->assertJsonPath('files.current.0.title', 'Demo Contract-Foundation')
-        ->assertJsonPath('files.current.0.mime', 'image/png');
+        ->assertJsonPath('files.current.0.mime', 'image/png')
+        ->assertJsonPath('files.certificate.0.file_id', 'certificate-file-id')
+        ->assertJsonPath('files.certificate.0.url', 'https://storage.test/certificate-file-id')
+        ->assertJsonPath('files.certificate.0.title', 'certificateOfCompletion.pdf')
+        ->assertJsonPath('files.certificate.0.mime', 'application/pdf');
 });
 
 test('progress report files remain renderable when Saras URL lookup fails', function () {
@@ -543,6 +565,10 @@ test('saras project progress sync creates local cache records', function () {
                     'remarks' => 'Remote progress from Saras with current files.',
                     'previousProgressFiles' => [['id' => 'prev-file-1']],
                     'currentProgressFiles' => [['id' => 'curr-file-1'], 'curr-file-2'],
+                    'certificateOfCompletion' => [
+                        'id' => 'certificate-file-id',
+                        'fileName' => 'certificateOfCompletion.pdf',
+                    ],
                 ],
             ]],
         ]);
@@ -557,7 +583,9 @@ test('saras project progress sync creates local cache records', function () {
         'saras_process_id' => 'remote-progress-1',
         'contract_id' => 'contract-from-saras',
         'current_milestone' => 'Foundation',
-        'progress_status' => ProjectProgressReport::STATUS_SUBMITTED,
+        'progress_status' => ProjectProgressReport::STATUS_EVALUATED,
+        'completion_status' => 'SUCCESS',
+        'certificate_file_id' => 'certificate-file-id',
         'source' => ProjectProgressReport::SOURCE_SARAS,
         'remote_deleted_at' => null,
     ]);
