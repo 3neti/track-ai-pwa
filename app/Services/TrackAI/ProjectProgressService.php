@@ -387,7 +387,7 @@ class ProjectProgressService
                 'ipAddress' => $input['ip_address'] ?? '',
                 'date' => now('Asia/Manila')->toDateString(),
                 'time' => now('Asia/Manila')->toIso8601String(),
-                'name' => 'Progress Report - '.now('Asia/Manila')->toDateString(),
+                'name' => $this->progressReportName($contractId, $milestone),
                 'tags' => ! empty($input['tags'])
                     ? array_values($input['tags'])
                     : ['progress', 'track-ai'],
@@ -435,6 +435,15 @@ class ProjectProgressService
         }
 
         return $report->fresh();
+    }
+
+    protected function progressReportName(string $contractId, string $milestone): string
+    {
+        $contractName = Contract::where('saras_process_id', $contractId)->value('name')
+            ?: $contractId
+            ?: 'Contract';
+
+        return "{$contractName}-{$milestone}";
     }
 
     /**

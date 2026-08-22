@@ -5,6 +5,7 @@ use App\Models\Contract;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Models\User;
+use App\Services\Saras\DTO\ProcessResponse;
 use App\Services\Saras\DTO\WorkflowResponse;
 use App\Services\Saras\DTO\WorkflowRunsResponse;
 use App\Services\TrackAI\ProjectProgressService;
@@ -73,6 +74,50 @@ test('progress report records location trust evidence', function () {
         ->and($report->location_evidence['latitude'])->toEqual(0.0)
         ->and($report->location_evidence['longitude'])->toEqual(0.0)
         ->and($report->location_evidence['accuracy_meters'])->toEqual(275.0);
+});
+
+test('project progress Saras payload uses contract name and milestone as the name', function () {
+    config(['saras.feature_flags.progress_enabled' => true]);
+
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-process-id',
+        'name' => 'P00916650LZ-1',
+        'milestones' => ['Floor3'],
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('createProcess')
+        ->once()
+        ->withArgs(function (string $subProjectId, array $fields, ?string $idempotencyKey, ?string $parentProcessId): bool {
+            return $subProjectId === config('saras.subproject_ids.project_progress')
+                && $parentProcessId === 'contract-process-id'
+                && ($fields['name'] ?? null) === 'P00916650LZ-1-Floor3'
+                && ! array_key_exists('title', $fields);
+        })
+        ->andReturn(new ProcessResponse(
+            success: true,
+            entryId: 'progress-entry-id',
+            processId: 'progress-process-id',
+            message: 'Created',
+            createdAt: now()->toIso8601String(),
+        ));
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/progress-reports", [
+            'contract_id' => 'contract-process-id',
+            'current_milestone' => 'Floor3',
+            'remarks' => 'Demo progress update submitted for Floor3.',
+            'current_progress_file_ids' => ['current-file-id'],
+        ]);
+
+    $response->assertSuccessful();
+
+    $this->assertDatabaseHas('project_progress_reports', [
+        'contract_id' => 'contract-process-id',
+        'current_milestone' => 'Floor3',
+        'saras_process_id' => 'progress-process-id',
+    ]);
 });
 
 test('progress reports can be listed for a project', function () {
