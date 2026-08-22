@@ -173,7 +173,7 @@ function isMilestoneBlockedByOrder(milestone: string): boolean {
 }
 
 function canEditMilestone(milestone: string): boolean {
-    if (props.relaxedMilestoneRules) return true;
+    if (props.relaxedMilestoneRules !== false) return true;
 
     return !isMilestoneLocked(milestone) && !isMilestoneBlockedByOrder(milestone);
 }
@@ -256,7 +256,7 @@ async function handleSubmit(milestone: string) {
         message.value = { type: 'error', text: milestoneLockMessage(milestone) };
         return;
     }
-    if (!hasExplanatoryRemarks(milestone)) {
+    if (props.relaxedMilestoneRules === false && !hasExplanatoryRemarks(milestone)) {
         message.value = { type: 'error', text: 'Engineer remarks should explain the observed progress in at least 20 characters.' };
         return;
     }
@@ -276,7 +276,9 @@ async function handleSubmit(milestone: string) {
         const r = await axios.post(storeProgressReport.url(selectedProject.value.id), {
             contract_id: selectedContractId.value,
             current_milestone: milestone,
-            remarks: uploadRemarks.value[milestone] || null,
+            remarks: hasExplanatoryRemarks(milestone)
+                ? uploadRemarks.value[milestone]
+                : `Demo progress update submitted for ${milestone}.`,
             tags: uploadTags.value[milestone] ?? [],
             geo_location: geoLocation,
             latitude: geoState.value.latitude,
@@ -319,6 +321,10 @@ const statusConfig = (s: string) => ({
 }[s] || { label: s, variant: 'secondary' as const });
 
 const canSubmitMilestone = (milestone: string) => {
+    if (props.relaxedMilestoneRules !== false) {
+        return !isSubmitting.value[milestone];
+    }
+
     return hasExplanatoryRemarks(milestone)
         && !isSubmitting.value[milestone]
         && (uploadFiles.value[milestone]?.length ?? 0) > 0;
