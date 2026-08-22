@@ -7,6 +7,7 @@ use App\Models\ProjectProgressReport;
 use App\Models\Upload;
 use App\Models\User;
 use App\Services\Saras\DTO\FileUploadResponse;
+use App\Services\Saras\DTO\ProcessResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 
@@ -543,6 +544,55 @@ test('new file endpoint uploads and updates status', function () {
     expect($upload->status)->toBe('uploaded');
     expect($upload->entry_id)->not->toBeNull();
     expect($upload->remote_file_id)->not->toBeNull();
+});
+
+test('generic upload process payload sends title instead of name', function () {
+    config([
+        'saras.subproject_ids.trackdata' => 'trackdata-subproject',
+    ]);
+
+    $client = Mockery::mock(SarasClientInterface::class);
+    $client->shouldReceive('uploadFiles')
+        ->once()
+        ->with(Mockery::type('array'), 'trackdata-subproject')
+        ->andReturn(new FileUploadResponse(
+            success: true,
+            fileIds: ['generic-file-id'],
+            message: 'Uploaded',
+        ));
+    $client->shouldReceive('createProcess')
+        ->once()
+        ->withArgs(function (string $subProjectId, array $fields): bool {
+            return $subProjectId === 'trackdata-subproject'
+                && ($fields['title'] ?? null) === 'New Flow Upload'
+                && ! array_key_exists('name', $fields);
+        })
+        ->andReturn(new ProcessResponse(
+            success: true,
+            entryId: 'entry-id',
+            processId: 'process-id',
+            message: 'Created',
+            createdAt: now()->toIso8601String(),
+        ));
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $upload = Upload::create([
+        'user_id' => $this->user->id,
+        'project_id' => $this->project->id,
+        'contract_id' => $this->project->external_id,
+        'title' => 'New Flow Upload',
+        'document_type' => 'equipment_pictures',
+        'status' => 'pending',
+        'client_request_id' => fake()->uuid(),
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads/{$upload->id}/file", [
+            'file' => UploadedFile::fake()->image('photo.jpg', 200, 200),
+        ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('upload.entry_id', 'entry-id');
 });
 
 test('current progress file endpoint stores images in the project progress Saras subproject', function () {
