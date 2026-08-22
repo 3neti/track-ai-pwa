@@ -197,6 +197,12 @@ function hasExplanatoryRemarks(milestone: string): boolean {
     return (uploadRemarks.value[milestone] ?? '').trim().length >= 20;
 }
 
+function progressUploadTitle(milestone: string): string {
+    const contractName = selectedContract.value?.name || selectedContractId.value || 'Contract';
+
+    return `${contractName}-${milestone}`;
+}
+
 function toggleMilestone(milestone: string) {
     expandedMilestone.value = expandedMilestone.value === milestone ? null : milestone;
 }
@@ -216,10 +222,11 @@ async function handleFileUpload(event: Event, milestone: string) {
 
     for (const file of files) {
         try {
+            const title = progressUploadTitle(milestone);
             const cr = await axios.post(`/api/projects/${selectedProject.value.id}/uploads`, {
                 contract_id: selectedContractId.value,
                 client_request_id: makeClientRequestId(),
-                title: file.name,
+                title,
                 document_type: 'current_progress',
                 tags: ['progress', 'current_progress', milestone],
             });
@@ -232,7 +239,7 @@ async function handleFileUpload(event: Event, milestone: string) {
             if (ur.data.success && ur.data.upload) {
                 uploadFiles.value[milestone].push({
                     id: ur.data.upload.id, remote_file_id: ur.data.upload.remote_file_id,
-                    title: file.name, status: ur.data.upload.status,
+                    title: ur.data.upload.title || title, status: ur.data.upload.status,
                 });
             }
         } catch (err: any) {

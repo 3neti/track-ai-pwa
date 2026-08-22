@@ -156,6 +156,31 @@ test('current progress upload can be created before previous milestone has progr
     $response->assertCreated();
 });
 
+test('current progress upload title is derived from contract name and milestone', function () {
+    Contract::factory()->create([
+        'saras_process_id' => 'contract-title',
+        'name' => 'DPWH Contract R3',
+        'milestones' => ['Foundation'],
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->postJson("/api/projects/{$this->project->id}/uploads", [
+            'client_request_id' => fake()->uuid(),
+            'contract_id' => 'contract-title',
+            'title' => 'site-photo-001.jpg',
+            'document_type' => 'current_progress',
+            'tags' => ['progress', 'current_progress', 'Foundation'],
+        ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('upload.title', 'DPWH Contract R3-Foundation');
+
+    $this->assertDatabaseHas('uploads', [
+        'contract_id' => 'contract-title',
+        'title' => 'DPWH Contract R3-Foundation',
+    ]);
+});
+
 test('project scoped upload actions reject uploads from another project', function () {
     $otherProject = Project::create([
         'external_id' => 'TEST-PROJECT-002',

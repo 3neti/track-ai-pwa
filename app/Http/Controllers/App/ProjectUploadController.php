@@ -6,6 +6,7 @@ use App\Contracts\SarasClientInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\App\StoreUploadRequest;
 use App\Http\Requests\App\UpdateUploadRequest;
+use App\Models\Contract;
 use App\Models\Project;
 use App\Models\Upload;
 use App\Services\TrackAI\ProjectProgressService;
@@ -107,6 +108,9 @@ class ProjectUploadController extends Controller
         $user = $request->user();
         $validated = $request->validated();
         $milestone = $this->currentProgressMilestone($validated);
+        $title = $milestone
+            ? $this->currentProgressTitle($validated['contract_id'], $milestone)
+            : $validated['title'];
 
         $blocker = $milestone
             ? $this->progressService->uploadSubmissionBlocker($validated['contract_id'], $milestone)
@@ -122,7 +126,7 @@ class ProjectUploadController extends Controller
         $upload = $this->uploadService->createUploadRecord(
             userId: $user->id,
             contractId: $validated['contract_id'],
-            title: $validated['title'],
+            title: $title,
             documentType: $validated['document_type'],
             clientRequestId: $validated['client_request_id'],
             tags: $validated['tags'] ?? null,
@@ -318,5 +322,14 @@ class ProjectUploadController extends Controller
         }
 
         return null;
+    }
+
+    protected function currentProgressTitle(string $contractId, string $milestone): string
+    {
+        $contractName = Contract::where('saras_process_id', $contractId)->value('name')
+            ?: $contractId
+            ?: 'Contract';
+
+        return "{$contractName}-{$milestone}";
     }
 }
