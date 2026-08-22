@@ -43,7 +43,7 @@ interface ProgressReport {
 interface UploadedFile { id: number; remote_file_id: string | null; title: string; status: string; }
 interface MilestoneStatus { has_progress: boolean; has_certificate: boolean; status: string; }
 
-const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; }>();
+const props = defineProps<{ projects: Project[]; contracts: Contract[]; defaultProjectId?: string; relaxedMilestoneRules?: boolean; }>();
 
 const { pendingCount, syncStatus, isOnline, triggerSync } = useOfflineQueue();
 const { activeContractId, clearActiveContract } = useActiveContract();
@@ -173,6 +173,8 @@ function isMilestoneBlockedByOrder(milestone: string): boolean {
 }
 
 function canEditMilestone(milestone: string): boolean {
+    if (props.relaxedMilestoneRules) return true;
+
     return !isMilestoneLocked(milestone) && !isMilestoneBlockedByOrder(milestone);
 }
 
@@ -317,8 +319,7 @@ const statusConfig = (s: string) => ({
 }[s] || { label: s, variant: 'secondary' as const });
 
 const canSubmitMilestone = (milestone: string) => {
-    return canEditMilestone(milestone)
-        && hasExplanatoryRemarks(milestone)
+    return hasExplanatoryRemarks(milestone)
         && !isSubmitting.value[milestone]
         && (uploadFiles.value[milestone]?.length ?? 0) > 0;
 };

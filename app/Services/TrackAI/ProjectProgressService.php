@@ -61,6 +61,10 @@ class ProjectProgressService
 
     public function progressSubmissionBlocker(string $contractId, string $milestone): ?string
     {
+        if (config('saras.feature_flags.relaxed_progress_milestone_rules', true)) {
+            return null;
+        }
+
         $orderBlocker = $this->milestoneOrderBlocker($contractId, $milestone);
 
         if ($orderBlocker !== null) {

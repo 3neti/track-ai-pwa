@@ -285,7 +285,7 @@ test('validation requires explanatory remarks', function () {
         ->assertJsonValidationErrors('remarks');
 });
 
-test('progress report cannot be created for an in progress milestone', function () {
+test('progress report can be created for an in progress milestone while milestone rules are relaxed', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -302,14 +302,11 @@ test('progress report cannot be created for an in progress milestone', function 
             'current_progress_file_ids' => ['new-file-id'],
         ]);
 
-    $response->assertStatus(423)
-        ->assertJson([
-            'success' => false,
-            'message' => 'This milestone is already in progress and cannot be edited.',
-        ]);
+    $response->assertSuccessful()
+        ->assertJson(['success' => true]);
 });
 
-test('later milestone cannot be submitted before previous milestone has progress', function () {
+test('later milestone can be submitted before previous milestone has progress while milestone rules are relaxed', function () {
     Contract::factory()->create([
         'saras_process_id' => 'contract-ordered',
         'milestones' => ['Foundation', 'Framing'],
@@ -323,11 +320,8 @@ test('later milestone cannot be submitted before previous milestone has progress
             'current_progress_file_ids' => ['new-file-id'],
         ]);
 
-    $response->assertStatus(423)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Submit Foundation before submitting Framing.',
-        ]);
+    $response->assertSuccessful()
+        ->assertJson(['success' => true]);
 });
 
 test('later milestone can be submitted after previous milestone has progress', function () {
@@ -381,7 +375,7 @@ test('rejected milestone can be resubmitted', function () {
         ->assertJson(['success' => true]);
 });
 
-test('progress report cannot be created when Saras has in progress milestone', function () {
+test('progress report can be created when Saras has in progress milestone while milestone rules are relaxed', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -399,11 +393,8 @@ test('progress report cannot be created when Saras has in progress milestone', f
             'current_progress_file_ids' => ['new-file-id'],
         ]);
 
-    $response->assertStatus(423)
-        ->assertJson([
-            'success' => false,
-            'message' => 'This milestone is already in progress and cannot be edited.',
-        ]);
+    $response->assertSuccessful()
+        ->assertJson(['success' => true]);
 });
 
 test('saras project progress sync creates local cache records', function () {

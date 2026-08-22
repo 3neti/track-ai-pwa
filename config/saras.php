@@ -224,6 +224,7 @@ return [
     'feature_flags' => [
         'enabled' => env('SARAS_ENABLED', true),
         'progress_enabled' => env('SARAS_PROGRESS_ENABLED', false),
+        'relaxed_progress_milestone_rules' => env('SARAS_RELAXED_PROGRESS_MILESTONE_RULES', true),
     ],
 
     /*

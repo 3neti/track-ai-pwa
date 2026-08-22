@@ -117,7 +117,7 @@ test('project scoped upload creation uses the route project', function () {
     expect($listResponse->json('data.0.title'))->toBe('Route Project Upload');
 });
 
-test('current progress upload cannot be created for an in progress milestone', function () {
+test('current progress upload can be created for an in progress milestone while milestone rules are relaxed', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
@@ -135,14 +135,10 @@ test('current progress upload cannot be created for an in progress milestone', f
             'tags' => ['progress', 'current_progress', 'Foundation'],
         ]);
 
-    $response->assertStatus(423)
-        ->assertJson([
-            'success' => false,
-            'message' => 'This milestone is already in progress and cannot accept new uploads.',
-        ]);
+    $response->assertCreated();
 });
 
-test('current progress upload cannot be created before previous milestone has progress', function () {
+test('current progress upload can be created before previous milestone has progress while milestone rules are relaxed', function () {
     Contract::factory()->create([
         'saras_process_id' => 'contract-ordered',
         'milestones' => ['Foundation', 'Framing'],
@@ -157,11 +153,7 @@ test('current progress upload cannot be created before previous milestone has pr
             'tags' => ['progress', 'current_progress', 'Framing'],
         ]);
 
-    $response->assertStatus(423)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Submit Foundation before submitting Framing.',
-        ]);
+    $response->assertCreated();
 });
 
 test('project scoped upload actions reject uploads from another project', function () {

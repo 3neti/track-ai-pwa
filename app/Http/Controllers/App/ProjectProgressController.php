@@ -49,6 +49,7 @@ class ProjectProgressController extends Controller
             'projects' => $projects,
             'contracts' => $contracts,
             'defaultProjectId' => config('saras.project_id'),
+            'relaxedMilestoneRules' => config('saras.feature_flags.relaxed_progress_milestone_rules', true),
         ]);
     }
 
