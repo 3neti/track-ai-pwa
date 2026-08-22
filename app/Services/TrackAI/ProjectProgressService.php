@@ -519,7 +519,6 @@ class ProjectProgressService
                 'ipAddress' => $input['ip_address'] ?? '',
                 'date' => now('Asia/Manila')->toDateString(),
                 'time' => now('Asia/Manila')->toIso8601String(),
-                'name' => $progressReportName,
                 'tags' => ! empty($input['tags'])
                     ? array_values($input['tags'])
                     : ['progress', 'track-ai'],

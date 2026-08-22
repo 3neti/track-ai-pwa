@@ -77,7 +77,7 @@ test('progress report records location trust evidence', function () {
         ->and($report->location_evidence['accuracy_meters'])->toEqual(275.0);
 });
 
-test('project progress Saras payload uses contract name and milestone as the name', function () {
+test('project progress Saras payload uses contract name and milestone as metadata title only', function () {
     config(['saras.feature_flags.progress_enabled' => true]);
 
     Contract::factory()->create([
@@ -93,7 +93,7 @@ test('project progress Saras payload uses contract name and milestone as the nam
             return $subProjectId === config('saras.subproject_ids.project_progress')
                 && $parentProcessId === 'contract-process-id'
                 && $processTitle === 'P00916650LZ-1-Floor3'
-                && ($fields['name'] ?? null) === 'P00916650LZ-1-Floor3'
+                && ! array_key_exists('name', $fields)
                 && ! array_key_exists('title', $fields);
         })
         ->andReturn(new ProcessResponse(
