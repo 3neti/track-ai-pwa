@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
-import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Info, ChevronDown, ChevronUp, FileText, Download } from 'lucide-vue-next';
+import { ClipboardCheck, Sparkles, Loader2, AlertCircle, Clock, Upload, Camera, Info, ChevronDown, ChevronUp, FileText, ExternalLink } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,7 +18,6 @@ import { useGeolocation } from '@/composables/useGeolocation';
 import { makeClientRequestId } from '@/lib/clientRequestId';
 import {
     files as progressReportFiles,
-    downloadCertificate as downloadProgressCertificate,
     list as listProgressReports,
     store as storeProgressReport,
     workflowStatus,
@@ -577,7 +576,7 @@ const canSubmitMilestone = (milestone: string) => {
                                                 <div
                                                     v-for="file in filesForReport(report, 'certificate')"
                                                     :key="`certificate-${report.id}-${file.file_id}`"
-                                                    class="min-w-0 rounded-md border border-green-200 bg-green-50 p-2 text-xs dark:border-green-800 dark:bg-green-950"
+                                                    class="min-w-0 rounded-md border border-green-200 bg-green-50 p-2 text-xs dark:border-green-800 dark:bg-green-950 sm:col-span-2"
                                                 >
                                                     <div class="flex items-start gap-2">
                                                         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-background">
@@ -587,14 +586,25 @@ const canSubmitMilestone = (milestone: string) => {
                                                             <span class="block truncate font-medium text-green-900 dark:text-green-100">{{ displayFileTitle(file) }}</span>
                                                             <span class="block truncate text-[10px] text-green-700 dark:text-green-300">Saras file: {{ file.file_id }}</span>
                                                             <a
-                                                                :href="downloadProgressCertificate.url(report.id)"
-                                                                download
+                                                                v-if="file.url"
+                                                                :href="file.url"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
                                                                 class="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-green-300 bg-background px-2 text-[11px] font-medium text-green-800 transition hover:bg-green-100 dark:border-green-800 dark:text-green-200 dark:hover:bg-green-900"
                                                             >
-                                                                <Download class="h-3 w-3" />
-                                                                Download
+                                                                <ExternalLink class="h-3 w-3" />
+                                                                Open
                                                             </a>
                                                         </div>
+                                                    </div>
+                                                    <iframe
+                                                        v-if="file.url"
+                                                        :src="file.url"
+                                                        :title="displayFileTitle(file)"
+                                                        class="mt-2 h-72 w-full rounded border border-green-200 bg-background dark:border-green-800"
+                                                    ></iframe>
+                                                    <div v-else class="mt-2 flex h-24 items-center justify-center rounded border border-dashed border-green-200 bg-background text-xs text-muted-foreground dark:border-green-800">
+                                                        Certificate preview unavailable.
                                                     </div>
                                                 </div>
                                             </div>
