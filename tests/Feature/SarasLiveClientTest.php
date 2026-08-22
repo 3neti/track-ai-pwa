@@ -186,6 +186,17 @@ test('child processes include the contract process as parent metadata', function
 });
 
 test('storage uploads use Saras signed storage lifecycle', function () {
+    $policy = base64_encode(json_encode([
+        'conditions' => [
+            ['Content-Type' => 'image/jpeg'],
+            ['bucket' => 'storage-test'],
+            ['key' => 'storage/progress.jpg'],
+            ['x-amz-algorithm' => 'AWS4-HMAC-SHA256'],
+            ['x-amz-credential' => 'credential-from-policy'],
+            ['x-amz-date' => '20260822T052434Z'],
+        ],
+    ], JSON_THROW_ON_ERROR));
+
     Http::fake([
         'https://saras.test/process/knowledges/createSignedStorage' => Http::response([
             'file' => [
@@ -197,7 +208,8 @@ test('storage uploads use Saras signed storage lifecycle', function () {
                 'url' => 'https://storage.test/',
                 'fields' => [
                     'key' => 'storage/progress.jpg',
-                    'policy' => 'policy-value',
+                    'policy' => $policy,
+                    'AWSAccessKeyId' => 'credential-from-field',
                     'signature' => 'signature-value',
                     'contentType' => 'image/jpeg',
                 ],
@@ -229,6 +241,41 @@ test('storage uploads use Saras signed storage lifecycle', function () {
         && $request->url() === 'https://saras.test/process/knowledges/closeSignedStorage'
         && $request['subProjectId'] === 'trackdata-subproject-id'
         && $request['fileId'] === 'file-id');
+});
+
+test('signed storage fields are normalized for S3 policy requirements', function () {
+    $policy = base64_encode(json_encode([
+        'conditions' => [
+            ['Content-Type' => 'image/png'],
+            ['x-amz-algorithm' => 'AWS4-HMAC-SHA256'],
+            ['x-amz-credential' => 'credential-from-policy'],
+            ['x-amz-date' => '20260822T052434Z'],
+        ],
+    ], JSON_THROW_ON_ERROR));
+
+    $client = new SarasLiveClient(sarasTestTokenManager(), 'https://saras.test', 10, 1, 0);
+    $method = new ReflectionMethod($client, 'normalizeSignedStorageFields');
+    $method->setAccessible(true);
+
+    $fields = $method->invoke($client, [
+        'key' => 'storage/image.png',
+        'AWSAccessKeyId' => 'credential-from-field',
+        'policy' => $policy,
+        'signature' => 'signature-value',
+        'contentType' => 'image/png',
+    ]);
+
+    expect($fields)->toMatchArray([
+        'key' => 'storage/image.png',
+        'Content-Type' => 'image/png',
+        'x-amz-algorithm' => 'AWS4-HMAC-SHA256',
+        'x-amz-credential' => 'credential-from-field',
+        'x-amz-date' => '20260822T052434Z',
+        'x-amz-signature' => 'signature-value',
+    ])
+        ->and($fields)->not->toHaveKey('AWSAccessKeyId')
+        ->and($fields)->not->toHaveKey('signature')
+        ->and($fields)->not->toHaveKey('contentType');
 });
 
 test('file URLs are requested through the scoped Saras storage endpoint', function () {

@@ -242,6 +242,7 @@ class SarasLiveClient implements SarasClientInterface
     protected function normalizeSignedStorageFields(array $fields): array
     {
         $normalized = [];
+        $policyConditions = $this->signedStoragePolicyConditions($fields['policy'] ?? null);
 
         foreach ($fields as $name => $value) {
             if ($name === 'contentType') {
@@ -250,10 +251,66 @@ class SarasLiveClient implements SarasClientInterface
                 continue;
             }
 
+            if ($name === 'AWSAccessKeyId') {
+                $normalized['x-amz-credential'] = (string) $value;
+
+                continue;
+            }
+
+            if ($name === 'signature') {
+                $normalized['x-amz-signature'] = (string) $value;
+
+                continue;
+            }
+
             $normalized[(string) $name] = (string) $value;
         }
 
+        foreach (['x-amz-algorithm', 'x-amz-credential', 'x-amz-date', 'Content-Type'] as $name) {
+            if (! isset($normalized[$name]) && isset($policyConditions[$name])) {
+                $normalized[$name] = $policyConditions[$name];
+            }
+        }
+
         return $normalized;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function signedStoragePolicyConditions(mixed $policy): array
+    {
+        if (! is_string($policy) || $policy === '') {
+            return [];
+        }
+
+        $decodedPolicy = base64_decode($policy, true);
+
+        if (! is_string($decodedPolicy)) {
+            return [];
+        }
+
+        $data = json_decode($decodedPolicy, true);
+
+        if (! is_array($data) || ! is_array($data['conditions'] ?? null)) {
+            return [];
+        }
+
+        $conditions = [];
+
+        foreach ($data['conditions'] as $condition) {
+            if (! is_array($condition)) {
+                continue;
+            }
+
+            foreach ($condition as $name => $value) {
+                if (is_string($name) && is_scalar($value)) {
+                    $conditions[$name] = (string) $value;
+                }
+            }
+        }
+
+        return $conditions;
     }
 
     /**
