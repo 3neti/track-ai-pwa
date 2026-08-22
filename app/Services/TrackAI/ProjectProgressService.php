@@ -52,15 +52,18 @@ class ProjectProgressService
         string $contractId,
         string $milestone,
     ): array {
-        $latest = $this->findLatestPreviousMilestoneProgress($contractId, $milestone);
+        $reports = $this->findPreviousMilestoneProgressReports($contractId, $milestone);
 
-        if (! $latest) {
+        if ($reports->isEmpty()) {
             return [];
         }
 
-        $fileIds = $latest->current_progress_file_ids ?? [];
-
-        return ! empty($fileIds) ? $fileIds : [];
+        return $reports
+            ->flatMap(fn (ProjectProgressReport $report): array => $report->current_progress_file_ids ?? [])
+            ->filter(fn (mixed $fileId): bool => is_string($fileId) && trim($fileId) !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function findLatestPreviousMilestoneProgress(
@@ -74,6 +77,33 @@ class ProjectProgressService
         }
 
         return $this->findLatestProgressForContractMilestone($contractId, $previousMilestone);
+    }
+
+    /**
+     * @return Collection<int, ProjectProgressReport>
+     */
+    public function findPreviousMilestoneProgressReports(
+        string $contractId,
+        string $milestone,
+    ): Collection {
+        $previousMilestone = $this->previousMilestoneFor($contractId, $milestone);
+
+        if (! $previousMilestone) {
+            return new Collection;
+        }
+
+        return ProjectProgressReport::where('contract_id', $contractId)
+            ->where('current_milestone', $previousMilestone)
+            ->whereNotNull('current_progress_file_ids')
+            ->whereNotIn('progress_status', [
+                ProjectProgressReport::STATUS_DRAFT,
+                ProjectProgressReport::STATUS_FAILED,
+            ])
+            ->whereNull('remote_deleted_at')
+            ->orderBy('created_at')
+            ->get()
+            ->filter(fn (ProjectProgressReport $report): bool => ! empty($report->current_progress_file_ids ?? []))
+            ->values();
     }
 
     private function previousMilestoneFor(string $contractId, string $milestone): ?string

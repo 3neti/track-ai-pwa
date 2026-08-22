@@ -65,6 +65,44 @@ test('next milestone auto-populates previous files from previous milestone curre
     expect($report2->current_progress_file_ids)->toBe(['uuid-r2-curr-1']);
 });
 
+test('next milestone auto-populates all files from previous milestone reports', function () {
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-abc',
+        'current_milestone' => 'Foundation',
+        'current_progress_file_ids' => ['uuid-r1-curr-1', 'uuid-r1-curr-2'],
+        'created_at' => now()->subMinutes(2),
+    ]);
+
+    ProjectProgressReport::factory()->submitted()->create([
+        'project_id' => $this->project->id,
+        'user_id' => $this->user->id,
+        'contract_id' => 'contract-abc',
+        'current_milestone' => 'Foundation',
+        'current_progress_file_ids' => ['uuid-r2-curr-1', 'uuid-r1-curr-2', 'uuid-r2-curr-2'],
+        'created_at' => now()->subMinute(),
+    ]);
+
+    $report = $this->service->createProgress(
+        user: $this->user,
+        project: $this->project,
+        input: [
+            'contract_id' => 'contract-abc',
+            'current_milestone' => 'Floor1',
+            'remarks' => 'Floor1 report with all Foundation files.',
+            'current_progress_file_ids' => ['uuid-floor1-current'],
+        ],
+    );
+
+    expect($report->previous_progress_file_ids)->toBe([
+        'uuid-r1-curr-1',
+        'uuid-r1-curr-2',
+        'uuid-r2-curr-1',
+        'uuid-r2-curr-2',
+    ]);
+});
+
 test('repeat report for same milestone does not use same milestone files as previous files', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
@@ -146,13 +184,13 @@ test('resolvePreviousProgressFileIds skips failed reports', function () {
     expect($fileIds)->toBe([]);
 });
 
-test('resolvePreviousProgressFileIds skips newer reports without current files', function () {
+test('resolvePreviousProgressFileIds skips reports without current files', function () {
     ProjectProgressReport::factory()->submitted()->create([
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
         'contract_id' => 'contract-abc',
         'current_milestone' => 'Foundation',
-        'current_progress_file_ids' => ['uuid-previous-1', 'uuid-previous-2'],
+        'current_progress_file_ids' => ['uuid-previous-1'],
         'created_at' => now()->subMinute(),
     ]);
 
@@ -167,7 +205,7 @@ test('resolvePreviousProgressFileIds skips newer reports without current files',
 
     $fileIds = $this->service->resolvePreviousProgressFileIds('contract-abc', 'Floor1');
 
-    expect($fileIds)->toBe(['uuid-previous-1', 'uuid-previous-2']);
+    expect($fileIds)->toBe(['uuid-previous-1']);
 });
 
 test('previous progress endpoint returns first report status', function () {
