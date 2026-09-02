@@ -41,6 +41,28 @@ test('authenticated developers can retrieve the Saras payload map', function () 
         ->assertJsonPath('data.createProcess.endpoint', '/process/createProcess');
 });
 
+test('developer Saras API X-Ray page receives branding support', function () {
+    config([
+        'branding.name' => 'DPWH Demo',
+        'branding.short_name' => 'DPWH',
+        'branding.square_logo' => '/branding/square.png',
+        'branding.rectangle_logo' => '/branding/rectangle.png',
+    ]);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get('/developer/saras-api-xray')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('developer/SarasApiXray')
+            ->where('branding.name', 'DPWH Demo')
+            ->where('branding.short_name', 'DPWH')
+            ->where('branding.square_logo', '/branding/square.png')
+            ->where('branding.rectangle_logo', '/branding/rectangle.png')
+        );
+});
+
 test('branding configuration is shared with inertia pages', function () {
     config([
         'branding.name' => 'DPWH Demo',
