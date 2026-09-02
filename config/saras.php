@@ -90,6 +90,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Project Context
+    |--------------------------------------------------------------------------
+    |
+    | D-Day readiness: SARAS_PROJECT_ID identifies the Saras project assigned
+    | to this deployment. When Saras returns subprojects/branding for that
+    | project, Track AI uses them. Missing values fall back to the explicit
+    | SARAS_SUBPROJECT_* and BRAND_* configuration above.
+    |
+    */
+
+    'project_context' => [
+        'cache_ttl_seconds' => (int) env('SARAS_PROJECT_CONTEXT_CACHE_TTL_SECONDS', 300),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Workflow Configuration
     |--------------------------------------------------------------------------
     |

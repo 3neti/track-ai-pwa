@@ -11,6 +11,7 @@ use App\Models\ProjectProgressReport;
 use App\Models\Upload;
 use App\Models\User;
 use App\Services\Saras\DTO\WorkflowRunDTO;
+use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\Mappers\ProjectProgressWorkflowPayloadMapper;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -21,6 +22,7 @@ class ProjectProgressService
     public function __construct(
         protected SarasClientInterface $sarasClient,
         protected ProjectProgressWorkflowPayloadMapper $payloadMapper,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -191,7 +193,7 @@ class ProjectProgressService
     {
         try {
             $response = $this->sarasClient->getFileUrl(
-                subProjectId: config('saras.subproject_ids.project_progress'),
+                subProjectId: $this->contextResolver->subProjectId('project_progress'),
                 fileId: $fileId,
             );
         } catch (\Throwable $e) {
@@ -325,7 +327,7 @@ class ProjectProgressService
     {
         try {
             $response = $this->sarasClient->getProcesses(
-                config('saras.subproject_ids.project_progress'),
+                $this->contextResolver->subProjectId('project_progress'),
                 1,
                 50,
             );
@@ -360,7 +362,7 @@ class ProjectProgressService
             return new Collection;
         }
 
-        $processes = $this->fetchAllRemoteProgressProcesses();
+        $processes = $this->fetchAllRemoteProgressProcesses($user);
         $syncedProcessIds = [];
 
         foreach ($processes as $process) {
@@ -430,7 +432,7 @@ class ProjectProgressService
     /**
      * @return array<int, array<string, mixed>>
      */
-    protected function fetchAllRemoteProgressProcesses(): array
+    protected function fetchAllRemoteProgressProcesses(User $user): array
     {
         $page = 1;
         $perPage = 50;
@@ -438,7 +440,7 @@ class ProjectProgressService
 
         do {
             $response = $this->sarasClient->getProcesses(
-                config('saras.subproject_ids.project_progress'),
+                $this->contextResolver->subProjectId('project_progress', user: $user),
                 $page,
                 $perPage,
             );
@@ -591,7 +593,7 @@ class ProjectProgressService
             }
 
             $processResponse = $this->sarasClient->createProcess(
-                subProjectId: config('saras.subproject_ids.project_progress'),
+                subProjectId: $this->contextResolver->subProjectId('project_progress', user: $user),
                 fields: $fields,
                 parentProcessId: $contractId,
                 processTitle: $progressReportName,
@@ -668,7 +670,7 @@ class ProjectProgressService
             $response = $this->sarasClient->updateFiles(
                 processId: $report->saras_process_id,
                 stageKey: config('saras.workflows.completion_stage_key'),
-                subProjectId: config('saras.subproject_ids.project_progress'),
+                subProjectId: $this->contextResolver->subProjectId('project_progress'),
                 files: $files,
             );
 
@@ -805,7 +807,7 @@ class ProjectProgressService
     protected function findWorkflowRun(ProjectProgressReport $report): ?WorkflowRunDTO
     {
         $filters = [
-            'subProjectId' => config('saras.subproject_ids.project_progress'),
+            'subProjectId' => $this->contextResolver->subProjectId('project_progress'),
             'processId' => $report->saras_process_id,
             'workflowId' => config('saras.workflows.completion_id'),
         ];

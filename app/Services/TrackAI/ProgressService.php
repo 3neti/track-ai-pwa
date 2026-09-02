@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Saras\DTO\AiWorkflowResponse;
 use App\Services\Saras\DTO\FileUploadResponse;
 use App\Services\Saras\DTO\ProcessResponse;
+use App\Services\Saras\SarasProjectContextResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 
@@ -16,6 +17,7 @@ class ProgressService
 {
     public function __construct(
         protected SarasClientInterface $sarasClient,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -62,7 +64,7 @@ class ProgressService
         }
 
         // Use progress subProjectId when available, fallback to trackdata
-        $subProjectId = config('saras.subproject_ids.progress') ?: config('saras.subproject_ids.trackdata');
+        $subProjectId = $this->contextResolver->subProjectId('progress', 'trackdata', $user);
 
         try {
             $response = $this->sarasClient->createProcess(
@@ -122,7 +124,7 @@ class ProgressService
         try {
             $response = $this->sarasClient->uploadFiles(
                 files: [$file],
-                subProjectId: config('saras.subproject_ids.progress') ?: config('saras.subproject_ids.trackdata'),
+                subProjectId: $this->contextResolver->subProjectId('progress', 'trackdata'),
             );
 
             if ($response->success) {

@@ -4,6 +4,7 @@ use App\Contracts\SarasClientInterface;
 use App\Models\User;
 use App\Services\Branding\BrandingResolver;
 use App\Services\Saras\DTO\ProjectsResponse;
+use App\Services\Saras\SarasProjectContextResolver;
 
 test('saras login credentials are exposed through configuration', function () {
     $sarasConfig = config('saras');
@@ -106,6 +107,187 @@ test('branding resolver can pull identity from Saras project metadata', function
         'source' => 'saras',
         'project_id' => 'dday-project-id',
     ]);
+});
+
+test('saras project context resolves subprojects and branding from selected project', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'dday-root-project',
+        'saras.subproject_ids.attendance' => 'configured-attendance',
+        'saras.subproject_ids.trackdata' => 'configured-trackdata',
+        'saras.subproject_ids.project_progress' => 'configured-progress',
+        'saras.subproject_ids.contract_ai' => 'configured-contracts',
+        'branding.name' => 'Fallback Brand',
+        'branding.short_name' => 'Fallback',
+        'branding.remote.enabled' => true,
+    ]);
+
+    $user = User::factory()->create();
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->once()
+        ->with(1, 50)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'dday-root-project',
+                    'projectMeta' => [
+                        'projectId' => 'dday-root-project',
+                        'name' => 'DPWH D-Day',
+                    ],
+                    'branding' => [
+                        'name' => 'DPWH Command Center',
+                    ],
+                    'subProjects' => [
+                        [
+                            'id' => 'remote-attendance',
+                            'projectMeta' => ['projectId' => 'attendance', 'name' => 'Attendance'],
+                        ],
+                        [
+                            'id' => 'remote-trackdata',
+                            'projectMeta' => ['projectId' => 'trackdata', 'name' => 'TrackData'],
+                        ],
+                        [
+                            'id' => 'remote-project-progress',
+                            'projectMeta' => ['projectId' => 'projectprogress', 'name' => 'Project Progress'],
+                        ],
+                        [
+                            'id' => 'remote-contract-ai',
+                            'projectMeta' => ['projectId' => 'bidcontracts', 'name' => 'Bid Contracts'],
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $context = app(SarasProjectContextResolver::class)->resolve($user);
+
+    expect($context->source)->toBe('saras')
+        ->and($context->projectId)->toBe('dday-root-project')
+        ->and($context->subProjectId('attendance'))->toBe('remote-attendance')
+        ->and($context->subProjectId('trackdata'))->toBe('remote-trackdata')
+        ->and($context->subProjectId('project_progress'))->toBe('remote-project-progress')
+        ->and($context->subProjectId('contract_ai'))->toBe('remote-contract-ai')
+        ->and($context->branding['name'])->toBe('DPWH Command Center');
+});
+
+test('saras project context falls back per missing subproject', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'dday-root-project',
+        'saras.subproject_ids.attendance' => 'configured-attendance',
+        'saras.subproject_ids.trackdata' => 'configured-trackdata',
+        'saras.subproject_ids.project_progress' => 'configured-progress',
+        'saras.subproject_ids.contract_ai' => 'configured-contracts',
+    ]);
+
+    $user = User::factory()->create();
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->once()
+        ->with(1, 50)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'dday-root-project',
+                    'projectMeta' => ['projectId' => 'dday-root-project', 'name' => 'DPWH D-Day'],
+                    'subProjects' => [
+                        [
+                            'id' => 'remote-attendance',
+                            'projectMeta' => ['projectId' => 'attendance', 'name' => 'Attendance'],
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $context = app(SarasProjectContextResolver::class)->resolve($user);
+
+    expect($context->subProjectId('attendance'))->toBe('remote-attendance')
+        ->and($context->subProjectId('project_progress'))->toBe('configured-progress')
+        ->and($context->subprojectSources['attendance'])->toBe('saras')
+        ->and($context->subprojectSources['project_progress'])->toBe('config');
+});
+
+test('saras project context can discover subprojects from sibling project records', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'procureai-root-project',
+        'saras.subproject_ids.attendance' => 'configured-attendance',
+        'saras.subproject_ids.project_progress' => 'configured-progress',
+    ]);
+
+    $user = User::factory()->create();
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->once()
+        ->with(1, 50)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'remote-attendance',
+                    'projectMeta' => ['projectId' => 'attendance', 'name' => 'Attendance'],
+                ],
+                [
+                    'id' => 'remote-project-progress',
+                    'projectMeta' => ['projectId' => 'projectprogress', 'name' => 'Project Progress'],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $context = app(SarasProjectContextResolver::class)->resolve($user);
+
+    expect($context->subProjectId('attendance'))->toBe('remote-attendance')
+        ->and($context->subProjectId('project_progress'))->toBe('remote-project-progress');
+});
+
+test('authenticated users can inspect saras project context readiness', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'dday-root-project',
+        'saras.subproject_ids.attendance' => 'configured-attendance',
+    ]);
+
+    $user = User::factory()->create();
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->once()
+        ->with(1, 50)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'dday-root-project',
+                    'projectMeta' => ['projectId' => 'dday-root-project', 'name' => 'DPWH D-Day'],
+                    'subProjects' => [
+                        [
+                            'id' => 'remote-attendance',
+                            'projectMeta' => ['projectId' => 'attendance', 'name' => 'Attendance'],
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $this->actingAs($user)
+        ->getJson('/api/saras/context')
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('context.project_id', 'dday-root-project')
+        ->assertJsonPath('context.subproject_ids.attendance', 'remote-attendance')
+        ->assertJsonPath('readiness.branding.square_logo_slot', true)
+        ->assertJsonPath('readiness.attendance.status', 'needs-test');
 });
 
 test('branding resolver falls back when Saras branding cannot be loaded', function () {

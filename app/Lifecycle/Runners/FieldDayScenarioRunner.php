@@ -174,15 +174,20 @@ final class FieldDayScenarioRunner implements ScenarioRunnerContract
             }
         }
 
-        // Select the first contract (or from scenario config)
+        // Select the requested contract before falling back to an arbitrary contract.
         $selectedContractId = null;
         $selectedContractName = null;
         $selectedMilestones = [];
 
         if (! empty($contractEntries)) {
-            $scenarioContract = $context->scenario['contract_id'] ?? null;
+            $requestedContractId = trim($context->contractId);
+            $scenarioContract = is_string($context->scenario['contract_id'] ?? null)
+                ? trim($context->scenario['contract_id'])
+                : null;
 
-            if ($scenarioContract) {
+            if ($requestedContractId !== '') {
+                $match = collect($contractEntries)->firstWhere('id', $requestedContractId);
+            } elseif ($scenarioContract) {
                 $match = collect($contractEntries)->firstWhere('id', $scenarioContract);
             } else {
                 $match = collect($contractEntries)->first(

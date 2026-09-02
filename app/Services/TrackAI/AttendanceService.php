@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\Location\LocationTrustService;
 use App\Services\Saras\DTO\ProcessResponse;
+use App\Services\Saras\SarasProjectContextResolver;
 use Illuminate\Support\Str;
 
 class AttendanceService
@@ -17,6 +18,7 @@ class AttendanceService
         protected SarasClientInterface $sarasClient,
         protected AttendanceSessionService $sessionService,
         protected LocationTrustService $locationTrustService,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -96,7 +98,7 @@ class AttendanceService
             }
 
             $response = $this->sarasClient->createProcess(
-                subProjectId: config('saras.subproject_ids.attendance'),
+                subProjectId: $this->contextResolver->subProjectId('attendance', user: $user),
                 fields: $fields,
                 idempotencyKey: $idempotencyKey,
                 parentProcessId: $resolvedContractId,
@@ -228,7 +230,7 @@ class AttendanceService
 
                 $this->sarasClient->updateProcessField(
                     processId: $session->saras_process_id,
-                    subProjectId: config('saras.subproject_ids.attendance'),
+                    subProjectId: $this->contextResolver->subProjectId('attendance', user: $user),
                     updates: $updates,
                 );
 
@@ -259,7 +261,7 @@ class AttendanceService
                 }
 
                 $response = $this->sarasClient->createProcess(
-                    subProjectId: config('saras.subproject_ids.attendance'),
+                    subProjectId: $this->contextResolver->subProjectId('attendance', user: $user),
                     fields: $fields,
                     idempotencyKey: $idempotencyKey,
                     parentProcessId: $resolvedContractId,

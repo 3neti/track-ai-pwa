@@ -9,6 +9,7 @@ use App\Http\Requests\App\UpdateUploadRequest;
 use App\Models\Contract;
 use App\Models\Project;
 use App\Models\Upload;
+use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\ProjectProgressService;
 use App\Services\TrackAI\UploadService;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,7 @@ class ProjectUploadController extends Controller
         protected UploadService $uploadService,
         protected SarasClientInterface $sarasClient,
         protected ProjectProgressService $progressService,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -35,7 +37,7 @@ class ProjectUploadController extends Controller
 
         try {
             $response = $this->sarasClient->getProcesses(
-                config('saras.subproject_ids.contract_ai'), 1, 50
+                $this->contextResolver->subProjectId('contract_ai'), 1, 50
             );
 
             foreach ($response['processes'] ?? [] as $c) {

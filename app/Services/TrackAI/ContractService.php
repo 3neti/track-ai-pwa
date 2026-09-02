@@ -5,15 +5,21 @@ namespace App\Services\TrackAI;
 use App\Contracts\SarasClientInterface;
 use App\Models\Contract;
 use App\Models\ProjectProgressReport;
+use App\Services\Saras\SarasProjectContextResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
 class ContractService
 {
+    protected SarasProjectContextResolver $contextResolver;
+
     public function __construct(
         protected SarasClientInterface $sarasClient,
-    ) {}
+        ?SarasProjectContextResolver $contextResolver = null,
+    ) {
+        $this->contextResolver = $contextResolver ?? app(SarasProjectContextResolver::class);
+    }
 
     /**
      * Sync contracts from Saras Contract AI into local database.
@@ -24,7 +30,7 @@ class ContractService
      */
     public function syncContractsFromSaras(bool $pruneMissing = true): Collection
     {
-        $contractAiId = config('saras.subproject_ids.contract_ai');
+        $contractAiId = $this->contextResolver->subProjectId('contract_ai');
 
         $response = $this->sarasClient->getProcesses($contractAiId, 1, 50);
 
@@ -131,7 +137,7 @@ class ContractService
         $certificates = [];
 
         try {
-            $ppSubId = config('saras.subproject_ids.project_progress');
+            $ppSubId = $this->contextResolver->subProjectId('project_progress');
             $ppResponse = $this->sarasClient->getProcesses($ppSubId, 1, 50);
 
             foreach ($ppResponse['processes'] ?? [] as $pp) {
@@ -206,14 +212,14 @@ class ContractService
         if (is_string($certificate) && ! empty($certificate)) {
             return [
                 'file_id' => $certificate,
-                'subproject_id' => config('saras.subproject_ids.contract_ai'),
+                'subproject_id' => $this->contextResolver->subProjectId('contract_ai'),
             ];
         }
 
         if (is_array($certificate) && ! empty($certificate[0]['id'])) {
             return [
                 'file_id' => $certificate[0]['id'],
-                'subproject_id' => config('saras.subproject_ids.contract_ai'),
+                'subproject_id' => $this->contextResolver->subProjectId('contract_ai'),
             ];
         }
 

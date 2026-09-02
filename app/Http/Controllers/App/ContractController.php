@@ -6,6 +6,7 @@ use App\Contracts\SarasClientInterface;
 use App\Exceptions\SarasApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Contract;
+use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\ContractService;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -16,6 +17,7 @@ class ContractController extends Controller
     public function __construct(
         protected ContractService $contractService,
         protected SarasClientInterface $sarasClient,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -141,8 +143,8 @@ class ContractController extends Controller
             try {
                 $certificateSubProjectId = $contract->certificate_subproject_id
                     ?? (data_get($contract->raw_saras_payload, 'fields.certificateOfCompletion')
-                        ? config('saras.subproject_ids.contract_ai')
-                        : config('saras.subproject_ids.project_progress'));
+                        ? $this->contextResolver->subProjectId('contract_ai')
+                        : $this->contextResolver->subProjectId('project_progress'));
 
                 $response = $this->sarasClient->getFileUrl(
                     subProjectId: $certificateSubProjectId,

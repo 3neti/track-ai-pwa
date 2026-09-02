@@ -78,4 +78,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Saras Status
     Route::get('/saras/status', [SarasStatusController::class, 'status'])->name('api.saras.status');
     Route::post('/saras/health-check', [SarasStatusController::class, 'healthCheck'])->name('api.saras.health-check');
+    Route::get('/saras/context', [SarasStatusController::class, 'context'])->name('api.saras.context');
+    Route::post('/saras/context/refresh', [SarasStatusController::class, 'refreshContext'])->name('api.saras.context.refresh');
 });

@@ -7,6 +7,7 @@ use App\Exceptions\SarasApiException;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\Upload;
+use App\Services\Saras\SarasProjectContextResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -15,6 +16,7 @@ class UploadService
 {
     public function __construct(
         protected SarasClientInterface $sarasClient,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -198,7 +200,7 @@ class UploadService
             $resolvedContractId = $upload->contract_id ?: config('saras.default_contract_id');
 
             $processResponse = $this->sarasClient->createProcess(
-                subProjectId: config('saras.subproject_ids.trackdata'),
+                subProjectId: $this->contextResolver->subProjectId('trackdata'),
                 fields: [
                     'file' => $remoteFileId,
                     'contractId' => $resolvedContractId,
@@ -257,10 +259,10 @@ class UploadService
     protected function storageSubProjectId(Upload $upload): string
     {
         if ($upload->document_type === 'current_progress') {
-            return config('saras.subproject_ids.project_progress');
+            return $this->contextResolver->subProjectId('project_progress');
         }
 
-        return config('saras.subproject_ids.trackdata');
+        return $this->contextResolver->subProjectId('trackdata');
     }
 
     /**

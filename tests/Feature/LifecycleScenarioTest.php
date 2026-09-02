@@ -1,9 +1,18 @@
 <?php
 
+use App\Contracts\SarasClientInterface;
+use App\Lifecycle\Output\NullLifecycleOutput;
+use App\Lifecycle\Runners\FieldDayScenarioRunner;
+use App\Lifecycle\Runners\ScenarioRunContext;
 use App\Lifecycle\Scenarios\LifecycleScenarioRepository;
 use App\Models\Contract;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\Saras\DTO\ProcessResponse;
+use App\Services\Saras\DTO\ProjectsResponse;
+use App\Services\TrackAI\AttendanceService;
+use App\Services\TrackAI\ProjectProgressService;
+use App\Services\TrackAI\UploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -187,6 +196,74 @@ test('run dpwh_field_day scenario', function () {
     $this->assertDatabaseHas('project_progress_reports', [
         'project_id' => $this->project->id,
         'user_id' => $this->user->id,
+    ]);
+});
+
+test('field day scenario honors contract override before first returned contract', function () {
+    $overrideContract = Contract::factory()->create([
+        'saras_process_id' => 'override-contract-id',
+        'name' => 'P00916650LZ-1',
+        'milestones' => ['demo1', 'demo2'],
+    ]);
+
+    $sarasClient = Mockery::mock(SarasClientInterface::class);
+    $sarasClient->shouldReceive('getProjectsForUser')
+        ->once()
+        ->andReturn(ProjectsResponse::fromArray(['projects' => []]));
+    $sarasClient->shouldReceive('getProcesses')
+        ->once()
+        ->andReturn([
+            'processes' => [
+                [
+                    'id' => 'first-contract-id',
+                    'metaDetails' => ['title' => '2025-GSIS-PB-130', 'displayNumber' => '7'],
+                    'fields' => ['milestone' => ['software_activation']],
+                ],
+                [
+                    'id' => $overrideContract->saras_process_id,
+                    'metaDetails' => ['title' => $overrideContract->name, 'displayNumber' => '1'],
+                    'fields' => ['milestone' => $overrideContract->milestones],
+                ],
+            ],
+        ]);
+
+    $attendance = Mockery::mock(AttendanceService::class);
+    $attendance->shouldReceive('checkIn')
+        ->once()
+        ->withArgs(fn (User $user, string $contractId): bool => $user->is($this->user)
+            && $contractId === $overrideContract->saras_process_id)
+        ->andReturn([
+            'response' => ProcessResponse::fromArray([
+                'success' => false,
+                'message' => 'Stop after contract selection.',
+            ]),
+            'session' => null,
+            'attendance_status' => 'checked_out',
+        ]);
+
+    $runner = new FieldDayScenarioRunner(
+        attendanceService: $attendance,
+        uploadService: Mockery::mock(UploadService::class),
+        progressService: Mockery::mock(ProjectProgressService::class),
+        sarasClient: $sarasClient,
+    );
+
+    $result = $runner->run(new ScenarioRunContext(
+        output: new NullLifecycleOutput,
+        scenarioKey: 'dpwh_field_day',
+        scenario: config('lifecycle-scenarios.scenarios.dpwh_field_day'),
+        user: $this->user,
+        project: $this->project,
+        contractId: $overrideContract->saras_process_id,
+        timeout: 2,
+        poll: 1,
+        maxPolls: 2,
+    ));
+
+    expect($result->payload['contract'])->toMatchArray([
+        'id' => $overrideContract->saras_process_id,
+        'name' => $overrideContract->name,
+        'milestone' => 'demo1',
     ]);
 });
 
