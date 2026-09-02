@@ -33,6 +33,7 @@ const emit = defineEmits<{
 }>();
 
 const documentTypes = [
+    { value: 'appliance_tagging', label: 'Appliance Tagging' },
     { value: 'purchase_order', label: 'Purchase Order' },
     { value: 'equipment_pictures', label: 'Equipment Pictures' },
     { value: 'delivery_receipts', label: 'Delivery Receipts' },

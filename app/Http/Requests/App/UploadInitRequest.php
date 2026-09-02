@@ -18,7 +18,7 @@ class UploadInitRequest extends FormRequest
     {
         return [
             'contract_id' => ['required', 'string', 'max:255'],
-            'document_type' => ['required', 'string', 'in:purchase_order,equipment_pictures,delivery_receipts,meals,documents,other'],
+            'document_type' => ['required', 'string', 'in:appliance_tagging,purchase_order,equipment_pictures,delivery_receipts,meals,documents,other'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:100'],
             'name' => ['nullable', 'string', 'max:255'],

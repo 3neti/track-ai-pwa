@@ -485,6 +485,29 @@ test('legacy init endpoint creates upload record', function () {
     expect($upload->status)->toBe('pending');
 });
 
+test('legacy init endpoint accepts appliance tagging document type', function () {
+    $clientRequestId = fake()->uuid();
+
+    $response = $this->actingAs($this->user)
+        ->postJson('/api/uploads/init', [
+            'contract_id' => $this->project->external_id,
+            'document_type' => 'appliance_tagging',
+            'name' => 'Appliance Tagging Upload',
+            'remarks' => 'Tagging appliance inventory for validation.',
+            'tags' => ['appliance_tagging'],
+            'client_request_id' => $clientRequestId,
+        ]);
+
+    $response->assertStatus(200)
+        ->assertJson(['success' => true]);
+
+    $this->assertDatabaseHas('uploads', [
+        'client_request_id' => $clientRequestId,
+        'title' => 'Appliance Tagging Upload',
+        'document_type' => 'appliance_tagging',
+    ]);
+});
+
 test('legacy file endpoint uploads file and creates entry', function () {
     // First create via init (creates Upload record, no entry_id yet)
     $initResponse = $this->actingAs($this->user)
