@@ -204,7 +204,7 @@ class UploadService
                 fields: [
                     'file' => $remoteFileId,
                     'contractId' => $resolvedContractId,
-                    'title' => $upload->title,
+                    'name' => $upload->title,
                     'documentType' => $upload->document_type,
                     'tags' => $upload->tags ?? [],
                     'remarks' => $upload->remarks ?? '',

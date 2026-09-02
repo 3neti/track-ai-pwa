@@ -126,8 +126,11 @@ const handleSubmit = async () => {
         } else {
             throw new Error(uploadResponse.data.message);
         }
-    } catch (error) {
-        message.value = { type: 'error', text: 'Failed to upload file. Please try again.' };
+    } catch (error: any) {
+        message.value = {
+            type: 'error',
+            text: error.response?.data?.message || error.message || 'Failed to upload file. Please try again.',
+        };
     } finally {
         isSubmitting.value = false;
     }

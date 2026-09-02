@@ -569,7 +569,7 @@ test('new file endpoint uploads and updates status', function () {
     expect($upload->remote_file_id)->not->toBeNull();
 });
 
-test('generic upload process payload sends title instead of name', function () {
+test('generic upload process payload sends TrackData name field', function () {
     config([
         'saras.subproject_ids.trackdata' => 'trackdata-subproject',
     ]);
@@ -587,8 +587,8 @@ test('generic upload process payload sends title instead of name', function () {
         ->once()
         ->withArgs(function (string $subProjectId, array $fields): bool {
             return $subProjectId === 'trackdata-subproject'
-                && ($fields['title'] ?? null) === 'New Flow Upload'
-                && ! array_key_exists('name', $fields);
+                && ($fields['name'] ?? null) === 'New Flow Upload'
+                && ! array_key_exists('title', $fields);
         })
         ->andReturn(new ProcessResponse(
             success: true,
