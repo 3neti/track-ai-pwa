@@ -29,6 +29,7 @@ class SarasProjectSelectionController extends Controller
             'activeContext' => $this->contextResolver->resolve($user)->toArray(),
             'projects' => $this->contextResolver->availableProjectOptions($user),
             'defaultProjectId' => config('saras.project_id'),
+            'canResetToDefault' => $user?->selected_saras_project_id !== null,
             'status' => $request->session()->get('status'),
         ]);
     }
@@ -50,6 +51,30 @@ class SarasProjectSelectionController extends Controller
         return redirect()
             ->route('app.project-context')
             ->with('status', sprintf('Project context switched to %s.', $context->projectName ?: $context->projectId));
+    }
+
+    public function refresh(Request $request): RedirectResponse
+    {
+        $this->contextResolver->forget($request->user());
+
+        $context = $this->contextResolver->resolve($request->user(), refresh: true);
+
+        $this->syncSelectedProjectResources($request, $context->projectId);
+
+        return redirect()
+            ->route('app.project-context')
+            ->with('status', 'Saras project context refreshed.');
+    }
+
+    public function reset(Request $request): RedirectResponse
+    {
+        $context = $this->contextResolver->resetSelectedProject($request->user());
+
+        $this->syncSelectedProjectResources($request, $context->projectId);
+
+        return redirect()
+            ->route('app.project-context')
+            ->with('status', 'Project context reset to the configured default.');
     }
 
     protected function syncSelectedProjectResources(Request $request, ?string $projectId): void

@@ -171,6 +171,20 @@ class SarasProjectContextResolver
         return $this->resolve($user, refresh: true);
     }
 
+    public function resetSelectedProject(User $user): SarasProjectContext
+    {
+        $previousProjectId = $this->selectedProjectId($user);
+        $defaultProjectId = (string) config('saras.project_id', '');
+
+        $this->forgetSessionProjectId();
+        $user->forceFill(['selected_saras_project_id' => null])->save();
+
+        Cache::forget($this->cacheKey($user, $previousProjectId));
+        Cache::forget($this->cacheKey($user, $defaultProjectId));
+
+        return $this->resolve($user, refresh: true);
+    }
+
     public function subProjectId(string $key, ?string $fallbackKey = null, ?User $user = null): string
     {
         $value = $this->resolve($user)->subProjectId($key, $fallbackKey);
@@ -526,6 +540,13 @@ class SarasProjectContextResolver
     {
         if (app()->bound('request') && request()->hasSession()) {
             request()->session()->put(self::SESSION_PROJECT_ID, $projectId);
+        }
+    }
+
+    protected function forgetSessionProjectId(): void
+    {
+        if (app()->bound('request') && request()->hasSession()) {
+            request()->session()->forget(self::SESSION_PROJECT_ID);
         }
     }
 

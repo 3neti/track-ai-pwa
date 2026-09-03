@@ -226,6 +226,59 @@ test('project picker falls back to configured project when Saras listing is unav
             ->component('app/ProjectContext')
             ->where('projects.0.id', 'configured-project-id')
             ->where('projects.0.is_default', true)
+            ->where('activeContext.source', 'config')
+            ->where('activeContext.message', 'Using configured Saras IDs because remote project context could not be loaded.')
+        );
+});
+
+test('project context can be refreshed without changing the saved project preference', function () {
+    config([
+        'saras.mode' => 'stub',
+        'saras.project_id' => 'configured-project-id',
+    ]);
+
+    $user = User::factory()->create(['selected_saras_project_id' => 'selected-project-id']);
+
+    $this->actingAs($user)
+        ->post('/app/project-context/refresh')
+        ->assertRedirect('/app/project-context')
+        ->assertSessionHas('status', 'Saras project context refreshed.');
+
+    expect($user->fresh()->selected_saras_project_id)->toBe('selected-project-id');
+});
+
+test('project context can be reset to the configured default', function () {
+    config([
+        'saras.mode' => 'stub',
+        'saras.project_id' => 'configured-project-id',
+    ]);
+
+    $user = User::factory()->create(['selected_saras_project_id' => 'selected-project-id']);
+
+    $this->actingAs($user)
+        ->post('/app/project-context/reset')
+        ->assertRedirect('/app/project-context')
+        ->assertSessionHas('status', 'Project context reset to the configured default.');
+
+    expect($user->fresh()->selected_saras_project_id)->toBeNull();
+});
+
+test('app pages receive active project context as shared data', function () {
+    config([
+        'saras.mode' => 'stub',
+        'saras.project_id' => 'configured-project-id',
+    ]);
+
+    $user = User::factory()->create(['selected_saras_project_id' => 'selected-project-id']);
+
+    $this->withoutVite();
+
+    $this->actingAs($user)
+        ->get('/app/contracts')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('activeProjectContext.project_id', 'selected-project-id')
+            ->where('activeProjectContext.source', 'config')
         );
 });
 

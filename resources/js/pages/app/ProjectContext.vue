@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Form } from '@inertiajs/vue3';
-import { Check, FolderSync, RefreshCw } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { AlertTriangle, Check, FolderSync, RefreshCw, RotateCcw } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 import AppBottomNav from '@/components/app/AppBottomNav.vue';
 import InputError from '@/components/InputError.vue';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { update } from '@/actions/App/Http/Controllers/App/SarasProjectSelectionController';
+import { refresh, reset, update } from '@/actions/App/Http/Controllers/App/SarasProjectSelectionController';
 
 interface ProjectOption {
     id: string;
@@ -26,18 +26,44 @@ interface ActiveContext {
     project_id: string | null;
     project_name: string | null;
     source: string;
-    subproject_ids: Record<string, string>;
+    subproject_ids: Record<string, string | null>;
     subproject_sources: Record<string, string>;
+    message?: string | null;
 }
 
 const props = defineProps<{
     activeContext: ActiveContext;
     projects: ProjectOption[];
     defaultProjectId: string;
+    canResetToDefault: boolean;
     status?: string;
 }>();
 
 const selectedProjectId = ref(props.activeContext.project_id || props.defaultProjectId);
+
+const fallbackSubprojectKeys = computed(() =>
+    Object.entries(props.activeContext.subproject_sources)
+        .filter(([, source]) => source !== 'saras')
+        .map(([key]) => key),
+);
+
+const isUsingFallbackContext = computed(() => props.activeContext.source !== 'saras' || Boolean(props.activeContext.message));
+
+function confirmSwitch(event: SubmitEvent) {
+    if (
+        !window.confirm(
+            'Switch Saras project context? This refreshes contracts, progress, attendance, uploads, and branding.',
+        )
+    ) {
+        event.preventDefault();
+    }
+}
+
+function confirmReset(event: SubmitEvent) {
+    if (!window.confirm('Reset to the configured default Saras project?')) {
+        event.preventDefault();
+    }
+}
 </script>
 
 <template>
@@ -50,7 +76,7 @@ const selectedProjectId = ref(props.activeContext.project_id || props.defaultPro
                     <FolderSync class="h-6 w-6 text-primary" />
                     <h1 class="text-lg font-semibold">Project Context</h1>
                 </div>
-                <Badge variant="outline">{{ activeContext.source }}</Badge>
+                <Badge :variant="isUsingFallbackContext ? 'secondary' : 'outline'">{{ activeContext.source }}</Badge>
             </div>
         </header>
 
@@ -60,9 +86,41 @@ const selectedProjectId = ref(props.activeContext.project_id || props.defaultPro
                 <AlertDescription>{{ status }}</AlertDescription>
             </Alert>
 
+            <Alert v-if="isUsingFallbackContext || fallbackSubprojectKeys.length" class="border-amber-200 bg-amber-50 text-amber-950">
+                <AlertTriangle class="h-4 w-4" />
+                <AlertDescription>
+                    <span class="font-medium">Some Saras values are using configured fallbacks.</span>
+                    <span v-if="activeContext.message" class="mt-1 block">{{ activeContext.message }}</span>
+                    <span v-if="fallbackSubprojectKeys.length" class="mt-1 block">
+                        Fallback subprojects: {{ fallbackSubprojectKeys.join(', ') }}
+                    </span>
+                </AlertDescription>
+            </Alert>
+
             <Card>
                 <CardHeader>
-                    <CardTitle class="text-base">Active Saras Project</CardTitle>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <CardTitle class="text-base">Active Saras Project</CardTitle>
+                        <div class="flex gap-2">
+                            <Form v-bind="refresh.form()" v-slot="{ processing }">
+                                <Button type="submit" variant="outline" size="sm" :disabled="processing">
+                                    <RefreshCw class="mr-2 h-4 w-4" :class="{ 'animate-spin': processing }" />
+                                    Refresh
+                                </Button>
+                            </Form>
+                            <Form
+                                v-if="canResetToDefault"
+                                v-bind="reset.form()"
+                                v-slot="{ processing }"
+                                @submit.capture="confirmReset"
+                            >
+                                <Button type="submit" variant="outline" size="sm" :disabled="processing">
+                                    <RotateCcw class="mr-2 h-4 w-4" :class="{ 'animate-spin': processing }" />
+                                    Default
+                                </Button>
+                            </Form>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent class="space-y-3">
                     <div>
@@ -92,6 +150,7 @@ const selectedProjectId = ref(props.activeContext.project_id || props.defaultPro
                         v-bind="update.form()"
                         v-slot="{ errors, processing }"
                         class="space-y-4"
+                        @submit.capture="confirmSwitch"
                     >
                         <div class="grid gap-3">
                             <label

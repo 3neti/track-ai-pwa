@@ -60,6 +60,8 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
     Route::get('/project-progress', [ProjectProgressController::class, 'index'])->name('app.project-progress');
     Route::get('/project-context', [SarasProjectSelectionController::class, 'index'])->name('app.project-context');
     Route::post('/project-context', [SarasProjectSelectionController::class, 'update'])->name('app.project-context.update');
+    Route::post('/project-context/refresh', [SarasProjectSelectionController::class, 'refresh'])->name('app.project-context.refresh');
+    Route::post('/project-context/reset', [SarasProjectSelectionController::class, 'reset'])->name('app.project-context.reset');
     Route::get('/sync', [SyncController::class, 'index'])->name('app.sync');
 });
 
