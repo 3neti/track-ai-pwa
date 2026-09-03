@@ -162,8 +162,36 @@ class SarasStatusController extends Controller
             'attendance' => [
                 'status' => 'needs-test',
                 'anti_gps_spoofing' => [
-                    'status' => config('saras.location_trust.mode') === 'reject' ? 'enforced' : 'audit',
+                    'status' => config('saras.location_trust.mode') === 'enforce' ? 'enforced' : 'audit',
+                    'mode' => config('saras.location_trust.mode', 'audit'),
                     'send_to_saras' => (bool) config('saras.location_trust.send_to_saras', false),
+                    'signals' => [
+                        'browser_coordinates',
+                        'gps_accuracy',
+                        'position_age',
+                        'impossible_travel',
+                    ],
+                    'thresholds' => [
+                        'max_accuracy_meters' => (int) config('saras.location_trust.max_accuracy_meters', 100),
+                        'max_position_age_seconds' => (int) config('saras.location_trust.max_position_age_seconds', 120),
+                        'max_speed_kmh' => (int) config('saras.location_trust.max_speed_kmh', 180),
+                    ],
+                    'stored_on' => [
+                        'attendance_sessions.check_in_location_status',
+                        'attendance_sessions.check_out_location_status',
+                        'project_progress_reports.location_status',
+                    ],
+                    'saras_payload_fields' => [
+                        'geoAccuracyCheckIn',
+                        'locationTrustCheckIn',
+                        'locationTrustReasonsCheckIn',
+                        'geoAccuracyCheckOut',
+                        'locationTrustCheckOut',
+                        'locationTrustReasonsCheckOut',
+                        'geoAccuracy',
+                        'locationTrust',
+                        'locationTrustReasons',
+                    ],
                 ],
             ],
             'appliance_tagging' => [

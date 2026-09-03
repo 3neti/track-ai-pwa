@@ -59,7 +59,22 @@ interface Readiness {
         square_logo_slot: boolean;
         rectangle_logo_slot: boolean;
     };
-    attendance?: { status: string };
+    attendance?: {
+        status: string;
+        anti_gps_spoofing?: {
+            status: string;
+            mode: string;
+            send_to_saras: boolean;
+            signals: string[];
+            thresholds: {
+                max_accuracy_meters: number;
+                max_position_age_seconds: number;
+                max_speed_kmh: number;
+            };
+            stored_on: string[];
+            saras_payload_fields: string[];
+        };
+    };
     appliance_tagging?: { status: string };
     hyperverge_face_auth?: { status: string };
 }
@@ -201,6 +216,12 @@ function sourceVariant(source: string | undefined): 'default' | 'secondary' | 'd
 function shortId(value: string | null | undefined): string {
     if (!value) return '—';
     return value.length > 12 ? `${value.slice(0, 8)}...` : value;
+}
+
+function labelize(value: string): string {
+    return value
+        .replaceAll('_', ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 </script>
 
@@ -347,6 +368,103 @@ function shortId(value: string | null | undefined): string {
                     <div v-if="contextError" class="mt-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                         <AlertTriangle class="h-4 w-4" />
                         {{ contextError }}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2 text-base">
+                        <MapPinned class="h-4 w-4 text-primary" />
+                        PWA Anti-GPS Spoofing
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div class="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Mode</p>
+                                <Badge
+                                    :variant="readiness.attendance?.anti_gps_spoofing?.status === 'enforced' ? 'destructive' : 'secondary'"
+                                    class="mt-1"
+                                >
+                                    {{ readiness.attendance?.anti_gps_spoofing?.mode || 'audit' }}
+                                </Badge>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Result</p>
+                                <p class="mt-1 text-sm font-medium">
+                                    {{ readiness.attendance?.anti_gps_spoofing?.status || 'audit' }}
+                                </p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Saras Fields</p>
+                                <p class="mt-1 text-sm font-medium">
+                                    {{ readiness.attendance?.anti_gps_spoofing?.send_to_saras ? 'Enabled' : 'Local audit' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Max Accuracy</p>
+                                <p class="mt-1 font-mono text-sm">
+                                    {{ readiness.attendance?.anti_gps_spoofing?.thresholds.max_accuracy_meters ?? 100 }}m
+                                </p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Max Age</p>
+                                <p class="mt-1 font-mono text-sm">
+                                    {{ readiness.attendance?.anti_gps_spoofing?.thresholds.max_position_age_seconds ?? 120 }}s
+                                </p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Max Speed</p>
+                                <p class="mt-1 font-mono text-sm">
+                                    {{ readiness.attendance?.anti_gps_spoofing?.thresholds.max_speed_kmh ?? 180 }} km/h
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs font-medium text-muted-foreground">Signals Checked</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <Badge
+                                    v-for="signal in readiness.attendance?.anti_gps_spoofing?.signals || []"
+                                    :key="signal"
+                                    variant="outline"
+                                >
+                                    {{ labelize(signal) }}
+                                </Badge>
+                            </div>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs font-medium text-muted-foreground">Audit Storage</p>
+                            <div class="mt-3 grid gap-1">
+                                <span
+                                    v-for="field in readiness.attendance?.anti_gps_spoofing?.stored_on || []"
+                                    :key="field"
+                                    class="break-all font-mono text-xs text-muted-foreground"
+                                >
+                                    {{ field }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs font-medium text-muted-foreground">Payload Fields Ready</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <Badge
+                                    v-for="field in readiness.attendance?.anti_gps_spoofing?.saras_payload_fields || []"
+                                    :key="field"
+                                    variant="secondary"
+                                    class="font-mono text-[10px]"
+                                >
+                                    {{ field }}
+                                </Badge>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

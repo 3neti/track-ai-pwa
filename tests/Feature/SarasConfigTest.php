@@ -571,7 +571,12 @@ test('authenticated users can inspect saras project context readiness', function
         ->assertJsonPath('context.project_id', 'dday-root-project')
         ->assertJsonPath('context.subproject_ids.attendance', 'remote-attendance')
         ->assertJsonPath('readiness.branding.square_logo_slot', true)
-        ->assertJsonPath('readiness.attendance.status', 'needs-test');
+        ->assertJsonPath('readiness.attendance.status', 'needs-test')
+        ->assertJsonPath('readiness.attendance.anti_gps_spoofing.mode', 'audit')
+        ->assertJsonPath('readiness.attendance.anti_gps_spoofing.thresholds.max_accuracy_meters', 100)
+        ->assertJsonPath('readiness.attendance.anti_gps_spoofing.signals.0', 'browser_coordinates')
+        ->assertJsonPath('readiness.attendance.anti_gps_spoofing.stored_on.0', 'attendance_sessions.check_in_location_status')
+        ->assertJsonPath('readiness.attendance.anti_gps_spoofing.saras_payload_fields.0', 'geoAccuracyCheckIn');
 });
 
 test('branding resolver falls back when Saras branding cannot be loaded', function () {
