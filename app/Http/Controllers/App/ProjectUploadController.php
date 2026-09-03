@@ -55,7 +55,7 @@ class ProjectUploadController extends Controller
         return Inertia::render('app/Project/Uploads', [
             'projects' => $projects,
             'contracts' => $contracts,
-            'defaultProjectId' => config('saras.project_id'),
+            'defaultProjectId' => $this->contextResolver->selectedProjectId(),
         ]);
     }
 

@@ -7,6 +7,7 @@ use App\Http\Requests\App\UploadFileRequest;
 use App\Http\Requests\App\UploadInitRequest;
 use App\Models\Project;
 use App\Models\Upload;
+use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -24,6 +25,7 @@ class UploadController extends Controller
 {
     public function __construct(
         protected UploadService $uploadService,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -35,7 +37,7 @@ class UploadController extends Controller
 
         return Inertia::render('app/Uploads', [
             'projects' => $projects,
-            'defaultProjectId' => config('saras.project_id'),
+            'defaultProjectId' => $this->contextResolver->selectedProjectId(),
         ]);
     }
 

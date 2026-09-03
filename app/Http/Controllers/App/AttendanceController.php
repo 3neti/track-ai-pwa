@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\App\CheckInRequest;
 use App\Http\Requests\App\CheckOutRequest;
 use App\Models\Project;
+use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\AttendanceService;
 use App\Services\TrackAI\AttendanceSessionService;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +19,7 @@ class AttendanceController extends Controller
     public function __construct(
         protected AttendanceService $attendanceService,
         protected AttendanceSessionService $sessionService,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -29,7 +31,7 @@ class AttendanceController extends Controller
 
         return Inertia::render('app/Attendance', [
             'projects' => $projects,
-            'defaultProjectId' => config('saras.project_id'),
+            'defaultProjectId' => $this->contextResolver->selectedProjectId(),
         ]);
     }
 

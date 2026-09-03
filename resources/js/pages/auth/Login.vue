@@ -11,13 +11,16 @@ import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
+import { ChevronDown } from 'lucide-vue-next';
 
-defineProps<{
+const props = defineProps<{
     status?: string;
     canResetPassword: boolean;
+    defaultProjectId: string;
 }>();
 
 const username = ref('lester@hurtado.ph');
+const showAdvanced = ref(false);
 
 function goToFaceLogin() {
     if (username.value.trim()) {
@@ -87,9 +90,36 @@ function goToFaceLogin() {
                     <InputError :message="errors.password" />
                 </div>
 
+                <div class="rounded-md border">
+                    <button
+                        type="button"
+                        class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm font-medium"
+                        @click="showAdvanced = !showAdvanced"
+                    >
+                        <span>Project context</span>
+                        <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showAdvanced }" />
+                    </button>
+                    <div v-if="showAdvanced" class="grid gap-2 border-t px-3 py-3">
+                        <Label for="saras_project_id">Saras Project ID</Label>
+                        <Input
+                            id="saras_project_id"
+                            type="text"
+                            name="saras_project_id"
+                            :default-value="props.defaultProjectId"
+                            :tabindex="3"
+                            autocomplete="off"
+                            placeholder="Use configured default"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Leave as-is for the current default, or paste the D-Day project ID from Saras.
+                        </p>
+                        <InputError :message="errors.saras_project_id" />
+                    </div>
+                </div>
+
                 <div class="flex items-center justify-between">
                     <Label for="remember" class="flex items-center space-x-3">
-                        <Checkbox id="remember" name="remember" :tabindex="3" />
+                        <Checkbox id="remember" name="remember" :tabindex="4" />
                         <span>Remember me</span>
                     </Label>
                 </div>
@@ -97,7 +127,7 @@ function goToFaceLogin() {
                 <Button
                     type="submit"
                     class="mt-4 w-full"
-                    :tabindex="4"
+                    :tabindex="5"
                     :disabled="processing"
                     data-test="login-button"
                 >
@@ -118,7 +148,7 @@ function goToFaceLogin() {
                     type="button"
                     variant="outline"
                     class="w-full"
-                    :tabindex="5"
+                    :tabindex="6"
                     :disabled="!username.trim() || processing"
                     @click="goToFaceLogin"
                     data-test="face-login-button"

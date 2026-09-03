@@ -6,6 +6,7 @@ use App\Http\Controllers\App\ProgressController;
 use App\Http\Controllers\App\ProjectController;
 use App\Http\Controllers\App\ProjectProgressController;
 use App\Http\Controllers\App\ProjectUploadController;
+use App\Http\Controllers\App\SarasProjectSelectionController;
 use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
 use App\Http\Controllers\Auth\FaceAuthController;
@@ -57,6 +58,8 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
     Route::get('/project-uploads', [ProjectUploadController::class, 'page'])->name('app.project-uploads');
     Route::get('/progress', [ProgressController::class, 'index'])->name('app.progress');
     Route::get('/project-progress', [ProjectProgressController::class, 'index'])->name('app.project-progress');
+    Route::get('/project-context', [SarasProjectSelectionController::class, 'index'])->name('app.project-context');
+    Route::post('/project-context', [SarasProjectSelectionController::class, 'update'])->name('app.project-context.update');
     Route::get('/sync', [SyncController::class, 'index'])->name('app.sync');
 });
 

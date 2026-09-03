@@ -32,6 +32,7 @@ class SarasAuthenticator
         // Support both 'email' and 'username' fields (Fortify uses username config)
         $identifier = $request->input('email') ?? $request->input('username');
         $password = $request->input('password');
+        $projectId = $request->input('saras_project_id');
 
         if (empty($identifier) || empty($password)) {
             return null;
@@ -45,7 +46,7 @@ class SarasAuthenticator
         }
 
         // In live mode, authenticate against Saras API
-        return $this->authenticateWithSaras($identifier, $password);
+        return $this->authenticateWithSaras($identifier, $password, is_string($projectId) ? $projectId : null);
     }
 
     /**
@@ -68,7 +69,7 @@ class SarasAuthenticator
     /**
      * Authenticate against Saras API and JIT provision local user.
      */
-    protected function authenticateWithSaras(string $email, string $password): ?User
+    protected function authenticateWithSaras(string $email, string $password, ?string $projectId = null): ?User
     {
         $baseUrl = config('saras.base_url');
         $timeout = config('saras.timeout', 30);
@@ -114,6 +115,12 @@ class SarasAuthenticator
 
             // JIT provision: get or create local user with their token
             $user = $this->getOrCreateUser($email, $password, $userData, $accessToken, $expiresIn);
+
+            $selectedProjectId = is_string($projectId) ? trim($projectId) : '';
+
+            if ($selectedProjectId !== '' && $selectedProjectId !== (string) config('saras.project_id', '')) {
+                $this->contextResolver->selectProject($user, $selectedProjectId, persist: true);
+            }
 
             $this->syncSarasResourcesForLogin($user);
 

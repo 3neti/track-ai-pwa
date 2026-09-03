@@ -8,6 +8,7 @@ use App\Http\Requests\App\ProjectProgressRequest;
 use App\Models\Project;
 use App\Models\ProjectProgressReport;
 use App\Services\Location\LocationTrustService;
+use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,7 @@ class ProjectProgressController extends Controller
         protected ContractService $contractService,
         protected SarasClientInterface $sarasClient,
         protected LocationTrustService $locationTrustService,
+        protected SarasProjectContextResolver $contextResolver,
     ) {}
 
     /**
@@ -50,7 +52,7 @@ class ProjectProgressController extends Controller
         return Inertia::render('app/ProjectProgress', [
             'projects' => $projects,
             'contracts' => $contracts,
-            'defaultProjectId' => config('saras.project_id'),
+            'defaultProjectId' => $this->contextResolver->selectedProjectId($request->user()),
             'relaxedMilestoneRules' => config('saras.feature_flags.relaxed_progress_milestone_rules', true),
         ]);
     }
@@ -287,7 +289,10 @@ class ProjectProgressController extends Controller
 
     protected function resolveDefaultProject(): ?Project
     {
-        return Project::where('external_id', config('saras.project_id'))->first()
+        $projectId = $this->contextResolver->selectedProjectId(request()->user());
+
+        return Project::where('external_id', $projectId)->first()
+            ?? Project::where('contract_id', $projectId)->first()
             ?? Project::query()->first();
     }
 

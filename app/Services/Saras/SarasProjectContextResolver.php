@@ -9,9 +9,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class SarasProjectContextResolver
 {
+    public const SESSION_PROJECT_ID = 'saras.selected_project_id';
+
     /**
      * @var array<string, array<int, string>>
      */
@@ -30,13 +33,13 @@ class SarasProjectContextResolver
     public function resolve(?User $user = null, bool $refresh = false): SarasProjectContext
     {
         $user ??= Auth::user();
-        $fallback = $this->fallbackContext();
+        $projectId = $this->selectedProjectId($user);
+        $fallback = $this->fallbackContext($projectId);
 
         if (! $user || config('saras.mode') !== 'live' || ! config('saras.feature_flags.enabled', true)) {
             return $fallback;
         }
 
-        $projectId = (string) config('saras.project_id', '');
         $cacheKey = $this->cacheKey($user, $projectId);
 
         if ($refresh) {
@@ -87,7 +90,85 @@ class SarasProjectContextResolver
             return;
         }
 
+        Cache::forget($this->cacheKey($user, $this->selectedProjectId($user)));
         Cache::forget($this->cacheKey($user, (string) config('saras.project_id', '')));
+    }
+
+    public function selectedProjectId(?User $user = null): string
+    {
+        $sessionProjectId = $this->sessionProjectId();
+
+        if ($sessionProjectId) {
+            return $sessionProjectId;
+        }
+
+        $savedProjectId = $user?->selected_saras_project_id;
+
+        if (is_string($savedProjectId) && trim($savedProjectId) !== '') {
+            return trim($savedProjectId);
+        }
+
+        return (string) config('saras.project_id', '');
+    }
+
+    /**
+     * @return array<int, array{id: string, contract_id: string, name: string, tenant_id: ?string, tenant_name: ?string, is_default: bool, is_selected: bool}>
+     */
+    public function availableProjectOptions(?User $user = null): array
+    {
+        $user ??= Auth::user();
+        $selectedProjectId = $this->selectedProjectId($user);
+
+        if (! $user || config('saras.mode') !== 'live' || ! config('saras.feature_flags.enabled', true)) {
+            return [$this->configuredProjectOption($selectedProjectId)];
+        }
+
+        try {
+            return $this->withAuthenticatedUser($user, function () use ($selectedProjectId): array {
+                $response = $this->sarasClient->getProjectsForUser(page: 1, perPage: 50);
+
+                return collect($response->projects)
+                    ->filter(fn (ProjectDTO $project): bool => $project->externalId !== '')
+                    ->map(fn (ProjectDTO $project): array => $this->projectOption($project, $selectedProjectId))
+                    ->values()
+                    ->all();
+            });
+        } catch (\Throwable $e) {
+            Log::warning('SarasProjectContext: Failed to list selectable projects', [
+                'user_id' => $user->id,
+                'selected_project_id' => $selectedProjectId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [$this->configuredProjectOption($selectedProjectId)];
+        }
+    }
+
+    public function selectProject(User $user, ?string $projectId, bool $persist = true): SarasProjectContext
+    {
+        $projectId = trim((string) ($projectId ?: config('saras.project_id', '')));
+        $previousProjectId = $this->selectedProjectId($user);
+
+        if ($projectId === '') {
+            throw ValidationException::withMessages([
+                'saras_project_id' => 'Enter a Saras project ID or keep the configured default.',
+            ]);
+        }
+
+        if (config('saras.mode') === 'live' && config('saras.feature_flags.enabled', true)) {
+            $this->assertProjectIsAvailableToUser($user, $projectId);
+        }
+
+        $this->putSessionProjectId($projectId);
+
+        if ($persist) {
+            $user->forceFill(['selected_saras_project_id' => $projectId])->save();
+        }
+
+        Cache::forget($this->cacheKey($user, $previousProjectId));
+        Cache::forget($this->cacheKey($user, $projectId));
+
+        return $this->resolve($user, refresh: true);
     }
 
     public function subProjectId(string $key, ?string $fallbackKey = null, ?User $user = null): string
@@ -149,7 +230,7 @@ class SarasProjectContextResolver
     /**
      * @param  array<int, ProjectDTO>  $projects
      */
-    protected function findProject(array $projects, string $projectId): ?ProjectDTO
+    public function findProject(array $projects, string $projectId): ?ProjectDTO
     {
         if ($projectId === '') {
             return $projects[0] ?? null;
@@ -164,7 +245,7 @@ class SarasProjectContextResolver
         return $projects[0] ?? null;
     }
 
-    protected function projectMatches(ProjectDTO $project, string $projectId): bool
+    public function projectMatches(ProjectDTO $project, string $projectId): bool
     {
         $candidateIds = array_filter([
             $project->externalId,
@@ -350,13 +431,14 @@ class SarasProjectContextResolver
         ];
     }
 
-    protected function fallbackContext(): SarasProjectContext
+    protected function fallbackContext(?string $projectId = null): SarasProjectContext
     {
         $subprojectIds = config('saras.subproject_ids', []);
         $subprojectIds = is_array($subprojectIds) ? $subprojectIds : [];
+        $projectId ??= (string) config('saras.project_id', '');
 
         return new SarasProjectContext(
-            projectId: config('saras.project_id'),
+            projectId: $projectId,
             projectName: null,
             source: 'config',
             subprojectIds: $subprojectIds,
@@ -367,9 +449,102 @@ class SarasProjectContextResolver
                 'square_logo' => config('branding.square_logo'),
                 'rectangle_logo' => config('branding.rectangle_logo'),
                 'source' => 'config',
-                'project_id' => config('saras.project_id'),
+                'project_id' => $projectId,
             ],
         );
+    }
+
+    protected function assertProjectIsAvailableToUser(User $user, string $projectId): void
+    {
+        $project = $this->withAuthenticatedUser($user, function () use ($projectId): ?ProjectDTO {
+            $response = $this->sarasClient->getProjectsForUser(page: 1, perPage: 50);
+
+            return $this->findProject($response->projects, $projectId);
+        });
+
+        if (! $project || ! $this->projectMatches($project, $projectId)) {
+            throw ValidationException::withMessages([
+                'saras_project_id' => 'That Saras project is not available for this account.',
+            ]);
+        }
+    }
+
+    /**
+     * @return array{id: string, contract_id: string, name: string, tenant_id: ?string, tenant_name: ?string, is_default: bool, is_selected: bool}
+     */
+    protected function projectOption(ProjectDTO $project, string $selectedProjectId): array
+    {
+        $defaultProjectId = (string) config('saras.project_id', '');
+
+        return [
+            'id' => $project->externalId,
+            'contract_id' => $project->contractId,
+            'name' => $project->name,
+            'tenant_id' => $project->tenantId,
+            'tenant_name' => $project->tenantName,
+            'is_default' => $this->projectMatches($project, $defaultProjectId),
+            'is_selected' => $this->projectMatches($project, $selectedProjectId),
+        ];
+    }
+
+    /**
+     * @return array{id: string, contract_id: string, name: string, tenant_id: ?string, tenant_name: ?string, is_default: bool, is_selected: bool}
+     */
+    protected function configuredProjectOption(string $selectedProjectId): array
+    {
+        $defaultProjectId = (string) config('saras.project_id', '');
+
+        return [
+            'id' => $defaultProjectId,
+            'contract_id' => $defaultProjectId,
+            'name' => (string) config('branding.name', 'Track AI'),
+            'tenant_id' => null,
+            'tenant_name' => null,
+            'is_default' => true,
+            'is_selected' => $selectedProjectId === $defaultProjectId,
+        ];
+    }
+
+    protected function sessionProjectId(): ?string
+    {
+        if (! app()->bound('request')) {
+            return null;
+        }
+
+        $request = request();
+
+        if (! $request->hasSession()) {
+            return null;
+        }
+
+        $projectId = $request->session()->get(self::SESSION_PROJECT_ID);
+
+        return is_string($projectId) && trim($projectId) !== '' ? trim($projectId) : null;
+    }
+
+    protected function putSessionProjectId(string $projectId): void
+    {
+        if (app()->bound('request') && request()->hasSession()) {
+            request()->session()->put(self::SESSION_PROJECT_ID, $projectId);
+        }
+    }
+
+    protected function withAuthenticatedUser(User $user, callable $callback): mixed
+    {
+        $guard = Auth::guard();
+        $previousUser = $guard->user();
+
+        try {
+            $guard->setUser($user);
+
+            return $callback();
+        } finally {
+            if ($previousUser instanceof User) {
+                $guard->setUser($previousUser);
+            } else {
+                $guard->forgetUser();
+            }
+        }
     }
 
     /**

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage, router } from '@inertiajs/vue3';
-import { ArrowLeft, Briefcase, ClipboardCheck, Clock, Package, LogOut } from 'lucide-vue-next';
+import { ArrowLeft, Briefcase, ClipboardCheck, Clock, FolderSync, Package, LogOut } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage();
@@ -12,6 +12,7 @@ const workspaceItems = [
     { name: 'Progress', href: '/app/project-progress', icon: ClipboardCheck },
     { name: 'Attendance', href: '/app/attendance', icon: Clock },
     { name: 'Inventory', href: '/app/project-uploads', icon: Package },
+    { name: 'Project', href: '/app/project-context', icon: FolderSync },
 ];
 
 const isActive = (href: string) => currentRoute.value.startsWith(href) && href !== '/app/contracts';
@@ -28,6 +29,10 @@ function handleLogout() {
                 <Link href="/app/contracts" class="flex flex-col items-center gap-1 px-3 py-2 text-xs text-primary">
                     <Briefcase class="h-5 w-5" />
                     <span>Contracts</span>
+                </Link>
+                <Link href="/app/project-context" class="flex flex-col items-center gap-1 px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
+                    <FolderSync class="h-5 w-5" />
+                    <span>Project</span>
                 </Link>
                 <button @click="handleLogout" class="flex flex-col items-center gap-1 px-3 py-2 text-xs text-muted-foreground hover:text-destructive">
                     <LogOut class="h-5 w-5" />

@@ -1,10 +1,12 @@
 <?php
 
 use App\Contracts\SarasClientInterface;
+use App\Http\Responses\LoginResponse;
 use App\Models\User;
 use App\Services\Branding\BrandingResolver;
 use App\Services\Saras\DTO\ProjectsResponse;
 use App\Services\Saras\SarasProjectContextResolver;
+use Illuminate\Http\Request;
 
 test('saras login credentials are exposed through configuration', function () {
     $sarasConfig = config('saras');
@@ -41,6 +43,17 @@ test('authenticated developers can retrieve the Saras payload map', function () 
         ->assertJsonPath('data.createProcess.endpoint', '/process/createProcess');
 });
 
+test('login page exposes configured project id as the default context', function () {
+    config(['saras.project_id' => 'configured-project-id']);
+
+    $this->get('/login')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('auth/Login')
+            ->where('defaultProjectId', 'configured-project-id')
+        );
+});
+
 test('developer Saras API X-Ray page receives branding support', function () {
     config([
         'branding.name' => 'DPWH Demo',
@@ -61,6 +74,202 @@ test('developer Saras API X-Ray page receives branding support', function () {
             ->where('branding.square_logo', '/branding/square.png')
             ->where('branding.rectangle_logo', '/branding/rectangle.png')
         );
+});
+
+test('saved project id overrides the configured Saras project context', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'configured-project-id',
+        'branding.remote.enabled' => true,
+    ]);
+
+    $user = User::factory()->create(['selected_saras_project_id' => 'selected-project-id']);
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->with(1, 50)
+        ->once()
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'selected-project-id',
+                    'projectMeta' => [
+                        'projectId' => 'selected-project-id',
+                        'name' => 'Selected DPWH Project',
+                    ],
+                    'branding' => [
+                        'name' => 'Selected Brand',
+                    ],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $this->actingAs($user)
+        ->getJson('/api/saras/context')
+        ->assertOk()
+        ->assertJsonPath('context.project_id', 'selected-project-id')
+        ->assertJsonPath('context.project_name', 'Selected DPWH Project')
+        ->assertJsonPath('context.branding.name', 'Selected Brand');
+});
+
+test('project context picker persists a selected Saras project', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'configured-project-id',
+        'branding.remote.enabled' => true,
+    ]);
+
+    $user = User::factory()->create();
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->with(1, 50)
+        ->times(3)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'configured-project-id',
+                    'projectMeta' => [
+                        'projectId' => 'configured-project-id',
+                        'name' => 'Configured Project',
+                    ],
+                ],
+                [
+                    'id' => 'dday-project-id',
+                    'projectMeta' => [
+                        'projectId' => 'dday-project-id',
+                        'name' => 'D-Day Project',
+                    ],
+                    'branding' => [
+                        'name' => 'D-Day Brand',
+                    ],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+
+    $this->actingAs($user)
+        ->post('/app/project-context', ['saras_project_id' => 'dday-project-id'])
+        ->assertRedirect('/app/project-context');
+
+    expect($user->fresh()->selected_saras_project_id)->toBe('dday-project-id');
+});
+
+test('project context picker lists available Saras projects', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'configured-project-id',
+        'branding.remote.enabled' => true,
+    ]);
+
+    $user = User::factory()->create(['selected_saras_project_id' => 'dday-project-id']);
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->with(1, 50)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                [
+                    'id' => 'configured-project-id',
+                    'projectMeta' => [
+                        'projectId' => 'configured-project-id',
+                        'name' => 'Configured Project',
+                    ],
+                ],
+                [
+                    'id' => 'dday-project-id',
+                    'projectMeta' => [
+                        'projectId' => 'dday-project-id',
+                        'name' => 'D-Day Project',
+                    ],
+                ],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+    $this->withoutVite();
+
+    $this->actingAs($user)
+        ->get('/app/project-context')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('app/ProjectContext')
+            ->where('activeContext.project_id', 'dday-project-id')
+            ->where('projects.1.name', 'D-Day Project')
+            ->where('projects.1.is_selected', true)
+        );
+});
+
+test('project picker falls back to configured project when Saras listing is unavailable', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'configured-project-id',
+    ]);
+
+    $user = User::factory()->create();
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->twice()
+        ->andThrow(new RuntimeException('Access Denied by IAM Engine.'));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+    $this->withoutVite();
+
+    $this->actingAs($user)
+        ->get('/app/project-context')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('app/ProjectContext')
+            ->where('projects.0.id', 'configured-project-id')
+            ->where('projects.0.is_default', true)
+        );
+});
+
+test('login response sends unselected multi-project users to the project picker', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.project_id' => 'configured-project-id',
+    ]);
+
+    $user = User::factory()->create(['selected_saras_project_id' => null]);
+    $client = Mockery::mock(SarasClientInterface::class);
+
+    $client->shouldReceive('getProjectsForUser')
+        ->once()
+        ->with(1, 50)
+        ->andReturn(ProjectsResponse::fromArray([
+            'projects' => [
+                ['id' => 'configured-project-id', 'projectMeta' => ['projectId' => 'configured-project-id', 'name' => 'Configured Project']],
+                ['id' => 'dday-project-id', 'projectMeta' => ['projectId' => 'dday-project-id', 'name' => 'D-Day Project']],
+            ],
+        ]));
+
+    $this->app->instance(SarasClientInterface::class, $client);
+    $this->actingAs($user);
+
+    $request = Request::create('/login', 'POST');
+    $request->setUserResolver(fn () => $user);
+
+    $response = app(LoginResponse::class)->toResponse($request);
+
+    expect($response->getTargetUrl())->toBe(route('app.project-context'));
+});
+
+test('login response keeps saved project users on the normal app path', function () {
+    $user = User::factory()->create(['selected_saras_project_id' => 'dday-project-id']);
+
+    $this->actingAs($user);
+
+    $request = Request::create('/login', 'POST');
+    $request->setUserResolver(fn () => $user);
+
+    $response = app(LoginResponse::class)->toResponse($request);
+
+    expect($response->getTargetUrl())->toBe(url('/app/contracts'));
 });
 
 test('branding configuration is shared with inertia pages', function () {

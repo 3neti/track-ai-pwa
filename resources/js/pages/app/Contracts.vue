@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
-import { Briefcase, RefreshCw, Loader2, AlertCircle, Award, Download, ChevronRight, Info, Check } from 'lucide-vue-next';
+import { Briefcase, RefreshCw, Loader2, AlertCircle, Award, Download, ChevronRight, Info, Check, FolderSync } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -118,11 +118,17 @@ const lastSyncTime = computed(() => {
                     <Briefcase class="h-6 w-6 text-primary" />
                     <h1 class="text-lg font-semibold">Contracts</h1>
                 </div>
-                <Button variant="outline" size="sm" @click="handleRefresh" :disabled="isRefreshing">
-                    <Loader2 v-if="isRefreshing" class="mr-1 h-3 w-3 animate-spin" />
-                    <RefreshCw v-else class="mr-1 h-3 w-3" />
-                    Refresh
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Button variant="outline" size="sm" @click="router.visit('/app/project-context')">
+                        <FolderSync class="mr-1 h-3 w-3" />
+                        Project
+                    </Button>
+                    <Button variant="outline" size="sm" @click="handleRefresh" :disabled="isRefreshing">
+                        <Loader2 v-if="isRefreshing" class="mr-1 h-3 w-3 animate-spin" />
+                        <RefreshCw v-else class="mr-1 h-3 w-3" />
+                        Refresh
+                    </Button>
+                </div>
             </div>
         </header>
 
