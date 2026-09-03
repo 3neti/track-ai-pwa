@@ -111,7 +111,7 @@ function goToFaceLogin() {
                             placeholder="Use configured default"
                         />
                         <p class="text-xs text-muted-foreground">
-                            Leave as-is for the current default, or paste the D-Day project ID from Saras.
+                            Optional. Keep the default project unless Saras provided another project ID.
                         </p>
                         <InputError :message="errors.saras_project_id" />
                     </div>
