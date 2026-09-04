@@ -76,7 +76,25 @@ interface Readiness {
         };
     };
     appliance_tagging?: { status: string };
-    hyperverge_face_auth?: { status: string };
+    hyperverge_face_auth?: {
+        status: string;
+        base_url: string;
+        liveness_path: string;
+        match_path: string;
+        confidence_threshold: number;
+        workflows: {
+            face_auth: string;
+            enroll: string;
+        };
+        credentials_configured: boolean;
+        current_user_enrolled: boolean;
+        saras?: {
+            base_url: string;
+            status_path: string;
+            register_path: string;
+            login_path: string;
+        };
+    };
 }
 
 const traces = ref<Trace[]>([]);
@@ -464,6 +482,85 @@ function labelize(value: string): string {
                                     {{ field }}
                                 </Badge>
                             </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2 text-base">
+                        <Radio class="h-4 w-4 text-primary" />
+                        Face Authentication
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Mode</p>
+                            <Badge :variant="readiness.hyperverge_face_auth?.status === 'saras' || readiness.hyperverge_face_auth?.status === 'hyperverge_direct' ? 'default' : 'secondary'" class="mt-1">
+                                {{ readiness.hyperverge_face_auth?.status || 'stub' }}
+                            </Badge>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Credentials</p>
+                            <p class="mt-1 text-sm font-medium">
+                                {{ readiness.hyperverge_face_auth?.credentials_configured ? 'Configured' : 'Missing' }}
+                            </p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Enrollment</p>
+                            <p class="mt-1 text-sm font-medium">
+                                {{ readiness.hyperverge_face_auth?.current_user_enrolled ? 'Current user enrolled' : 'Current user not enrolled' }}
+                            </p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Threshold</p>
+                            <p class="mt-1 font-mono text-sm">
+                                {{ readiness.hyperverge_face_auth?.confidence_threshold ?? 85 }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div v-if="readiness.hyperverge_face_auth?.saras" class="mt-4 grid gap-3 lg:grid-cols-4">
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Saras Base URL</p>
+                            <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.saras.base_url }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Registration Status</p>
+                            <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.saras.status_path }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Face Registration</p>
+                            <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.saras.register_path }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Face Login</p>
+                            <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.saras.login_path }}</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-3 lg:grid-cols-5">
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Base URL</p>
+                            <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth?.base_url || '—' }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Liveness</p>
+                            <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth?.liveness_path || '/checkLiveness' }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Face Match</p>
+                            <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth?.match_path || '/matchFace' }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Auth Workflow</p>
+                            <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth?.workflows?.face_auth || 'faceAuth' }}</p>
+                        </div>
+                        <div class="rounded-md border p-3">
+                            <p class="text-xs text-muted-foreground">Enroll Workflow</p>
+                            <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth?.workflows?.enroll || 'enrol' }}</p>
                         </div>
                     </div>
                 </CardContent>

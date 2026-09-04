@@ -105,6 +105,19 @@ class SarasAuthenticator
                 return null;
             }
 
+            if ($this->requiresFaceRegistration($tokenData)) {
+                $user = $this->getOrCreateUser($email, $password, [], $accessToken, $expiresIn);
+
+                request()->session()->put('saras_face_registration_required', true);
+
+                Log::info('Saras login requires face registration', [
+                    'user_id' => $user->id,
+                    'email' => $email,
+                ]);
+
+                return $user;
+            }
+
             // Fetch user details from Saras
             $userResponse = Http::timeout($timeout)
                 ->withToken($accessToken)
@@ -240,6 +253,35 @@ class SarasAuthenticator
         ]);
 
         return $user;
+    }
+
+    /**
+     * @param  array<string, mixed>  $tokenData
+     */
+    protected function requiresFaceRegistration(array $tokenData): bool
+    {
+        $markers = [
+            'face_registration_required',
+            'faceRegistrationRequired',
+            'register_face',
+            'registerFace',
+            'requires_face_registration',
+            'requiresFaceRegistration',
+        ];
+
+        foreach ($markers as $marker) {
+            if (($tokenData[$marker] ?? false) === true) {
+                return true;
+            }
+        }
+
+        $tokenType = strtolower((string) ($tokenData['token_type'] ?? $tokenData['tokenType'] ?? ''));
+        $purpose = strtolower((string) ($tokenData['purpose'] ?? $tokenData['scope'] ?? ''));
+
+        return str_contains($tokenType, 'signup')
+            || str_contains($tokenType, 'self')
+            || str_contains($purpose, 'face_registration')
+            || str_contains($purpose, 'self_signup');
     }
 
     /**

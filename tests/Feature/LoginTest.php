@@ -103,6 +103,33 @@ test('saras login refreshes contracts and removes stale cached contracts', funct
     ]);
 });
 
+test('saras login with face registration token redirects to face registration', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    Http::fake([
+        'https://saras.test/v1/users/userLogin' => Http::response([
+            'access_token' => 'temporary-face-registration-token',
+            'expires_in' => 900,
+            'face_registration_required' => true,
+        ]),
+    ]);
+
+    $response = $this->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('face-register'));
+    $this->assertDatabaseHas('users', [
+        'email' => 'lester@example.test',
+        'saras_access_token' => 'temporary-face-registration-token',
+    ]);
+});
+
 test('live saras login outage does not authenticate with expired stored token', function () {
     config([
         'saras.mode' => 'live',

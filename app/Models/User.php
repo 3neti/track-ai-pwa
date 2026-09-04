@@ -5,6 +5,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -60,5 +62,34 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
             'saras_token_expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @return HasMany<FaceEnrollment, $this>
+     */
+    public function faceEnrollments(): HasMany
+    {
+        return $this->hasMany(FaceEnrollment::class);
+    }
+
+    /**
+     * @return HasOne<FaceEnrollment, $this>
+     */
+    public function activeFaceEnrollment(): HasOne
+    {
+        return $this->hasOne(FaceEnrollment::class)
+            ->where('status', 'active')
+            ->latestOfMany();
+    }
+
+    /**
+     * @return HasOne<FaceEnrollment, $this>
+     */
+    public function activeHypervergeFaceEnrollment(): HasOne
+    {
+        return $this->hasOne(FaceEnrollment::class)
+            ->where('provider', 'hyperverge')
+            ->where('status', 'active')
+            ->latestOfMany();
     }
 }

@@ -37,6 +37,19 @@ return [
 
     'verify_path' => env('HYPERVERGE_VERIFY_PATH', '/photo/verifyPair'),
 
+    'liveness_path' => env('HYPERVERGE_LIVENESS_PATH', '/checkLiveness'),
+
+    'match_path' => env('HYPERVERGE_MATCH_PATH', '/matchFace'),
+
+    'match_type' => env('HYPERVERGE_MATCH_TYPE', 'face_face'),
+
+    'confidence_threshold' => (float) env('HYPERVERGE_CONFIDENCE_THRESHOLD', 85),
+
+    'workflows' => [
+        'face_auth' => env('HYPERVERGE_FACE_AUTH_WORKFLOW', 'faceAuth'),
+        'enroll' => env('HYPERVERGE_ENROLL_WORKFLOW', 'enrol'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Timeout

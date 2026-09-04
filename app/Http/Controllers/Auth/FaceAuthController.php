@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class FaceAuthController extends Controller
 {
@@ -23,7 +24,9 @@ class FaceAuthController extends Controller
         $transactionId = $request->transactionId();
 
         // Look up user - don't leak existence in response
-        $user = User::where('username', $username)->first();
+        $user = User::where('username', $username)
+            ->orWhere('email', $username)
+            ->first();
 
         // Short-circuit for non-existent users: add randomized delay to prevent timing attacks
         // without burning API credits
@@ -52,6 +55,8 @@ class FaceAuthController extends Controller
 
         // If verified, log the user in
         if ($result->verified) {
+            $this->storeSarasFaceToken($user, $result->details);
+
             Auth::login($user, remember: false);
 
             $request->session()->regenerate();
@@ -85,5 +90,33 @@ class FaceAuthController extends Controller
             'reason' => $reason,
             'confidence' => $confidence,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $details
+     */
+    private function storeSarasFaceToken(User $user, array $details): void
+    {
+        $token = $details['access_token'] ?? null;
+
+        if (! is_string($token) || $token === '') {
+            return;
+        }
+
+        $expiresIn = is_numeric($details['expires_in'] ?? null)
+            ? (int) $details['expires_in']
+            : 3600;
+
+        $sarasUser = is_array($details['user'] ?? null) ? $details['user'] : [];
+        $tenant = is_array($sarasUser['tenantId'] ?? null) ? $sarasUser['tenantId'] : [];
+
+        $user->forceFill([
+            'password' => $user->password ?: Hash::make(str()->random(32)),
+            'saras_user_id' => $sarasUser['id'] ?? $user->saras_user_id,
+            'tenant_id' => $tenant['id'] ?? $user->tenant_id,
+            'tenant_name' => $tenant['name'] ?? $user->tenant_name,
+            'saras_access_token' => $token,
+            'saras_token_expires_at' => now()->addSeconds(max($expiresIn - 60, 60)),
+        ])->save();
     }
 }

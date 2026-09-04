@@ -12,6 +12,7 @@ use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
 class SarasStatusController extends Controller
@@ -198,7 +199,20 @@ class SarasStatusController extends Controller
                 'status' => 'needs-test',
             ],
             'hyperverge_face_auth' => [
-                'status' => config('hyperverge.mode') === 'live' ? 'live' : 'stub',
+                'status' => config('face_auth.provider'),
+                'base_url' => config('hyperverge.base_url'),
+                'liveness_path' => config('hyperverge.liveness_path'),
+                'match_path' => config('hyperverge.match_path'),
+                'confidence_threshold' => config('hyperverge.confidence_threshold'),
+                'workflows' => config('hyperverge.workflows'),
+                'credentials_configured' => filled(config('hyperverge.app_id')) && filled(config('hyperverge.app_key')),
+                'current_user_enrolled' => Auth::user()?->activeFaceEnrollment()->exists() ?? false,
+                'saras' => [
+                    'base_url' => config('saras.base_url'),
+                    'status_path' => config('face_auth.saras.status_path'),
+                    'register_path' => config('face_auth.saras.register_path'),
+                    'login_path' => config('face_auth.saras.login_path'),
+                ],
             ],
         ];
     }

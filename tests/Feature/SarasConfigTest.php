@@ -2,11 +2,13 @@
 
 use App\Contracts\SarasClientInterface;
 use App\Http\Responses\LoginResponse;
+use App\Models\FaceEnrollment;
 use App\Models\User;
 use App\Services\Branding\BrandingResolver;
 use App\Services\Saras\DTO\ProjectsResponse;
 use App\Services\Saras\SarasProjectContextResolver;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 test('saras login credentials are exposed through configuration', function () {
     $sarasConfig = config('saras');
@@ -74,6 +76,44 @@ test('developer Saras API X-Ray page receives branding support', function () {
             ->where('branding.square_logo', '/branding/square.png')
             ->where('branding.rectangle_logo', '/branding/rectangle.png')
         );
+});
+
+test('saras context exposes hyperverge face auth readiness', function () {
+    config([
+        'hyperverge.mode' => 'live',
+        'hyperverge.base_url' => 'https://ind.idv.hyperverge.co/v1',
+        'hyperverge.app_id' => 'configured-app-id',
+        'hyperverge.app_key' => 'configured-app-key',
+        'hyperverge.liveness_path' => '/checkLiveness',
+        'hyperverge.match_path' => '/matchFace',
+        'hyperverge.confidence_threshold' => 85,
+        'face_auth.provider' => 'hyperverge_direct',
+    ]);
+
+    Storage::fake('local');
+
+    $user = User::factory()->create();
+
+    Storage::disk('local')->put("face-enrollments/{$user->id}/reference.jpeg", 'reference-image');
+
+    FaceEnrollment::create([
+        'user_id' => $user->id,
+        'provider' => 'hyperverge',
+        'disk' => 'local',
+        'path' => "face-enrollments/{$user->id}/reference.jpeg",
+        'status' => 'active',
+        'enrolled_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->getJson('/api/saras/context')
+        ->assertOk()
+        ->assertJsonPath('readiness.hyperverge_face_auth.status', 'hyperverge_direct')
+        ->assertJsonPath('readiness.hyperverge_face_auth.liveness_path', '/checkLiveness')
+        ->assertJsonPath('readiness.hyperverge_face_auth.match_path', '/matchFace')
+        ->assertJsonPath('readiness.hyperverge_face_auth.confidence_threshold', 85)
+        ->assertJsonPath('readiness.hyperverge_face_auth.credentials_configured', true)
+        ->assertJsonPath('readiness.hyperverge_face_auth.current_user_enrolled', true);
 });
 
 test('saved project id overrides the configured Saras project context', function () {

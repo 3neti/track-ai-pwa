@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 
 test('face login page can be rendered', function () {
     $response = $this->get('/face-login?username=testuser');
@@ -19,7 +20,29 @@ test('face login page requires username parameter', function () {
     $response->assertRedirect(route('login'));
 });
 
+test('face registration page requires authentication', function () {
+    $response = $this->get('/face-register');
+
+    $response->assertRedirect(route('login'));
+});
+
+test('face registration page can be rendered for authenticated user', function () {
+    $user = User::factory()->create([
+        'email' => 'lester@hurtado.ph',
+    ]);
+
+    $response = $this->actingAs($user)->get('/face-register');
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('auth/FaceRegister')
+        ->where('username', 'lester@hurtado.ph')
+    );
+});
+
 test('successful face verification logs in the user', function () {
+    config(['face_auth.provider' => 'stub']);
+
     $user = User::factory()->create([
         'username' => 'faceuser',
     ]);
@@ -38,7 +61,38 @@ test('successful face verification logs in the user', function () {
     $this->assertAuthenticatedAs($user);
 });
 
+test('successful saras face verification stores returned saras token', function () {
+    config(['face_auth.provider' => 'saras']);
+
+    $user = User::factory()->create([
+        'username' => 'lester@hurtado.ph',
+        'email' => 'lester@hurtado.ph',
+        'saras_access_token' => null,
+        'saras_token_expires_at' => null,
+    ]);
+
+    Http::fake([
+        '*/users/loginWithFace' => Http::response([
+            'success' => true,
+            'access_token' => 'saras-face-token',
+            'expires_in' => 3600,
+        ]),
+    ]);
+
+    $response = $this->postJson('/auth/face/verify', [
+        'username' => 'lester@hurtado.ph',
+        'selfie' => UploadedFile::fake()->image('selfie.jpg', 640, 480),
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonFragment(['verified' => true]);
+    $this->assertAuthenticatedAs($user);
+    expect($user->fresh()->saras_access_token)->toBe('saras-face-token');
+});
+
 test('face verification fails for non-matching face', function () {
+    config(['face_auth.provider' => 'stub']);
+
     User::factory()->create([
         'username' => 'fail_match',
     ]);
@@ -59,6 +113,8 @@ test('face verification fails for non-matching face', function () {
 });
 
 test('face verification returns quality failure details', function () {
+    config(['face_auth.provider' => 'stub']);
+
     User::factory()->create([
         'username' => 'fail_quality',
     ]);

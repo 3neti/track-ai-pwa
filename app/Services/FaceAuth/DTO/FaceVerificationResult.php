@@ -12,13 +12,13 @@ readonly class FaceVerificationResult
         public array $raw = [],
     ) {}
 
-    public static function verified(float $confidence, array $raw = []): self
+    public static function verified(float $confidence, array $raw = [], array $details = []): self
     {
         return new self(
             verified: true,
             confidence: $confidence,
             reason: 'matched',
-            details: [],
+            details: $details,
             raw: $raw,
         );
     }

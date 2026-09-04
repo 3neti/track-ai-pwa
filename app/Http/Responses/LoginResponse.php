@@ -20,6 +20,10 @@ class LoginResponse implements LoginResponseContract
             return response()->json(['two_factor' => false]);
         }
 
+        if ($request->hasSession() && $request->session()->pull('saras_face_registration_required', false)) {
+            return redirect()->route('face-register');
+        }
+
         if ($this->shouldChooseProject($request)) {
             return redirect()->route('app.project-context');
         }

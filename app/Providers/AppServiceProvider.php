@@ -8,6 +8,9 @@ use App\Contracts\SarasTokenManagerInterface;
 use App\Lifecycle\Output\SarasApiTracer;
 use App\Services\FaceAuth\HypervergeDirectProvider;
 use App\Services\FaceAuth\HypervergeStubProvider;
+use App\Services\FaceAuth\SarasFaceAuthProvider;
+use App\Services\FaceAuth\SarasFaceRegistrationService;
+use App\Services\FaceAuth\SarasFaceRegistrationStatusService;
 use App\Services\Saras\SarasLiveClient;
 use App\Services\Saras\SarasStubClient;
 use App\Services\Saras\SarasTokenManager;
@@ -35,17 +38,40 @@ class AppServiceProvider extends ServiceProvider
     private function registerFaceAuthProvider(): void
     {
         $this->app->singleton(FaceAuthProviderInterface::class, function () {
-            if (config('hyperverge.mode') === 'live') {
-                return new HypervergeDirectProvider(
+            return match (config('face_auth.provider')) {
+                'saras' => new SarasFaceAuthProvider(
+                    baseUrl: config('saras.base_url'),
+                    loginPath: config('face_auth.saras.login_path'),
+                    timeout: config('saras.timeout'),
+                ),
+                'hyperverge_direct' => new HypervergeDirectProvider(
                     baseUrl: config('hyperverge.base_url'),
                     appId: config('hyperverge.app_id'),
                     appKey: config('hyperverge.app_key'),
-                    verifyPath: config('hyperverge.verify_path'),
+                    livenessPath: config('hyperverge.liveness_path'),
+                    matchPath: config('hyperverge.match_path'),
+                    matchType: config('hyperverge.match_type'),
+                    confidenceThreshold: config('hyperverge.confidence_threshold'),
                     timeout: config('hyperverge.timeout'),
-                );
-            }
+                ),
+                default => new HypervergeStubProvider,
+            };
+        });
 
-            return new HypervergeStubProvider;
+        $this->app->singleton(SarasFaceRegistrationService::class, function () {
+            return new SarasFaceRegistrationService(
+                baseUrl: config('saras.base_url'),
+                registerPath: config('face_auth.saras.register_path'),
+                timeout: config('saras.timeout'),
+            );
+        });
+
+        $this->app->singleton(SarasFaceRegistrationStatusService::class, function () {
+            return new SarasFaceRegistrationStatusService(
+                baseUrl: config('saras.base_url'),
+                statusPath: config('face_auth.saras.status_path'),
+                timeout: config('saras.timeout'),
+            );
         });
     }
 

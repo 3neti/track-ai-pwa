@@ -11,6 +11,8 @@ use App\Http\Controllers\App\SyncController;
 use App\Http\Controllers\App\UploadController;
 use App\Http\Controllers\Auth\FaceAuthController;
 use App\Http\Controllers\Auth\FaceLoginController;
+use App\Http\Controllers\Auth\FaceRegistrationController;
+use App\Http\Controllers\Auth\FaceRegistrationStatusController;
 use App\Http\Controllers\Developer\SarasApiXrayController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -39,6 +41,18 @@ Route::get('/face-login', [FaceLoginController::class, 'index'])
 Route::post('/auth/face/verify', [FaceAuthController::class, 'verify'])
     ->middleware(['web', 'throttle:face-login'])
     ->name('auth.face.verify');
+
+Route::get('/face-register', [FaceRegistrationController::class, 'index'])
+    ->middleware('auth')
+    ->name('face-register');
+
+Route::post('/auth/face/register', [FaceRegistrationController::class, 'store'])
+    ->middleware(['auth', 'throttle:face-login'])
+    ->name('auth.face.register');
+
+Route::post('/auth/face/registration-status', [FaceRegistrationStatusController::class, 'show'])
+    ->middleware(['web', 'throttle:face-login'])
+    ->name('auth.face.registration-status');
 
 Route::get('dashboard', function () {
     return redirect('/app/contracts');

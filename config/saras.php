@@ -156,6 +156,40 @@ return [
             ],
             'response_fields_used' => ['access_token', 'token', 'expires_in', 'expiresIn'],
         ],
+        'checkSamlLoginEnabled' => [
+            'method' => 'POST',
+            'endpoint' => '/users/checkSamlLoginEnabled',
+            'config_keys' => ['face_auth.saras.status_path'],
+            'request_shape' => [
+                'email' => 'string',
+            ],
+            'response_fields_used' => [
+                'face_registration_enabled',
+                'faceRegistrationEnabled',
+                'samlLoginEnabled',
+                'enabled',
+            ],
+        ],
+        'registerFaceForFaceAuthentication' => [
+            'method' => 'POST',
+            'endpoint' => '/users/registerFaceForFaceAuthentication',
+            'config_keys' => ['face_auth.saras.register_path'],
+            'request_shape' => [
+                'image1' => 'base64 selfie image',
+                'image2' => 'base64 document face image',
+            ],
+            'response_fields_used' => ['success', 'traceId', 'message'],
+        ],
+        'loginWithFace' => [
+            'method' => 'POST',
+            'endpoint' => '/users/loginWithFace',
+            'config_keys' => ['face_auth.provider', 'face_auth.saras.login_path'],
+            'request_shape' => [
+                'client_id' => 'email',
+                'face' => 'base64 selfie image',
+            ],
+            'response_fields_used' => ['success', 'verified', 'access_token', 'token', 'expires_in', 'expiresIn'],
+        ],
         'getUserDetails' => [
             'method' => 'GET',
             'endpoint' => '/users/getUserDetails',
