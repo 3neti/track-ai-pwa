@@ -14,6 +14,16 @@ test('face login page can be rendered', function () {
     );
 });
 
+test('login page preserves username query for face registration handoff', function () {
+    $response = $this->get('/login?username=lester%40hurtado.ph');
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('auth/Login')
+        ->where('initialUsername', 'lester@hurtado.ph')
+    );
+});
+
 test('face login page requires username parameter', function () {
     $response = $this->get('/face-login');
 
@@ -88,6 +98,40 @@ test('successful saras face verification stores returned saras token', function 
     $response->assertJsonFragment(['verified' => true]);
     $this->assertAuthenticatedAs($user);
     expect($user->fresh()->saras_access_token)->toBe('saras-face-token');
+});
+
+test('saras face verification returns registration handoff when face is not registered', function () {
+    config(['face_auth.provider' => 'saras']);
+
+    User::factory()->create([
+        'username' => 'lester@hurtado.ph',
+        'email' => 'lester@hurtado.ph',
+    ]);
+
+    Http::fake([
+        '*/users/loginWithFace' => Http::response([
+            'errorCode' => 1509,
+            'msg' => 'Face is not registered for biometric authentication.',
+            'addMsg' => 'Face is not registered for user',
+        ], 400),
+    ]);
+
+    $response = $this->postJson('/auth/face/verify', [
+        'username' => 'lester@hurtado.ph',
+        'selfie' => UploadedFile::fake()->image('selfie.jpg', 640, 480),
+    ]);
+
+    $response->assertOk();
+    $response->assertJson([
+        'verified' => false,
+        'reason' => 'not_enrolled',
+        'details' => [
+            'message' => 'Face is not registered for biometric authentication.',
+            'registration_required' => true,
+        ],
+    ]);
+    expect($response->json('details.registration_url'))->toBe(route('login', ['username' => 'lester@hurtado.ph']));
+    $this->assertGuest();
 });
 
 test('face verification fails for non-matching face', function () {

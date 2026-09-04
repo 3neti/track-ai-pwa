@@ -74,7 +74,12 @@ class FaceAuthController extends Controller
             'ok' => true,
             'verified' => false,
             'reason' => $result->reason,
-            'details' => $result->details,
+            'details' => [
+                ...$result->details,
+                'registration_url' => $result->reason === 'not_enrolled'
+                    ? route('login', ['username' => $username])
+                    : null,
+            ],
         ]);
     }
 
@@ -94,6 +99,8 @@ class FaceAuthController extends Controller
             'provider' => config('face_auth.provider'),
             'status' => $details['status'] ?? null,
             'message' => $details['message'] ?? null,
+            'error_code' => $details['error_code'] ?? null,
+            'registration_required' => $details['registration_required'] ?? false,
         ]);
     }
 

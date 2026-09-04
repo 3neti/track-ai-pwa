@@ -83,6 +83,28 @@ test('saras face provider exposes unauthorized api errors', function () {
         ->and($result->details['status'])->toBe(401);
 });
 
+test('saras face provider maps biometric registration error to not enrolled', function () {
+    Http::fake([
+        'https://ind-prod.sarasfinance.com/v1/users/loginWithFace' => Http::response([
+            'errorCode' => 1509,
+            'msg' => 'Face is not registered for biometric authentication.',
+            'addMsg' => 'Face is not registered for user',
+        ], 400),
+    ]);
+
+    $result = sarasFaceAuthProvider()->verify(
+        'lester@hurtado.ph',
+        UploadedFile::fake()->image('selfie.jpg'),
+        'txn-saras-face-not-registered',
+    );
+
+    expect($result->verified)->toBeFalse()
+        ->and($result->reason)->toBe('not_enrolled')
+        ->and($result->details['message'])->toBe('Face is not registered for biometric authentication.')
+        ->and($result->details['error_code'])->toBe(1509)
+        ->and($result->details['registration_required'])->toBeTrue();
+});
+
 test('saras face provider exposes non json api errors', function () {
     Http::fake([
         'https://ind-prod.sarasfinance.com/v1/users/loginWithFace' => Http::response('Unauthorized', 401),

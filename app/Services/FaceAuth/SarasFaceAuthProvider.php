@@ -75,12 +75,25 @@ class SarasFaceAuthProvider implements FaceAuthProviderInterface
     {
         $data = $response->json() ?? [];
         $message = $this->errorMessage($response, $data);
+        $errorCode = data_get($data, 'errorCode');
 
         Log::warning('Saras face login API error', [
             'status' => $response->status(),
             'body' => app()->isProduction() ? '[redacted]' : $data,
             'transactionId' => $transactionId,
         ]);
+
+        if ((string) $errorCode === '1509') {
+            return FaceVerificationResult::notEnrolled(
+                $data,
+                [
+                    'message' => $message,
+                    'status' => $response->status(),
+                    'error_code' => $errorCode,
+                    'registration_required' => true,
+                ],
+            );
+        }
 
         return FaceVerificationResult::error(
             $message,
@@ -94,8 +107,10 @@ class SarasFaceAuthProvider implements FaceAuthProviderInterface
     private function errorMessage(Response $response, array $data): string
     {
         $message = data_get($data, 'message')
+            ?? data_get($data, 'msg')
             ?? data_get($data, 'error')
             ?? data_get($data, 'errorMessage')
+            ?? data_get($data, 'addMsg')
             ?? data_get($data, 'result.error')
             ?? data_get($data, 'result.message');
 

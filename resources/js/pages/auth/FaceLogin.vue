@@ -11,9 +11,22 @@ const props = defineProps<{
 }>();
 
 type State = 'initializing' | 'ready' | 'captured' | 'submitting' | 'success' | 'error';
+type FaceLoginResponse = {
+    verified?: boolean;
+    redirect?: string;
+    reason?: string;
+    details?: {
+        message?: string;
+        issue?: string;
+        registration_url?: string | null;
+        registration_required?: boolean;
+    };
+};
 
 const state = ref<State>('initializing');
 const errorMessage = ref('');
+const failureReason = ref('');
+const registrationUrl = ref<string | null>(null);
 const videoRef = ref<HTMLVideoElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const capturedImage = ref<string | null>(null);
@@ -86,10 +99,14 @@ function capture() {
 
     capturedImage.value = canvas.toDataURL('image/jpeg', 0.9);
     state.value = 'captured';
+    failureReason.value = '';
+    registrationUrl.value = null;
 }
 
 function retake() {
     capturedImage.value = null;
+    failureReason.value = '';
+    registrationUrl.value = null;
     state.value = 'ready';
 }
 
@@ -128,7 +145,7 @@ async function submit() {
             credentials: 'same-origin',
         });
 
-        const data = await result.json();
+        const data = (await result.json()) as FaceLoginResponse;
 
         if (data.verified) {
             state.value = 'success';
@@ -139,6 +156,8 @@ async function submit() {
             }, 500);
         } else {
             state.value = 'error';
+            failureReason.value = data.reason || '';
+            registrationUrl.value = data.details?.registration_url || null;
             errorMessage.value = data.details?.message || data.details?.issue || 'Face not recognized. Please try again.';
         }
     } catch (err) {
@@ -158,6 +177,11 @@ function handleOnline() {
 
 function handleOffline() {
     isOffline.value = true;
+}
+
+function continueToFaceRegistration() {
+    stopCamera();
+    router.visit(registrationUrl.value || login({ query: { username: props.username } }).url);
 }
 
 onMounted(() => {
@@ -290,6 +314,14 @@ onUnmounted(() => {
 
             <!-- Error State Buttons -->
             <template v-if="state === 'error'">
+                <Button
+                    v-if="failureReason === 'not_enrolled'"
+                    type="button"
+                    class="w-full"
+                    @click="continueToFaceRegistration"
+                >
+                    Use password to register face
+                </Button>
                 <!-- Camera never initialized -->
                 <Button
                     v-if="!cameraInitialized"

@@ -59,6 +59,7 @@ class FortifyServiceProvider extends ServiceProvider
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'canRegister' => Features::enabled(Features::registration()),
             'defaultProjectId' => config('saras.project_id'),
+            'initialUsername' => $request->query('username', 'lester@hurtado.ph'),
             'status' => $request->session()->get('status'),
         ]));
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -11,16 +11,15 @@ import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
-import { ChevronDown } from 'lucide-vue-next';
 
 const props = defineProps<{
     status?: string;
     canResetPassword: boolean;
-    defaultProjectId: string;
+    initialUsername?: string;
 }>();
 
-const username = ref('lester@hurtado.ph');
-const showAdvanced = ref(false);
+const username = ref(props.initialUsername || 'lester@hurtado.ph');
+const usernameInput = ref<HTMLInputElement | null>(null);
 const faceStatusMessage = ref('');
 const checkingFaceStatus = ref(false);
 
@@ -68,6 +67,22 @@ function getCsrfToken(): string {
 
     return match ? decodeURIComponent(match[1]) : '';
 }
+
+function syncInitialUsernameInput(element: HTMLInputElement | null) {
+    usernameInput.value = element;
+
+    if (element && username.value && element.value !== username.value) {
+        element.value = username.value;
+    }
+}
+
+onMounted(() => {
+    window.setTimeout(() => {
+        if (usernameInput.value && username.value && usernameInput.value.value !== username.value) {
+            usernameInput.value.value = username.value;
+        }
+    }, 100);
+});
 </script>
 
 <template>
@@ -93,18 +108,20 @@ function getCsrfToken(): string {
             <div class="grid gap-6">
                 <div class="grid gap-2">
                     <Label for="username">Username</Label>
-                    <Input
+                    <input
                         id="username"
+                        :ref="syncInitialUsernameInput"
                         type="text"
                         name="username"
                         v-model="username"
                         required
                         autofocus
                         :tabindex="1"
-                        autocomplete="username"
+                        autocomplete="off"
                         placeholder="Enter your username"
+                        class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
                         @blur="checkFaceRegistrationStatus"
-                    />
+                    >
                     <InputError :message="errors.username" />
                     <p v-if="faceStatusMessage" class="text-xs text-muted-foreground">
                         {{ faceStatusMessage }}
@@ -133,33 +150,6 @@ function getCsrfToken(): string {
                         placeholder="Password"
                     />
                     <InputError :message="errors.password" />
-                </div>
-
-                <div class="rounded-md border">
-                    <button
-                        type="button"
-                        class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm font-medium"
-                        @click="showAdvanced = !showAdvanced"
-                    >
-                        <span>Project context</span>
-                        <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showAdvanced }" />
-                    </button>
-                    <div v-if="showAdvanced" class="grid gap-2 border-t px-3 py-3">
-                        <Label for="saras_project_id">Saras Project ID</Label>
-                        <Input
-                            id="saras_project_id"
-                            type="text"
-                            name="saras_project_id"
-                            :default-value="props.defaultProjectId"
-                            :tabindex="3"
-                            autocomplete="off"
-                            placeholder="Use configured default"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Optional. Keep the default project unless Saras provided another project ID.
-                        </p>
-                        <InputError :message="errors.saras_project_id" />
-                    </div>
                 </div>
 
                 <div class="flex items-center justify-between">

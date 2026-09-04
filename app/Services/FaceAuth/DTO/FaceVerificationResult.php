@@ -56,14 +56,14 @@ readonly class FaceVerificationResult
         );
     }
 
-    public static function notEnrolled(): self
+    public static function notEnrolled(array $raw = [], array $details = []): self
     {
         return new self(
             verified: false,
             confidence: null,
             reason: 'not_enrolled',
-            details: ['message' => 'User is not enrolled for face authentication.'],
-            raw: [],
+            details: ['message' => 'User is not enrolled for face authentication.', ...$details],
+            raw: $raw,
         );
     }
 
