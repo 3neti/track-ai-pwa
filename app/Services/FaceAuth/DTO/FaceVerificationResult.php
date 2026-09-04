@@ -45,13 +45,13 @@ readonly class FaceVerificationResult
         );
     }
 
-    public static function error(string $message, array $raw = []): self
+    public static function error(string $message, array $raw = [], array $details = []): self
     {
         return new self(
             verified: false,
             confidence: null,
             reason: 'error',
-            details: ['message' => $message],
+            details: ['message' => $message, ...$details],
             raw: $raw,
         );
     }

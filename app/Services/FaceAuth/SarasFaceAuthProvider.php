@@ -9,6 +9,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class SarasFaceAuthProvider implements FaceAuthProviderInterface
@@ -73,6 +74,7 @@ class SarasFaceAuthProvider implements FaceAuthProviderInterface
     private function apiError(Response $response, string $transactionId): FaceVerificationResult
     {
         $data = $response->json() ?? [];
+        $message = $this->errorMessage($response, $data);
 
         Log::warning('Saras face login API error', [
             'status' => $response->status(),
@@ -81,9 +83,38 @@ class SarasFaceAuthProvider implements FaceAuthProviderInterface
         ]);
 
         return FaceVerificationResult::error(
-            data_get($data, 'message') ?? data_get($data, 'result.error') ?? 'Saras face login unavailable.',
+            $message,
             $data,
+            [
+                'status' => $response->status(),
+            ],
         );
+    }
+
+    private function errorMessage(Response $response, array $data): string
+    {
+        $message = data_get($data, 'message')
+            ?? data_get($data, 'error')
+            ?? data_get($data, 'errorMessage')
+            ?? data_get($data, 'result.error')
+            ?? data_get($data, 'result.message');
+
+        if (is_string($message) && $message !== '') {
+            return $message;
+        }
+
+        $body = trim($response->body());
+
+        if ($body !== '') {
+            return Str::limit($body, 180);
+        }
+
+        return match ($response->status()) {
+            401 => 'Saras face login unauthorized.',
+            403 => 'Saras face login forbidden.',
+            404 => 'Saras face login endpoint was not found.',
+            default => 'Saras face login unavailable.',
+        };
     }
 
     private function confidence(array $data): float

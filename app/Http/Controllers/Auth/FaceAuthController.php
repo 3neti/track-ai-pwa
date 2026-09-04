@@ -51,6 +51,7 @@ class FaceAuthController extends Controller
             $result->verified,
             $result->reason,
             $result->confidence,
+            $result->details,
         );
 
         // If verified, log the user in
@@ -83,12 +84,16 @@ class FaceAuthController extends Controller
         bool $verified,
         string $reason,
         ?float $confidence,
+        array $details,
     ): void {
         AuditLog::log($userId, 'face_login_attempt', null, [
             'transaction_id' => $transactionId,
             'result' => $verified ? 'verified' : 'not_verified',
             'reason' => $reason,
             'confidence' => $confidence,
+            'provider' => config('face_auth.provider'),
+            'status' => $details['status'] ?? null,
+            'message' => $details['message'] ?? null,
         ]);
     }
 

@@ -64,6 +64,41 @@ test('saras face provider returns not matched when login is rejected', function 
         ->and($result->reason)->toBe('not_matched');
 });
 
+test('saras face provider exposes unauthorized api errors', function () {
+    Http::fake([
+        'https://ind-prod.sarasfinance.com/v1/users/loginWithFace' => Http::response([
+            'error' => 'Unauthorized',
+        ], 401),
+    ]);
+
+    $result = sarasFaceAuthProvider()->verify(
+        'lester@hurtado.ph',
+        UploadedFile::fake()->image('selfie.jpg'),
+        'txn-saras-unauthorized',
+    );
+
+    expect($result->verified)->toBeFalse()
+        ->and($result->reason)->toBe('error')
+        ->and($result->details['message'])->toBe('Unauthorized')
+        ->and($result->details['status'])->toBe(401);
+});
+
+test('saras face provider exposes non json api errors', function () {
+    Http::fake([
+        'https://ind-prod.sarasfinance.com/v1/users/loginWithFace' => Http::response('Unauthorized', 401),
+    ]);
+
+    $result = sarasFaceAuthProvider()->verify(
+        'lester@hurtado.ph',
+        UploadedFile::fake()->image('selfie.jpg'),
+        'txn-saras-plain-unauthorized',
+    );
+
+    expect($result->verified)->toBeFalse()
+        ->and($result->details['message'])->toBe('Unauthorized')
+        ->and($result->details['status'])->toBe(401);
+});
+
 test('saras face registration service sends selfie and document to saras', function () {
     $user = User::factory()->create([
         'saras_access_token' => 'temp-face-registration-token',
