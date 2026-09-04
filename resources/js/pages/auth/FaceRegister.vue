@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { Camera, Check, RotateCcw } from 'lucide-vue-next';
+import { Camera, Check, RotateCcw, Upload } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ const errorMessage = ref('');
 const validationErrors = ref<Record<string, string>>({});
 const videoRef = ref<HTMLVideoElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
+const documentFileInputRef = ref<HTMLInputElement | null>(null);
 const stream = ref<MediaStream | null>(null);
 const selfieImage = ref<string | null>(null);
 const documentImage = ref<string | null>(null);
@@ -27,11 +28,15 @@ const isOffline = ref(!navigator.onLine);
 const cameraInitialized = ref(false);
 
 const activeImage = computed(() => (step.value === 'selfie' ? selfieImage.value : documentImage.value));
-const title = computed(() => (step.value === 'selfie' ? 'Register Selfie' : 'Register Document'));
-const instruction = computed(() => (step.value === 'selfie' ? 'Capture your face clearly.' : 'Capture the document face image clearly.'));
+const instructionHeading = computed(() => (step.value === 'selfie' ? 'LIVE BIOMETRIC' : 'ID DOCUMENT / CARD'));
+const instruction = computed(() => (
+    step.value === 'selfie'
+        ? 'Position your face inside the frame with good lighting and look directly at the camera.'
+        : "Position your official ID (Driver's License, Passport, ID Card) inside the frame, or upload a photo."
+));
 
 const stateMessage = computed(() => {
-    if (state.value === 'success') return 'Registration complete. Returning to login...';
+    if (state.value === 'success') return 'Registration complete. Opening face verification...';
     if (state.value === 'submitting') return 'Registering face with Saras...';
     if (state.value === 'error') return errorMessage.value || 'Registration failed.';
     if (state.value === 'captured') return `${step.value === 'selfie' ? 'Selfie' : 'Document'} captured.`;
@@ -87,11 +92,11 @@ function capture() {
 
     if (step.value === 'selfie') {
         selfieImage.value = image;
+        state.value = 'captured';
     } else {
         documentImage.value = image;
+        void submit();
     }
-
-    state.value = 'captured';
 }
 
 function retake() {
@@ -189,6 +194,30 @@ function retryCamera() {
     startCamera();
 }
 
+function cancel() {
+    router.visit(props.username ? `/login?username=${encodeURIComponent(props.username)}` : '/login');
+}
+
+async function uploadDocumentPhoto(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    documentImage.value = await fileToDataUrl(file);
+    validationErrors.value = {};
+    void submit();
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
 function handleOnline() {
     isOffline.value = false;
 }
@@ -212,10 +241,14 @@ onUnmounted(() => {
 
 <template>
     <AuthBase
-        :title="title"
-        :description="username ? `Setting up face login for ${username}` : 'Setting up face login'"
+        title="Register Face Profile"
+        description="Account Biometric Setup"
     >
         <Head title="Register Face" />
+
+        <p v-if="username" class="mb-4 text-center text-sm font-medium text-muted-foreground">
+            {{ username }}
+        </p>
 
         <div
             v-if="isOffline"
@@ -227,12 +260,18 @@ onUnmounted(() => {
         <div class="mb-4 grid grid-cols-2 gap-2 text-xs font-medium">
             <div class="rounded-md border px-3 py-2" :class="{ 'border-primary bg-primary/10': step === 'selfie' }">
                 <Check v-if="selfieImage" class="mr-1 inline h-3 w-3" />
-                Selfie
+                <span v-else class="mr-1">1</span>
+                Live Selfie
             </div>
             <div class="rounded-md border px-3 py-2" :class="{ 'border-primary bg-primary/10': step === 'document' }">
                 <Check v-if="documentImage" class="mr-1 inline h-3 w-3" />
-                Document
+                <span v-else class="mr-1">2</span>
+                ID Document
             </div>
+        </div>
+
+        <div class="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
+            {{ instructionHeading }}
         </div>
 
         <div class="relative mx-auto aspect-[4/3] w-full max-w-sm overflow-hidden rounded-lg bg-black">
@@ -252,6 +291,13 @@ onUnmounted(() => {
                 alt="Captured registration image"
                 class="h-full w-full object-cover"
             />
+
+            <div
+                v-if="state === 'ready' && step === 'document'"
+                class="pointer-events-none absolute inset-4 flex items-center justify-center rounded-md border-2 border-dashed border-white/50 text-xs font-semibold text-white/70"
+            >
+                DOCUMENT VIEW
+            </div>
 
             <div
                 v-if="state === 'ready' && step === 'selfie'"
@@ -293,7 +339,45 @@ onUnmounted(() => {
                 @click="capture"
             >
                 <Camera class="mr-2 h-4 w-4" />
-                Capture {{ step === 'selfie' ? 'Selfie' : 'Document' }}
+                Capture {{ step === 'selfie' ? 'Face Selfie' : 'ID Document' }}
+            </Button>
+
+            <template v-if="state === 'ready' && step === 'document'">
+                <input
+                    ref="documentFileInputRef"
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="uploadDocumentPhoto"
+                >
+                <Button
+                    type="button"
+                    variant="outline"
+                    class="w-full"
+                    :disabled="isOffline"
+                    @click="documentFileInputRef?.click()"
+                >
+                    <Upload class="mr-2 h-4 w-4" />
+                    Upload ID Document Photo
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    class="w-full"
+                    @click="backToSelfie"
+                >
+                    Retake Selfie
+                </Button>
+            </template>
+
+            <Button
+                v-if="state === 'ready' && step === 'selfie'"
+                type="button"
+                variant="outline"
+                class="w-full"
+                @click="cancel"
+            >
+                Cancel
             </Button>
 
             <template v-if="state === 'captured'">
@@ -306,22 +390,13 @@ onUnmounted(() => {
                     Continue
                 </Button>
                 <Button
-                    v-else
-                    type="button"
-                    class="w-full"
-                    :disabled="!selfieImage || !documentImage || isOffline"
-                    @click="submit"
-                >
-                    Register Face
-                </Button>
-                <Button
                     type="button"
                     variant="outline"
                     class="w-full"
                     @click="retake"
                 >
                     <RotateCcw class="mr-2 h-4 w-4" />
-                    Retake
+                    {{ step === 'selfie' ? 'Retake Selfie' : 'Retake ID Document' }}
                 </Button>
                 <Button
                     v-if="step === 'document'"
@@ -330,7 +405,7 @@ onUnmounted(() => {
                     class="w-full"
                     @click="backToSelfie"
                 >
-                    Back to Selfie
+                    Retake Selfie
                 </Button>
             </template>
 

@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\Project;
 use App\Models\User;
+use App\Services\FaceAuth\SarasFaceRegistrationStatusService;
 use App\Services\Saras\SarasProjectContextResolver;
 use App\Services\TrackAI\ContractService;
 use App\Services\TrackAI\ProjectProgressService;
@@ -22,6 +23,7 @@ class SarasAuthenticator
         protected ContractService $contractService,
         protected ProjectProgressService $projectProgressService,
         protected SarasProjectContextResolver $contextResolver,
+        protected SarasFaceRegistrationStatusService $faceRegistrationStatusService,
     ) {}
 
     /**
@@ -94,7 +96,17 @@ class SarasAuthenticator
             }
 
             $tokenData = $response->json();
-            $accessToken = $tokenData['access_token'] ?? $tokenData['token'] ?? null;
+            $accessToken = $tokenData['access_token']
+                ?? $tokenData['accessToken']
+                ?? $tokenData['authToken']
+                ?? $tokenData['jwt']
+                ?? $tokenData['token']
+                ?? data_get($tokenData, 'data.access_token')
+                ?? data_get($tokenData, 'data.accessToken')
+                ?? data_get($tokenData, 'data.authToken')
+                ?? data_get($tokenData, 'data.jwt')
+                ?? data_get($tokenData, 'data.token')
+                ?? null;
             $expiresIn = $tokenData['expires_in'] ?? $tokenData['expiresIn'] ?? 3600;
 
             if (! $accessToken) {
@@ -105,10 +117,12 @@ class SarasAuthenticator
                 return null;
             }
 
-            if ($this->requiresFaceRegistration($tokenData)) {
-                $user = $this->getOrCreateUser($email, $password, [], $accessToken, $expiresIn);
+            if ($this->requiresFaceRegistration($tokenData) || $this->requiresFaceRegistrationByStatus($email)) {
+                $user = $this->getOrCreateUser($email, $password, [], null);
 
                 request()->session()->put('saras_face_registration_required', true);
+                request()->session()->put('saras_face_registration_token', $accessToken);
+                request()->session()->put('saras_face_registration_token_expires_at', now()->addSeconds(max($expiresIn - 60, 60))->toISOString());
 
                 Log::info('Saras login requires face registration', [
                     'user_id' => $user->id,
@@ -277,11 +291,25 @@ class SarasAuthenticator
 
         $tokenType = strtolower((string) ($tokenData['token_type'] ?? $tokenData['tokenType'] ?? ''));
         $purpose = strtolower((string) ($tokenData['purpose'] ?? $tokenData['scope'] ?? ''));
+        $authStrategy = strtoupper((string) ($tokenData['authStrategy'] ?? $tokenData['auth_strategy'] ?? ''));
+        $faceRegistered = filter_var(
+            $tokenData['faceRegistered'] ?? $tokenData['face_registered'] ?? null,
+            FILTER_VALIDATE_BOOLEAN,
+            FILTER_NULL_ON_FAILURE,
+        );
 
-        return str_contains($tokenType, 'signup')
+        return ($authStrategy === 'FACE' && $faceRegistered === false)
+            || str_contains($tokenType, 'signup')
             || str_contains($tokenType, 'self')
             || str_contains($purpose, 'face_registration')
             || str_contains($purpose, 'self_signup');
+    }
+
+    protected function requiresFaceRegistrationByStatus(string $email): bool
+    {
+        $status = $this->faceRegistrationStatusService->check($email);
+
+        return $status['ok'] === true && ($status['face_registration_required'] ?? false) === true;
     }
 
     /**

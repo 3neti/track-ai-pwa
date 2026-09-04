@@ -20,6 +20,9 @@ class FaceRegistrationStatusController extends Controller
         return response()->json([
             'ok' => $result['ok'],
             'face_registration_enabled' => $result['face_registration_enabled'],
+            'auth_strategy' => $result['auth_strategy'] ?? null,
+            'face_registered' => $result['face_registered'] ?? null,
+            'face_registration_required' => $result['face_registration_required'] ?? null,
         ]);
     }
 }

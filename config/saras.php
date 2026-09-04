@@ -167,6 +167,8 @@ return [
                 'face_registration_enabled',
                 'faceRegistrationEnabled',
                 'samlLoginEnabled',
+                'authStrategy',
+                'faceRegistered',
                 'enabled',
             ],
         ],

@@ -31,7 +31,7 @@ test('face login page requires username parameter', function () {
 });
 
 test('face registration page requires authentication', function () {
-    $response = $this->get('/face-register');
+    $response = $this->get('/face-register?username=lester%40hurtado.ph');
 
     $response->assertRedirect(route('login'));
 });
@@ -48,6 +48,55 @@ test('face registration page can be rendered for authenticated user', function (
         ->component('auth/FaceRegister')
         ->where('username', 'lester@hurtado.ph')
     );
+});
+
+test('face registration submit uses temporary session token and registers images with saras', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    $user = User::factory()->create([
+        'email' => 'lester@hurtado.ph',
+        'username' => 'lester@hurtado.ph',
+        'saras_access_token' => null,
+    ]);
+
+    Http::fake([
+        'https://saras.test/v1/users/registerFaceForFaceAuthentication' => Http::response([
+            'success' => true,
+            'traceId' => 'trace-face-register',
+        ]),
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->withSession(['saras_face_registration_token' => 'temporary-face-registration-token'])
+        ->post('/auth/face/register', [
+            'selfie' => UploadedFile::fake()->image('selfie.jpg', 640, 480),
+            'document' => UploadedFile::fake()->image('document.jpg', 640, 480),
+        ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'redirect' => route('face-login', ['username' => 'lester@hurtado.ph']),
+        ]);
+
+    $this->assertDatabaseHas('users', [
+        'email' => 'lester@hurtado.ph',
+        'saras_access_token' => null,
+    ]);
+
+    $this->assertDatabaseHas('face_enrollments', [
+        'provider' => 'saras',
+        'status' => 'active',
+    ]);
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://saras.test/v1/users/registerFaceForFaceAuthentication'
+        && $request->hasHeader('Authorization', 'Bearer temporary-face-registration-token')
+        && is_string($request['image1'])
+        && is_string($request['image2']));
 });
 
 test('successful face verification logs in the user', function () {

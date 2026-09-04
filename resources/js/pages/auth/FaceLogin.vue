@@ -39,13 +39,13 @@ const stateMessage = computed(() => {
         case 'initializing':
             return 'Starting camera...';
         case 'ready':
-            return 'Position your face in the frame';
+            return 'Align your face within the frame and hold still to verify your identity.';
         case 'captured':
             return 'Photo captured. Ready to verify.';
         case 'submitting':
             return 'Verifying...';
         case 'success':
-            return 'Verified! Redirecting...';
+            return 'Verified. Signing in...';
         case 'error':
             return errorMessage.value || 'Verification failed';
         default:
@@ -199,10 +199,14 @@ onUnmounted(() => {
 
 <template>
     <AuthBase
-        title="Face Login"
-        :description="`Logging in as ${username}`"
+        title="Face Authentication"
+        description="Biometric Identity Verification"
     >
         <Head title="Face Login" />
+
+        <p class="mb-4 text-center text-sm font-medium text-muted-foreground">
+            {{ username }}
+        </p>
 
         <!-- Offline Warning -->
         <div
@@ -210,6 +214,10 @@ onUnmounted(() => {
             class="mb-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200"
         >
             You are offline. Face login requires an internet connection.
+        </div>
+
+        <div class="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
+            LIVE BIOMETRIC
         </div>
 
         <!-- Camera / Capture View -->
@@ -289,7 +297,7 @@ onUnmounted(() => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Capture
+                Capture Face Selfie
             </Button>
 
             <!-- Verify / Retake Buttons -->
@@ -300,7 +308,7 @@ onUnmounted(() => {
                     @click="submit"
                     :disabled="isOffline"
                 >
-                    Verify & Log In
+                    Verify and Sign In
                 </Button>
                 <Button
                     type="button"
@@ -308,7 +316,7 @@ onUnmounted(() => {
                     class="w-full"
                     @click="retake"
                 >
-                    Retake Photo
+                    Retake Selfie
                 </Button>
             </template>
 
@@ -320,7 +328,7 @@ onUnmounted(() => {
                     class="w-full"
                     @click="continueToFaceRegistration"
                 >
-                    Use password to register face
+                    Sign and Register Face
                 </Button>
                 <!-- Camera never initialized -->
                 <Button
@@ -338,18 +346,17 @@ onUnmounted(() => {
                     class="w-full"
                     @click="retake"
                 >
-                    Retake Photo
+                    Retake Selfie
                 </Button>
             </template>
         </div>
 
-        <!-- Back to Password Login -->
         <div class="mt-6 text-center">
             <Link
                 :href="login()"
                 class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
             >
-                Use password instead
+                Use a different email
             </Link>
         </div>
     </AuthBase>

@@ -21,12 +21,14 @@ class SarasFaceRegistrationService
     /**
      * @return array<string, mixed>
      */
-    public function register(User $user, UploadedFile $selfie, UploadedFile $document): array
+    public function register(User $user, UploadedFile $selfie, UploadedFile $document, ?string $bearerToken = null): array
     {
         try {
+            $token = $bearerToken ?: (string) $user->saras_access_token;
+
             $response = Http::timeout($this->timeout)
                 ->connectTimeout(10)
-                ->withToken((string) $user->saras_access_token)
+                ->withToken($token)
                 ->acceptJson()
                 ->asJson()
                 ->post($this->endpoint($this->registerPath), [
@@ -45,7 +47,11 @@ class SarasFaceRegistrationService
 
                 return [
                     'ok' => false,
-                    'message' => data_get($data, 'message') ?? 'Saras face registration failed.',
+                    'message' => data_get($data, 'message')
+                        ?? data_get($data, 'msg')
+                        ?? data_get($data, 'error')
+                        ?? data_get($data, 'addMsg')
+                        ?? 'Saras face registration failed.',
                     'raw' => $data,
                 ];
             }

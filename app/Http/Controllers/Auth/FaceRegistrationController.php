@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\FaceRegistrationRequest;
 use App\Models\AuditLog;
+use App\Models\User;
 use App\Services\FaceAuth\SarasFaceRegistrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,15 +22,16 @@ class FaceRegistrationController extends Controller
     public function index(Request $request): Response
     {
         return Inertia::render('auth/FaceRegister', [
-            'username' => $request->user()?->email ?? $request->user()?->username,
+            'username' => $request->user()?->email ?? $request->user()?->username ?? $request->query('username'),
         ]);
     }
 
     public function store(FaceRegistrationRequest $request): JsonResponse
     {
         $user = $request->user();
+        $registrationToken = $request->session()->get('saras_face_registration_token');
 
-        if (! $user || ! $user->saras_access_token) {
+        if (! $user instanceof User || ! is_string($registrationToken) || $registrationToken === '') {
             return response()->json([
                 'ok' => false,
                 'message' => 'Please log in with your temporary Saras password first.',
@@ -40,6 +42,7 @@ class FaceRegistrationController extends Controller
             $user,
             $request->file('selfie'),
             $request->file('document'),
+            $registrationToken,
         );
 
         AuditLog::log($user->id, 'face_registration_attempt', null, [
@@ -60,8 +63,8 @@ class FaceRegistrationController extends Controller
 
         return response()->json([
             'ok' => true,
-            'redirect' => route('login'),
-            'message' => 'Face registration complete. Please log in with face.',
+            'redirect' => route('face-login', ['username' => $user->email]),
+            'message' => 'Face registration complete. Please sign in with face.',
         ]);
     }
 }

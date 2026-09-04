@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, router } from '@inertiajs/vue3';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -18,10 +18,37 @@ const props = defineProps<{
     initialUsername?: string;
 }>();
 
+type LoginMode = 'unknown' | 'password' | 'face_registered' | 'face_registration_required';
+
 const username = ref(props.initialUsername || 'lester@hurtado.ph');
 const usernameInput = ref<HTMLInputElement | null>(null);
 const faceStatusMessage = ref('');
+const loginMode = ref<LoginMode>('unknown');
 const checkingFaceStatus = ref(false);
+
+const description = computed(() => {
+    if (loginMode.value === 'face_registration_required') {
+        return 'Biometric face authentication is required for your account. Please sign in with your temporary password to setup your face profile.';
+    }
+
+    if (loginMode.value === 'face_registered') {
+        return 'Use face login to continue';
+    }
+
+    if (loginMode.value === 'password') {
+        return 'Enter your password to log in';
+    }
+
+    return 'Enter your email to continue';
+});
+
+const passwordVisible = computed(() => loginMode.value === 'password' || loginMode.value === 'face_registration_required');
+const passwordLabel = computed(() => (loginMode.value === 'face_registration_required' ? 'Temporary password' : 'Password'));
+const passwordPlaceholder = computed(() => (loginMode.value === 'face_registration_required' ? 'Temporary password' : 'Password'));
+const loginButtonText = computed(() => (loginMode.value === 'face_registration_required' ? 'Sign and Register Face' : 'Log in'));
+const showFaceLogin = computed(() => loginMode.value === 'face_registered');
+const showContinue = computed(() => loginMode.value === 'unknown');
+const showUseDifferentEmail = computed(() => loginMode.value === 'face_registration_required' || loginMode.value === 'face_registered');
 
 function goToFaceLogin() {
     if (username.value.trim()) {
@@ -29,16 +56,26 @@ function goToFaceLogin() {
     }
 }
 
+function useDifferentEmail() {
+    username.value = '';
+    faceStatusMessage.value = '';
+    loginMode.value = 'unknown';
+
+    window.setTimeout(() => usernameInput.value?.focus(), 50);
+}
+
 async function checkFaceRegistrationStatus() {
     const email = username.value.trim();
 
     if (!email || !email.includes('@')) {
         faceStatusMessage.value = '';
+        loginMode.value = 'unknown';
         return;
     }
 
     checkingFaceStatus.value = true;
     faceStatusMessage.value = '';
+    loginMode.value = 'unknown';
 
     try {
         const response = await fetch('/auth/face/registration-status', {
@@ -52,10 +89,17 @@ async function checkFaceRegistrationStatus() {
         });
         const data = await response.json();
 
-        if (response.ok && data.face_registration_enabled === true) {
-            faceStatusMessage.value = 'Face setup is enabled for this profile.';
+        if (response.ok && data.face_registration_required === true) {
+            loginMode.value = 'face_registration_required';
+            faceStatusMessage.value = 'Face registration is required.';
+        } else if (response.ok && String(data.auth_strategy || '').toUpperCase() === 'FACE') {
+            loginMode.value = 'face_registered';
+            faceStatusMessage.value = 'Face login is enabled.';
+        } else {
+            loginMode.value = 'password';
         }
     } catch {
+        loginMode.value = 'password';
         faceStatusMessage.value = '';
     } finally {
         checkingFaceStatus.value = false;
@@ -83,12 +127,17 @@ onMounted(() => {
         }
     }, 100);
 });
+
+watch(username, () => {
+    faceStatusMessage.value = '';
+    loginMode.value = 'unknown';
+});
 </script>
 
 <template>
     <AuthBase
         title="Log in to your account"
-        description="Enter your email and password below to log in"
+        :description="description"
     >
         <Head title="Log in" />
 
@@ -128,11 +177,11 @@ onMounted(() => {
                     </p>
                 </div>
 
-                <div class="grid gap-2">
+                <div v-if="passwordVisible" class="grid gap-2">
                     <div class="flex items-center justify-between">
-                        <Label for="password">Password</Label>
+                        <Label for="password">{{ passwordLabel }}</Label>
                         <TextLink
-                            v-if="canResetPassword"
+                            v-if="canResetPassword && loginMode === 'password'"
                             :href="request()"
                             class="text-sm"
                             :tabindex="5"
@@ -147,12 +196,12 @@ onMounted(() => {
                         required
                         :tabindex="2"
                         autocomplete="current-password"
-                        placeholder="Password"
+                        :placeholder="passwordPlaceholder"
                     />
                     <InputError :message="errors.password" />
                 </div>
 
-                <div class="flex items-center justify-between">
+                <div v-if="passwordVisible" class="flex items-center justify-between">
                     <Label for="remember" class="flex items-center space-x-3">
                         <Checkbox id="remember" name="remember" :tabindex="4" />
                         <span>Remember me</span>
@@ -160,6 +209,20 @@ onMounted(() => {
                 </div>
 
                 <Button
+                    v-if="showContinue"
+                    type="button"
+                    class="mt-4 w-full"
+                    :tabindex="3"
+                    :disabled="!username.trim() || processing || checkingFaceStatus"
+                    data-test="continue-login-button"
+                    @click="checkFaceRegistrationStatus"
+                >
+                    <Spinner v-if="checkingFaceStatus" />
+                    Continue
+                </Button>
+
+                <Button
+                    v-if="passwordVisible"
                     type="submit"
                     class="mt-4 w-full"
                     :tabindex="5"
@@ -167,21 +230,13 @@ onMounted(() => {
                     data-test="login-button"
                 >
                     <Spinner v-if="processing" />
-                    Log in
+                    {{ loginButtonText }}
                 </Button>
 
-                <div class="relative">
-                    <div class="absolute inset-0 flex items-center">
-                        <span class="w-full border-t" />
-                    </div>
-                    <div class="relative flex justify-center text-xs uppercase">
-                        <span class="bg-background px-2 text-muted-foreground">Or</span>
-                    </div>
-                </div>
-
                 <Button
+                    v-if="showFaceLogin"
                     type="button"
-                    variant="outline"
+                    variant="default"
                     class="w-full"
                     :tabindex="6"
                     :disabled="!username.trim() || processing"
@@ -194,6 +249,19 @@ onMounted(() => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                     Login with Face
+                </Button>
+
+                <Button
+                    v-if="showUseDifferentEmail"
+                    type="button"
+                    variant="outline"
+                    class="w-full"
+                    :tabindex="7"
+                    :disabled="processing"
+                    data-test="use-different-email-button"
+                    @click="useDifferentEmail"
+                >
+                    Use Different Email
                 </Button>
             </div>
         </Form>

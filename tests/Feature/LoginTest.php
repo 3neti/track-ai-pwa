@@ -126,8 +126,64 @@ test('saras login with face registration token redirects to face registration', 
     $response->assertRedirect(route('face-register'));
     $this->assertDatabaseHas('users', [
         'email' => 'lester@example.test',
-        'saras_access_token' => 'temporary-face-registration-token',
+        'saras_access_token' => null,
     ]);
+    $response->assertSessionHas('saras_face_registration_token', 'temporary-face-registration-token');
+});
+
+test('saras login redirects to face registration when face auth profile is not registered', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    Http::fake([
+        'https://saras.test/v1/users/userLogin' => Http::response([
+            'access_token' => 'temporary-face-registration-token',
+            'expires_in' => 900,
+        ]),
+        'https://saras.test/v1/users/checkSamlLoginEnabled' => Http::response([
+            'status' => false,
+            'authStrategy' => 'FACE',
+            'faceRegistered' => false,
+        ]),
+    ]);
+
+    $response = $this->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('face-register'));
+    $this->assertDatabaseHas('users', [
+        'email' => 'lester@example.test',
+        'saras_access_token' => null,
+    ]);
+    $response->assertSessionHas('saras_face_registration_token', 'temporary-face-registration-token');
+});
+
+test('face registration status endpoint exposes required enrollment state', function () {
+    Http::fake([
+        '*/users/checkSamlLoginEnabled' => Http::response([
+            'status' => false,
+            'authStrategy' => 'FACE',
+            'faceRegistered' => false,
+            'branding' => [],
+        ]),
+    ]);
+
+    $response = $this->postJson('/auth/face/registration-status', [
+        'email' => 'lester@example.test',
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'auth_strategy' => 'FACE',
+            'face_registered' => false,
+            'face_registration_required' => true,
+        ]);
 });
 
 test('live saras login outage does not authenticate with expired stored token', function () {

@@ -176,3 +176,27 @@ test('saras face registration status service checks email status', function () {
     Http::assertSent(fn ($request) => $request->url() === 'https://ind-prod.sarasfinance.com/v1/users/checkSamlLoginEnabled'
         && $request['email'] === 'lester@hurtado.ph');
 });
+
+test('saras face registration status service detects required face enrollment', function () {
+    Http::fake([
+        'https://ind-prod.sarasfinance.com/v1/users/checkSamlLoginEnabled' => Http::response([
+            'status' => false,
+            'authStrategy' => 'FACE',
+            'faceRegistered' => false,
+            'branding' => [],
+        ]),
+    ]);
+
+    $service = new SarasFaceRegistrationStatusService(
+        baseUrl: 'https://ind-prod.sarasfinance.com/v1',
+        statusPath: '/users/checkSamlLoginEnabled',
+        timeout: 5,
+    );
+
+    $result = $service->check('lester@hurtado.ph');
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['auth_strategy'])->toBe('FACE')
+        ->and($result['face_registered'])->toBeFalse()
+        ->and($result['face_registration_required'])->toBeTrue();
+});

@@ -48,6 +48,9 @@ class SarasFaceRegistrationStatusService
             return [
                 'ok' => true,
                 'face_registration_enabled' => $this->enabled($data),
+                'auth_strategy' => $this->authStrategy($data),
+                'face_registered' => $this->faceRegistered($data),
+                'face_registration_required' => $this->requiresFaceRegistration($data),
                 'raw' => $data,
             ];
         } catch (ConnectionException $e) {
@@ -65,8 +68,41 @@ class SarasFaceRegistrationStatusService
         return [
             'ok' => false,
             'face_registration_enabled' => null,
+            'auth_strategy' => null,
+            'face_registered' => null,
+            'face_registration_required' => null,
             'raw' => [],
         ];
+    }
+
+    private function authStrategy(array $data): ?string
+    {
+        $strategy = data_get($data, 'authStrategy') ?? data_get($data, 'auth_strategy');
+
+        return is_string($strategy) && $strategy !== '' ? $strategy : null;
+    }
+
+    private function faceRegistered(array $data): ?bool
+    {
+        foreach (['faceRegistered', 'face_registered', 'registered'] as $key) {
+            if (array_key_exists($key, $data)) {
+                return filter_var($data[$key], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            }
+        }
+
+        return null;
+    }
+
+    private function requiresFaceRegistration(array $data): ?bool
+    {
+        $strategy = $this->authStrategy($data);
+        $registered = $this->faceRegistered($data);
+
+        if ($strategy === null || $registered === null) {
+            return null;
+        }
+
+        return strtoupper($strategy) === 'FACE' && $registered === false;
     }
 
     private function enabled(array $data): ?bool
