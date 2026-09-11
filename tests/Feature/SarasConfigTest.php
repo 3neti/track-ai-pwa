@@ -106,6 +106,24 @@ test('saras context exposes hyperverge face auth readiness', function () {
     ]);
 
     $this->actingAs($user)
+        ->withSession([
+            'hyperverge_capture_feedback.last' => [
+                'status' => 'auto_declined',
+                'transactionId' => 'track-ai-face-faceauth-test',
+                'errorCode' => null,
+                'errorMessage' => null,
+                'latestModule' => null,
+                'detailKeys' => ['selfieImage', 'faceAuthAction'],
+                'imageFieldPaths' => ['details.selfieImage'],
+                'captured_at' => now()->toIso8601String(),
+                'capture_role' => 'image_capture_only',
+                'saras_decision' => [
+                    'authority' => 'saras_loginWithFace',
+                    'verified' => true,
+                    'reason' => 'verified',
+                ],
+            ],
+        ])
         ->getJson('/api/saras/context')
         ->assertOk()
         ->assertJsonPath('readiness.hyperverge_face_auth.status', 'hyperverge_direct')
@@ -113,7 +131,10 @@ test('saras context exposes hyperverge face auth readiness', function () {
         ->assertJsonPath('readiness.hyperverge_face_auth.match_path', '/matchFace')
         ->assertJsonPath('readiness.hyperverge_face_auth.confidence_threshold', 85)
         ->assertJsonPath('readiness.hyperverge_face_auth.credentials_configured', true)
-        ->assertJsonPath('readiness.hyperverge_face_auth.current_user_enrolled', true);
+        ->assertJsonPath('readiness.hyperverge_face_auth.current_user_enrolled', true)
+        ->assertJsonPath('readiness.hyperverge_face_auth.capture_role', 'image_capture_only')
+        ->assertJsonPath('readiness.hyperverge_face_auth.capture_feedback.status', 'auto_declined')
+        ->assertJsonPath('readiness.hyperverge_face_auth.capture_feedback.saras_decision.verified', true);
 });
 
 test('saved project id overrides the configured Saras project context', function () {

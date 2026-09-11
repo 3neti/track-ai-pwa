@@ -275,9 +275,9 @@ async function launchHypervergeCapture() {
             if (images.selfie && images.document) {
                 step.value = 'document';
                 state.value = 'captured';
-                hypervergeMessage.value = 'HyperVerge returned both images.';
+                hypervergeMessage.value = 'Images captured. Saras will register your face profile.';
             } else {
-                hypervergeMessage.value = 'HyperVerge completed, but image fields were not found in the SDK callback.';
+                hypervergeMessage.value = 'No usable registration images were captured. Please try again.';
             }
 
             hypervergeState.value = 'complete';
@@ -463,10 +463,6 @@ onUnmounted(() => {
             >
                 {{ hypervergeMessage }}
             </p>
-            <pre
-                v-if="hypervergeSummary"
-                class="max-h-32 overflow-auto rounded bg-muted p-2 text-xs"
-            >{{ JSON.stringify(hypervergeSummary, null, 2) }}</pre>
             <Button
                 v-if="hypervergeImagesReady"
                 type="button"

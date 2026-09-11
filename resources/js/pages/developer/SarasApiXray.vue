@@ -88,6 +88,24 @@ interface Readiness {
         };
         credentials_configured: boolean;
         current_user_enrolled: boolean;
+        capture_role?: string;
+        decision_authority?: string;
+        capture_feedback?: {
+            status?: string | null;
+            transactionId?: string | null;
+            errorCode?: string | number | null;
+            errorMessage?: string | null;
+            latestModule?: string | null;
+            detailKeys?: string[];
+            imageFieldPaths?: string[];
+            captured_at?: string;
+            capture_role?: string;
+            saras_decision?: {
+                authority?: string;
+                verified?: boolean;
+                reason?: string;
+            };
+        } | null;
         saras?: {
             base_url: string;
             status_path: string;
@@ -539,6 +557,83 @@ function labelize(value: string): string {
                             <p class="text-xs text-muted-foreground">Face Login</p>
                             <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.saras.login_path }}</p>
                         </div>
+                    </div>
+
+                    <div class="mt-4 rounded-md border p-4">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-medium">Latest HyperVerge Capture Feedback</p>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    HyperVerge captures the image. Saras makes the login decision.
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <Badge variant="secondary">{{ readiness.hyperverge_face_auth?.capture_role || 'image_capture_only' }}</Badge>
+                                <Badge variant="outline">{{ readiness.hyperverge_face_auth?.decision_authority || 'saras_loginWithFace' }}</Badge>
+                            </div>
+                        </div>
+
+                        <div v-if="readiness.hyperverge_face_auth?.capture_feedback" class="mt-4 grid gap-3 lg:grid-cols-3">
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">HyperVerge Status</p>
+                                <Badge class="mt-1" variant="secondary">
+                                    {{ readiness.hyperverge_face_auth.capture_feedback.status || 'received' }}
+                                </Badge>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Saras Decision</p>
+                                <Badge
+                                    class="mt-1"
+                                    :variant="readiness.hyperverge_face_auth.capture_feedback.saras_decision?.verified ? 'default' : 'secondary'"
+                                >
+                                    {{ readiness.hyperverge_face_auth.capture_feedback.saras_decision?.verified ? 'verified' : (readiness.hyperverge_face_auth.capture_feedback.saras_decision?.reason || 'pending') }}
+                                </Badge>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Captured At</p>
+                                <p class="mt-1 text-xs">{{ readiness.hyperverge_face_auth.capture_feedback.captured_at ? formatDate(readiness.hyperverge_face_auth.capture_feedback.captured_at) : '—' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3 lg:col-span-3">
+                                <p class="text-xs text-muted-foreground">Transaction ID</p>
+                                <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.capture_feedback.transactionId || '—' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Error</p>
+                                <p class="mt-1 text-xs">
+                                    {{ readiness.hyperverge_face_auth.capture_feedback.errorCode || readiness.hyperverge_face_auth.capture_feedback.errorMessage ? `${readiness.hyperverge_face_auth.capture_feedback.errorCode || '—'} ${readiness.hyperverge_face_auth.capture_feedback.errorMessage || ''}` : '—' }}
+                                </p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Detail Keys</p>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <Badge
+                                        v-for="key in readiness.hyperverge_face_auth.capture_feedback.detailKeys || []"
+                                        :key="key"
+                                        variant="outline"
+                                        class="font-mono text-[10px]"
+                                    >
+                                        {{ key }}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Image Fields</p>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <Badge
+                                        v-for="path in readiness.hyperverge_face_auth.capture_feedback.imageFieldPaths || []"
+                                        :key="path"
+                                        variant="secondary"
+                                        class="font-mono text-[10px]"
+                                    >
+                                        {{ path }}
+                                    </Badge>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p v-else class="mt-4 text-sm text-muted-foreground">
+                            No HyperVerge capture feedback recorded in this session.
+                        </p>
                     </div>
 
                     <div class="mt-4 grid gap-3 lg:grid-cols-5">

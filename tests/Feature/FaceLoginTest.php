@@ -233,6 +233,59 @@ test('successful saras face verification stores returned saras token', function 
     expect($user->fresh()->saras_access_token)->toBe('saras-face-token');
 });
 
+test('saras face verification stores sanitized hyperverge capture feedback for xray', function () {
+    config(['face_auth.provider' => 'saras']);
+
+    $user = User::factory()->create([
+        'username' => 'lester@hurtado.ph',
+        'email' => 'lester@hurtado.ph',
+    ]);
+
+    Http::fake([
+        '*/users/loginWithFace' => Http::response([
+            'success' => true,
+            'access_token' => 'saras-face-token',
+            'expires_in' => 3600,
+        ]),
+    ]);
+
+    $response = $this->postJson('/auth/face/verify', [
+        'username' => 'lester@hurtado.ph',
+        'selfie' => UploadedFile::fake()->image('selfie.jpg', 640, 480),
+        'hyperverge_capture_feedback' => json_encode([
+            'status' => 'auto_declined',
+            'transactionId' => 'track-ai-face-faceauth-85e29850-a6f0-4db4-98e2-18a303412967',
+            'errorCode' => null,
+            'errorMessage' => null,
+            'latestModule' => null,
+            'detailKeys' => [
+                'selfieImage',
+                'selfieRequestId',
+                'selfieAction',
+                'faceAuthRequestId',
+                'faceAuthAction',
+            ],
+            'imageFieldPaths' => [
+                'details.selfieImage',
+            ],
+            'selfieImage' => 'data:image/jpeg;base64,'.str_repeat('a', 64),
+        ]),
+    ]);
+
+    $response->assertOk()
+        ->assertJsonFragment(['verified' => true])
+        ->assertSessionHas('hyperverge_capture_feedback.last', function (array $feedback): bool {
+            return $feedback['status'] === 'auto_declined'
+                && $feedback['transactionId'] === 'track-ai-face-faceauth-85e29850-a6f0-4db4-98e2-18a303412967'
+                && $feedback['imageFieldPaths'] === ['details.selfieImage']
+                && $feedback['saras_decision']['authority'] === 'saras_loginWithFace'
+                && $feedback['saras_decision']['verified'] === true
+                && ! array_key_exists('selfieImage', $feedback);
+        });
+
+    $this->assertAuthenticatedAs($user);
+});
+
 test('saras face verification returns registration handoff when face is not registered', function () {
     config(['face_auth.provider' => 'saras']);
 

@@ -243,10 +243,10 @@ async function launchHypervergeCapture() {
             if (image) {
                 capturedImage.value = image;
                 state.value = 'captured';
-                hypervergeMessage.value = 'HyperVerge returned a login image.';
+                hypervergeMessage.value = 'Image captured. Saras will verify your face.';
             } else {
                 state.value = 'error';
-                errorMessage.value = 'HyperVerge completed, but no login image was returned.';
+                errorMessage.value = 'No usable face image was captured. Please try again or use Browser Camera.';
                 hypervergeMessage.value = errorMessage.value;
             }
 
@@ -280,6 +280,10 @@ async function submit() {
         const formData = new FormData();
         formData.append('username', props.username);
         formData.append('selfie', blob, 'selfie.jpg');
+
+        if (hypervergeSummary.value) {
+            formData.append('hyperverge_capture_feedback', JSON.stringify(hypervergeSummary.value));
+        }
 
         const result = await fetch('/auth/face/verify', {
             method: 'POST',
@@ -574,11 +578,6 @@ onUnmounted(() => {
             >
                 {{ hypervergeMessage }}
             </div>
-
-            <pre
-                v-if="captureMode === 'hyperverge' && hypervergeSummary"
-                class="max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs text-muted-foreground"
-            >{{ JSON.stringify(hypervergeSummary, null, 2) }}</pre>
 
             <!-- Verify / Retake Buttons -->
             <template v-if="state === 'captured'">

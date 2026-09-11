@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class FaceAuthController extends Controller
 {
@@ -43,6 +44,7 @@ class FaceAuthController extends Controller
 
         // Perform verification
         $result = $this->faceAuth->verify($username, $selfie, $transactionId);
+        $captureFeedback = $this->hypervergeCaptureFeedback($request);
 
         // Log the attempt
         $this->logAttempt(
@@ -61,6 +63,7 @@ class FaceAuthController extends Controller
             Auth::login($user, remember: false);
 
             $request->session()->regenerate();
+            $this->storeCaptureFeedback($request, $captureFeedback, $result->verified, $result->reason);
 
             return response()->json([
                 'ok' => true,
@@ -68,6 +71,8 @@ class FaceAuthController extends Controller
                 'redirect' => route('app.projects'),
             ]);
         }
+
+        $this->storeCaptureFeedback($request, $captureFeedback, $result->verified, $result->reason);
 
         // Return failure response
         return response()->json([
@@ -130,5 +135,90 @@ class FaceAuthController extends Controller
             'saras_access_token' => $token,
             'saras_token_expires_at' => now()->addSeconds(max($expiresIn - 60, 60)),
         ])->save();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function hypervergeCaptureFeedback(FaceLoginRequest $request): ?array
+    {
+        $payload = $request->input('hyperverge_capture_feedback');
+
+        if (! is_string($payload) || $payload === '') {
+            return null;
+        }
+
+        $decoded = json_decode($payload, true);
+
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        return [
+            'status' => $this->shortFeedbackValue($decoded['status'] ?? null),
+            'transactionId' => $this->shortFeedbackValue($decoded['transactionId'] ?? null, 160),
+            'errorCode' => $this->shortFeedbackValue($decoded['errorCode'] ?? null),
+            'errorMessage' => $this->shortFeedbackValue($decoded['errorMessage'] ?? null, 240),
+            'latestModule' => $this->shortFeedbackValue($decoded['latestModule'] ?? null),
+            'detailKeys' => $this->feedbackStringList($decoded['detailKeys'] ?? []),
+            'imageFieldPaths' => $this->feedbackStringList($decoded['imageFieldPaths'] ?? []),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $feedback
+     */
+    private function storeCaptureFeedback(
+        FaceLoginRequest $request,
+        ?array $feedback,
+        bool $sarasVerified,
+        string $sarasReason,
+    ): void {
+        if ($feedback === null) {
+            return;
+        }
+
+        $request->session()->put('hyperverge_capture_feedback.last', [
+            ...$feedback,
+            'captured_at' => now()->toIso8601String(),
+            'capture_role' => 'image_capture_only',
+            'saras_decision' => [
+                'authority' => config('face_auth.provider') === 'saras'
+                    ? 'saras_loginWithFace'
+                    : (string) config('face_auth.provider'),
+                'verified' => $sarasVerified,
+                'reason' => $sarasReason,
+            ],
+        ]);
+    }
+
+    private function shortFeedbackValue(mixed $value, int $limit = 80): string|int|float|bool|null
+    {
+        if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+            return $value;
+        }
+
+        if (is_string($value)) {
+            return Str::limit($value, $limit, '');
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function feedbackStringList(mixed $values): array
+    {
+        if (! is_array($values)) {
+            return [];
+        }
+
+        return collect($values)
+            ->filter(fn (mixed $value): bool => is_string($value))
+            ->map(fn (string $value): string => Str::limit($value, 120, ''))
+            ->take(20)
+            ->values()
+            ->all();
     }
 }

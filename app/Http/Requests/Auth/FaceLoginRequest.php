@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 
 class FaceLoginRequest extends FormRequest
 {
@@ -20,6 +21,7 @@ class FaceLoginRequest extends FormRequest
             'username' => ['required', 'string', 'max:255'],
             'selfie' => ['required', 'image', 'max:5120'], // 5MB
             'transaction_id' => ['nullable', 'string', 'max:255'],
+            'hyperverge_capture_feedback' => ['nullable', 'json', 'max:4096'],
         ];
     }
 
@@ -41,6 +43,6 @@ class FaceLoginRequest extends FormRequest
      */
     public function transactionId(): string
     {
-        return $this->input('transaction_id') ?? (string) \Illuminate\Support\Str::ulid();
+        return $this->input('transaction_id') ?? (string) Str::ulid();
     }
 }

@@ -207,6 +207,11 @@ class SarasStatusController extends Controller
                 'workflows' => config('hyperverge.workflows'),
                 'credentials_configured' => filled(config('hyperverge.app_id')) && filled(config('hyperverge.app_key')),
                 'current_user_enrolled' => Auth::user()?->activeFaceEnrollment()->exists() ?? false,
+                'capture_role' => 'image_capture_only',
+                'decision_authority' => config('face_auth.provider') === 'saras'
+                    ? 'saras_loginWithFace'
+                    : config('face_auth.provider'),
+                'capture_feedback' => session('hyperverge_capture_feedback.last'),
                 'saras' => [
                     'base_url' => config('saras.base_url'),
                     'status_path' => config('face_auth.saras.status_path'),
