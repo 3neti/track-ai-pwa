@@ -8,9 +8,15 @@ import { login } from '@/routes';
 
 const props = defineProps<{
     username: string;
+    captureProvider?: string;
+    hypervergeCapture?: {
+        enabled?: boolean;
+        workflow?: string;
+    };
 }>();
 
 type State = 'initializing' | 'ready' | 'captured' | 'submitting' | 'success' | 'error';
+type CaptureMode = 'browser' | 'hyperverge';
 type FaceLoginResponse = {
     verified?: boolean;
     redirect?: string;
@@ -22,6 +28,35 @@ type FaceLoginResponse = {
         registration_required?: boolean;
     };
 };
+type HypervergeTokenResponse = {
+    ok?: boolean;
+    access_token?: string;
+    workflow_id?: string;
+    transaction_id?: string;
+    sdk_url?: string;
+    message?: string;
+};
+type HypervergeResult = {
+    status?: string;
+    details?: Record<string, unknown>;
+    transactionId?: string;
+    errorMessage?: string;
+    errorCode?: string | number;
+    latestModule?: string;
+};
+
+declare global {
+    interface Window {
+        HyperKycConfig?: new (...args: unknown[]) => {
+            setInputs?: (inputs: Record<string, unknown>) => void;
+            supportDarkMode?: (enabled: boolean) => void;
+            setUseLocation?: (enabled: boolean) => void;
+        };
+        HyperKYCModule?: {
+            launch: (config: unknown, callback: (result: HypervergeResult) => void) => Promise<void>;
+        };
+    }
+}
 
 const state = ref<State>('initializing');
 const errorMessage = ref('');
@@ -33,13 +68,21 @@ const capturedImage = ref<string | null>(null);
 const stream = ref<MediaStream | null>(null);
 const isOffline = ref(!navigator.onLine);
 const cameraInitialized = ref(false);
+const captureMode = ref<CaptureMode>(props.captureProvider === 'hyperverge' && props.hypervergeCapture?.enabled ? 'hyperverge' : 'browser');
+const hypervergeState = ref<'idle' | 'loading' | 'complete' | 'error'>('idle');
+const hypervergeMessage = ref('');
+const hypervergeSummary = ref<Record<string, unknown> | null>(null);
+
+const canUseHyperverge = computed(() => props.hypervergeCapture?.enabled === true);
 
 const stateMessage = computed(() => {
     switch (state.value) {
         case 'initializing':
-            return 'Starting camera...';
+            return captureMode.value === 'browser' ? 'Starting camera...' : 'Preparing HyperVerge...';
         case 'ready':
-            return 'Align your face within the frame and hold still to verify your identity.';
+            return captureMode.value === 'browser'
+                ? 'Align your face within the frame and hold still to verify your identity.'
+                : 'Launch HyperVerge to capture your face, then verify with Saras.';
         case 'captured':
             return 'Photo captured. Ready to verify.';
         case 'submitting':
@@ -54,6 +97,8 @@ const stateMessage = computed(() => {
 });
 
 async function startCamera() {
+    if (captureMode.value !== 'browser') return;
+
     try {
         stream.value = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
@@ -107,13 +152,113 @@ function retake() {
     capturedImage.value = null;
     failureReason.value = '';
     registrationUrl.value = null;
-    state.value = 'ready';
+    if (captureMode.value === 'browser') {
+        state.value = cameraInitialized.value ? 'ready' : 'initializing';
+        if (!cameraInitialized.value) {
+            void startCamera();
+        }
+    } else {
+        state.value = 'ready';
+    }
 }
 
 function retryCamera() {
+    captureMode.value = 'browser';
     state.value = 'initializing';
     errorMessage.value = '';
     startCamera();
+}
+
+function selectCaptureMode(mode: CaptureMode) {
+    if (captureMode.value === mode) return;
+
+    captureMode.value = mode;
+    capturedImage.value = null;
+    failureReason.value = '';
+    registrationUrl.value = null;
+    errorMessage.value = '';
+
+    if (mode === 'browser') {
+        hypervergeState.value = 'idle';
+        hypervergeMessage.value = '';
+        state.value = 'initializing';
+        void startCamera();
+        return;
+    }
+
+    stopCamera();
+    state.value = 'ready';
+}
+
+async function launchHypervergeCapture() {
+    if (!canUseHyperverge.value || isOffline.value) return;
+
+    stopCamera();
+    hypervergeState.value = 'loading';
+    hypervergeMessage.value = 'Starting HyperVerge...';
+    hypervergeSummary.value = null;
+    state.value = 'initializing';
+    errorMessage.value = '';
+
+    try {
+        const response = await fetch('/auth/hyperverge/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-XSRF-TOKEN': getCsrfToken(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                workflow: props.hypervergeCapture?.workflow || 'faceAuth',
+            }),
+        });
+        const token = (await response.json()) as HypervergeTokenResponse;
+
+        if (!response.ok || !token.ok || !token.access_token || !token.workflow_id || !token.transaction_id || !token.sdk_url) {
+            throw new Error(token.message || 'Unable to start HyperVerge capture.');
+        }
+
+        await loadHypervergeSdk(token.sdk_url);
+
+        if (!window.HyperKycConfig || !window.HyperKYCModule) {
+            throw new Error('HyperVerge SDK did not load.');
+        }
+
+        const config = new window.HyperKycConfig(
+            token.access_token,
+            token.workflow_id,
+            token.transaction_id,
+            true,
+        );
+
+        config.supportDarkMode?.(false);
+        config.setUseLocation?.(false);
+        config.setInputs?.({
+            email: props.username,
+        });
+
+        await window.HyperKYCModule.launch(config, (result: HypervergeResult) => {
+            const image = extractLoginImage(result);
+
+            if (image) {
+                capturedImage.value = image;
+                state.value = 'captured';
+                hypervergeMessage.value = 'HyperVerge returned a login image.';
+            } else {
+                state.value = 'error';
+                errorMessage.value = 'HyperVerge completed, but no login image was returned.';
+                hypervergeMessage.value = errorMessage.value;
+            }
+
+            hypervergeState.value = 'complete';
+            hypervergeSummary.value = summarizeHypervergeResult(result);
+        });
+    } catch (error) {
+        state.value = 'error';
+        hypervergeState.value = 'error';
+        hypervergeMessage.value = error instanceof Error ? error.message : 'HyperVerge capture failed.';
+        errorMessage.value = hypervergeMessage.value;
+    }
 }
 
 async function submit() {
@@ -184,10 +329,89 @@ function continueToFaceRegistration() {
     router.visit(registrationUrl.value || login({ query: { username: props.username } }).url);
 }
 
+function loadHypervergeSdk(url: string): Promise<void> {
+    if (window.HyperKYCModule && window.HyperKycConfig) {
+        return Promise.resolve();
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${url}"]`);
+
+    if (existing) {
+        return new Promise((resolve, reject) => {
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('HyperVerge SDK failed to load.')), { once: true });
+        });
+    }
+
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('HyperVerge SDK failed to load.'));
+        document.head.appendChild(script);
+    });
+}
+
+function extractLoginImage(result: HypervergeResult): string | null {
+    const matches = findBase64Images(result);
+    const preferred = matches.find((match) => /selfie|face|live/i.test(match.path)) ?? matches[0] ?? null;
+
+    return normalizeImageValue(preferred?.value);
+}
+
+function findBase64Images(value: unknown, path = ''): Array<{ path: string; value: string }> {
+    if (typeof value === 'string' && looksLikeImage(value)) {
+        return [{ path, value }];
+    }
+
+    if (!value || typeof value !== 'object') {
+        return [];
+    }
+
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => (
+        findBase64Images(child, path ? `${path}.${key}` : key)
+    ));
+}
+
+function looksLikeImage(value: string): boolean {
+    return value.startsWith('data:image/')
+        || /^\/9j\/[A-Za-z0-9+/=]+/.test(value)
+        || /^iVBORw0KGgo[A-Za-z0-9+/=]+/.test(value);
+}
+
+function normalizeImageValue(value?: string): string | null {
+    if (!value) return null;
+    if (value.startsWith('data:image/')) return value;
+    if (value.startsWith('/9j/')) return `data:image/jpeg;base64,${value}`;
+    if (value.startsWith('iVBORw0KGgo')) return `data:image/png;base64,${value}`;
+
+    return null;
+}
+
+function summarizeHypervergeResult(result: HypervergeResult): Record<string, unknown> {
+    const details = result.details && typeof result.details === 'object' ? result.details : {};
+
+    return {
+        status: result.status ?? null,
+        transactionId: result.transactionId ?? null,
+        errorCode: result.errorCode ?? null,
+        errorMessage: result.errorMessage ?? null,
+        latestModule: result.latestModule ?? null,
+        detailKeys: Object.keys(details),
+        imageFieldPaths: findBase64Images(result).map((match) => match.path),
+    };
+}
+
 onMounted(() => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    startCamera();
+
+    if (captureMode.value === 'browser') {
+        void startCamera();
+    } else {
+        state.value = 'ready';
+    }
 });
 
 onUnmounted(() => {
@@ -220,11 +444,33 @@ onUnmounted(() => {
             LIVE BIOMETRIC
         </div>
 
+        <div
+            v-if="canUseHyperverge"
+            class="mb-4 grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
+        >
+            <button
+                type="button"
+                class="rounded-sm px-3 py-2 text-sm font-medium transition"
+                :class="captureMode === 'browser' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                @click="selectCaptureMode('browser')"
+            >
+                Browser Camera
+            </button>
+            <button
+                type="button"
+                class="rounded-sm px-3 py-2 text-sm font-medium transition"
+                :class="captureMode === 'hyperverge' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                @click="selectCaptureMode('hyperverge')"
+            >
+                HyperVerge SDK
+            </button>
+        </div>
+
         <!-- Camera / Capture View -->
         <div class="relative mx-auto aspect-[4/3] w-full max-w-sm overflow-hidden rounded-lg bg-black">
             <!-- Video Preview -->
             <video
-                v-show="state === 'ready' || state === 'initializing'"
+                v-show="captureMode === 'browser' && (state === 'ready' || state === 'initializing')"
                 ref="videoRef"
                 class="h-full w-full object-cover"
                 style="transform: scaleX(-1)"
@@ -232,6 +478,16 @@ onUnmounted(() => {
                 playsinline
                 muted
             />
+
+            <div
+                v-if="captureMode === 'hyperverge' && !capturedImage"
+                class="flex h-full w-full flex-col items-center justify-center gap-3 bg-zinc-950 px-6 text-center text-white"
+            >
+                <div class="h-48 w-36 rounded-full border-2 border-white/50" />
+                <p class="text-sm text-white/80">
+                    HyperVerge will open its own capture screen.
+                </p>
+            </div>
 
             <!-- Captured Image -->
             <img
@@ -243,7 +499,7 @@ onUnmounted(() => {
 
             <!-- Face Guide Overlay -->
             <div
-                v-if="state === 'ready'"
+                v-if="captureMode === 'browser' && state === 'ready'"
                 class="pointer-events-none absolute inset-0 flex items-center justify-center"
             >
                 <div class="h-48 w-36 rounded-full border-2 border-white/50" />
@@ -251,7 +507,7 @@ onUnmounted(() => {
 
             <!-- Loading Overlay -->
             <div
-                v-if="state === 'initializing' || state === 'submitting'"
+                v-if="state === 'submitting' || (captureMode === 'browser' && state === 'initializing') || hypervergeState === 'loading'"
                 class="absolute inset-0 flex items-center justify-center bg-black/50"
             >
                 <Spinner class="h-8 w-8 text-white" />
@@ -287,7 +543,7 @@ onUnmounted(() => {
         <div class="mt-6 flex flex-col gap-3">
             <!-- Capture Button -->
             <Button
-                v-if="state === 'ready'"
+                v-if="captureMode === 'browser' && state === 'ready'"
                 type="button"
                 class="w-full"
                 @click="capture"
@@ -299,6 +555,30 @@ onUnmounted(() => {
                 </svg>
                 Capture Face Selfie
             </Button>
+
+            <Button
+                v-if="captureMode === 'hyperverge' && state === 'ready'"
+                type="button"
+                class="w-full"
+                @click="launchHypervergeCapture"
+                :disabled="isOffline || hypervergeState === 'loading'"
+            >
+                <Spinner v-if="hypervergeState === 'loading'" class="mr-2" />
+                Launch HyperVerge Face Capture
+            </Button>
+
+            <div
+                v-if="captureMode === 'hyperverge' && hypervergeMessage"
+                class="rounded-md border border-border bg-muted/30 p-3 text-sm"
+                :class="hypervergeState === 'error' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'"
+            >
+                {{ hypervergeMessage }}
+            </div>
+
+            <pre
+                v-if="captureMode === 'hyperverge' && hypervergeSummary"
+                class="max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs text-muted-foreground"
+            >{{ JSON.stringify(hypervergeSummary, null, 2) }}</pre>
 
             <!-- Verify / Retake Buttons -->
             <template v-if="state === 'captured'">
@@ -332,7 +612,7 @@ onUnmounted(() => {
                 </Button>
                 <!-- Camera never initialized -->
                 <Button
-                    v-if="!cameraInitialized"
+                    v-if="captureMode === 'browser' && !cameraInitialized"
                     type="button"
                     class="w-full"
                     @click="retryCamera"

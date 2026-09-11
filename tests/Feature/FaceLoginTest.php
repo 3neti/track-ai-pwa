@@ -11,6 +11,9 @@ test('face login page can be rendered', function () {
     $response->assertInertia(fn ($page) => $page
         ->component('auth/FaceLogin')
         ->has('username')
+        ->where('captureProvider', 'browser')
+        ->where('hypervergeCapture.enabled', true)
+        ->where('hypervergeCapture.workflow', 'faceAuth')
     );
 });
 
@@ -47,7 +50,88 @@ test('face registration page can be rendered for authenticated user', function (
     $response->assertInertia(fn ($page) => $page
         ->component('auth/FaceRegister')
         ->where('username', 'lester@hurtado.ph')
+        ->where('captureProvider', 'browser')
+        ->where('hypervergeCapture.enabled', true)
     );
+});
+
+test('hyperverge token endpoint returns stub token outside live mode for guest face login', function () {
+    config([
+        'hyperverge.mode' => 'stub',
+        'face_auth.hyperverge_capture.enabled' => true,
+        'face_auth.hyperverge_capture.workflow' => 'enrol',
+        'hyperverge.workflows.face_auth' => 'faceAuth',
+    ]);
+
+    $response = $this->postJson('/auth/hyperverge/token', [
+        'workflow' => 'faceAuth',
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'mode' => 'stub',
+            'access_token' => 'stub-hyperverge-token',
+            'workflow_id' => 'faceAuth',
+        ])
+        ->assertJsonStructure(['transaction_id', 'sdk_url']);
+});
+
+test('hyperverge token endpoint rejects unconfigured workflows', function () {
+    config([
+        'hyperverge.mode' => 'stub',
+        'face_auth.hyperverge_capture.enabled' => true,
+        'face_auth.hyperverge_capture.workflow' => 'enrol',
+        'hyperverge.workflows.face_auth' => 'faceAuth',
+    ]);
+
+    $response = $this->postJson('/auth/hyperverge/token', [
+        'workflow' => 'notConfigured',
+    ]);
+
+    $response->assertUnprocessable();
+    $response->assertJsonValidationErrors(['workflow']);
+});
+
+test('hyperverge token endpoint exchanges configured credentials in live mode', function () {
+    config([
+        'hyperverge.mode' => 'live',
+        'hyperverge.app_id' => 'configured-app-id',
+        'hyperverge.app_key' => 'configured-app-key',
+        'face_auth.hyperverge_capture.enabled' => true,
+        'face_auth.hyperverge_capture.auth_url' => 'https://auth.hyperverge.test/login',
+        'face_auth.hyperverge_capture.workflow' => 'enrol',
+        'face_auth.hyperverge_capture.token_expiry_seconds' => 900,
+    ]);
+
+    $user = User::factory()->create();
+
+    Http::fake([
+        'https://auth.hyperverge.test/login' => Http::response([
+            'result' => [
+                'token' => 'hyperverge-access-token',
+            ],
+        ]),
+    ]);
+
+    $response = $this->actingAs($user)->postJson('/auth/hyperverge/token', [
+        'workflow' => 'enrol',
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'mode' => 'live',
+            'access_token' => 'hyperverge-access-token',
+            'workflow_id' => 'enrol',
+        ]);
+
+    Http::assertSent(fn ($request) => $request->url() === 'https://auth.hyperverge.test/login'
+        && $request['appId'] === 'configured-app-id'
+        && $request['appKey'] === 'configured-app-key'
+        && $request['expiry'] === 900
+        && ! array_key_exists('workflowId', $request->data())
+        && ! array_key_exists('transactionId', $request->data()));
 });
 
 test('face registration submit uses temporary session token and registers images with saras', function () {

@@ -9,7 +9,43 @@ import AuthBase from '@/layouts/AuthLayout.vue';
 
 const props = defineProps<{
     username?: string;
+    captureProvider?: string;
+    hypervergeCapture?: {
+        enabled?: boolean;
+        workflow?: string;
+    };
 }>();
+
+type HypervergeTokenResponse = {
+    ok?: boolean;
+    access_token?: string;
+    workflow_id?: string;
+    transaction_id?: string;
+    sdk_url?: string;
+    message?: string;
+};
+
+type HypervergeResult = {
+    status?: string;
+    details?: Record<string, unknown>;
+    transactionId?: string;
+    errorMessage?: string;
+    errorCode?: string | number;
+    latestModule?: string;
+};
+
+declare global {
+    interface Window {
+        HyperKycConfig?: new (...args: unknown[]) => {
+            setInputs?: (inputs: Record<string, unknown>) => void;
+            supportDarkMode?: (enabled: boolean) => void;
+            setUseLocation?: (enabled: boolean) => void;
+        };
+        HyperKYCModule?: {
+            launch: (config: unknown, callback: (result: HypervergeResult) => void) => Promise<void>;
+        };
+    }
+}
 
 type CaptureStep = 'selfie' | 'document';
 type State = 'initializing' | 'ready' | 'captured' | 'submitting' | 'success' | 'error';
@@ -26,6 +62,9 @@ const selfieImage = ref<string | null>(null);
 const documentImage = ref<string | null>(null);
 const isOffline = ref(!navigator.onLine);
 const cameraInitialized = ref(false);
+const hypervergeState = ref<'idle' | 'loading' | 'complete' | 'error'>('idle');
+const hypervergeMessage = ref('');
+const hypervergeSummary = ref<Record<string, unknown> | null>(null);
 
 const activeImage = computed(() => (step.value === 'selfie' ? selfieImage.value : documentImage.value));
 const instructionHeading = computed(() => (step.value === 'selfie' ? 'LIVE BIOMETRIC' : 'ID DOCUMENT / CARD'));
@@ -44,6 +83,8 @@ const stateMessage = computed(() => {
 
     return 'Starting camera...';
 });
+const canTryHyperverge = computed(() => props.hypervergeCapture?.enabled === true);
+const hypervergeImagesReady = computed(() => selfieImage.value !== null && documentImage.value !== null && hypervergeState.value === 'complete');
 
 async function startCamera() {
     try {
@@ -176,6 +217,156 @@ async function submit() {
     }
 }
 
+async function launchHypervergeCapture() {
+    if (!canTryHyperverge.value) return;
+
+    hypervergeState.value = 'loading';
+    hypervergeMessage.value = 'Starting HyperVerge...';
+    hypervergeSummary.value = null;
+
+    try {
+        const response = await fetch('/auth/hyperverge/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-XSRF-TOKEN': getCsrfToken(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                workflow: props.hypervergeCapture?.workflow || 'enrol',
+            }),
+        });
+        const token = (await response.json()) as HypervergeTokenResponse;
+
+        if (!response.ok || !token.ok || !token.access_token || !token.workflow_id || !token.transaction_id || !token.sdk_url) {
+            throw new Error(token.message || 'Unable to start HyperVerge capture.');
+        }
+
+        await loadHypervergeSdk(token.sdk_url);
+
+        if (!window.HyperKycConfig || !window.HyperKYCModule) {
+            throw new Error('HyperVerge SDK did not load.');
+        }
+
+        const config = new window.HyperKycConfig(
+            token.access_token,
+            token.workflow_id,
+            token.transaction_id,
+            true,
+        );
+
+        config.supportDarkMode?.(false);
+        config.setUseLocation?.(false);
+        config.setInputs?.({
+            email: props.username || '',
+        });
+
+        await window.HyperKYCModule.launch(config, (result: HypervergeResult) => {
+            const images = extractImages(result);
+
+            if (images.selfie) {
+                selfieImage.value = images.selfie;
+            }
+
+            if (images.document) {
+                documentImage.value = images.document;
+            }
+
+            if (images.selfie && images.document) {
+                step.value = 'document';
+                state.value = 'captured';
+                hypervergeMessage.value = 'HyperVerge returned both images.';
+            } else {
+                hypervergeMessage.value = 'HyperVerge completed, but image fields were not found in the SDK callback.';
+            }
+
+            hypervergeState.value = 'complete';
+            hypervergeSummary.value = summarizeHypervergeResult(result);
+        });
+    } catch (error) {
+        hypervergeState.value = 'error';
+        hypervergeMessage.value = error instanceof Error ? error.message : 'HyperVerge capture failed.';
+    }
+}
+
+function loadHypervergeSdk(url: string): Promise<void> {
+    if (window.HyperKYCModule && window.HyperKycConfig) {
+        return Promise.resolve();
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${url}"]`);
+
+    if (existing) {
+        return new Promise((resolve, reject) => {
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('HyperVerge SDK failed to load.')), { once: true });
+        });
+    }
+
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('HyperVerge SDK failed to load.'));
+        document.head.appendChild(script);
+    });
+}
+
+function extractImages(result: HypervergeResult): { selfie: string | null; document: string | null } {
+    const matches = findBase64Images(result);
+    const selfie = matches.find((match) => /selfie|face|live/i.test(match.path)) ?? null;
+    const document = matches.find((match) => /document|doc|id|card/i.test(match.path)) ?? null;
+
+    return {
+        selfie: normalizeImageValue(selfie?.value ?? matches[0]?.value),
+        document: normalizeImageValue(document?.value ?? matches.find((match) => match.value !== selfie?.value)?.value),
+    };
+}
+
+function findBase64Images(value: unknown, path = ''): Array<{ path: string; value: string }> {
+    if (typeof value === 'string' && looksLikeImage(value)) {
+        return [{ path, value }];
+    }
+
+    if (!value || typeof value !== 'object') {
+        return [];
+    }
+
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => (
+        findBase64Images(child, path ? `${path}.${key}` : key)
+    ));
+}
+
+function looksLikeImage(value: string): boolean {
+    return value.startsWith('data:image/')
+        || /^\/9j\/[A-Za-z0-9+/=]+/.test(value)
+        || /^iVBORw0KGgo[A-Za-z0-9+/=]+/.test(value);
+}
+
+function normalizeImageValue(value?: string): string | null {
+    if (!value) return null;
+    if (value.startsWith('data:image/')) return value;
+    if (value.startsWith('/9j/')) return `data:image/jpeg;base64,${value}`;
+    if (value.startsWith('iVBORw0KGgo')) return `data:image/png;base64,${value}`;
+
+    return null;
+}
+
+function summarizeHypervergeResult(result: HypervergeResult): Record<string, unknown> {
+    const details = result.details && typeof result.details === 'object' ? result.details : {};
+
+    return {
+        status: result.status ?? null,
+        transactionId: result.transactionId ?? null,
+        errorCode: result.errorCode ?? null,
+        errorMessage: result.errorMessage ?? null,
+        latestModule: result.latestModule ?? null,
+        detailKeys: Object.keys(details),
+        imageFieldPaths: findBase64Images(result).map((match) => match.path),
+    };
+}
+
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
     const response = await fetch(dataUrl);
 
@@ -249,6 +440,44 @@ onUnmounted(() => {
         <p v-if="username" class="mb-4 text-center text-sm font-medium text-muted-foreground">
             {{ username }}
         </p>
+
+        <div
+            v-if="canTryHyperverge"
+            class="mb-4 grid gap-3 rounded-md border border-dashed p-3"
+        >
+            <Button
+                type="button"
+                variant="outline"
+                class="w-full"
+                :disabled="hypervergeState === 'loading' || state === 'submitting'"
+                data-test="hyperverge-capture-button"
+                @click="launchHypervergeCapture"
+            >
+                <Spinner v-if="hypervergeState === 'loading'" />
+                Try HyperVerge Capture
+            </Button>
+            <p
+                v-if="hypervergeMessage"
+                class="text-xs"
+                :class="hypervergeState === 'error' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'"
+            >
+                {{ hypervergeMessage }}
+            </p>
+            <pre
+                v-if="hypervergeSummary"
+                class="max-h-32 overflow-auto rounded bg-muted p-2 text-xs"
+            >{{ JSON.stringify(hypervergeSummary, null, 2) }}</pre>
+            <Button
+                v-if="hypervergeImagesReady"
+                type="button"
+                class="w-full"
+                :disabled="isOffline || state === 'submitting'"
+                data-test="hyperverge-register-button"
+                @click="submit"
+            >
+                Register Face with HyperVerge Images
+            </Button>
+        </div>
 
         <div
             v-if="isOffline"

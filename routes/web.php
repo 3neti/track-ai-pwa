@@ -13,6 +13,7 @@ use App\Http\Controllers\Auth\FaceAuthController;
 use App\Http\Controllers\Auth\FaceLoginController;
 use App\Http\Controllers\Auth\FaceRegistrationController;
 use App\Http\Controllers\Auth\FaceRegistrationStatusController;
+use App\Http\Controllers\Auth\HypervergeTokenController;
 use App\Http\Controllers\Developer\SarasApiXrayController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -53,6 +54,10 @@ Route::post('/auth/face/register', [FaceRegistrationController::class, 'store'])
 Route::post('/auth/face/registration-status', [FaceRegistrationStatusController::class, 'show'])
     ->middleware(['web', 'throttle:face-login'])
     ->name('auth.face.registration-status');
+
+Route::post('/auth/hyperverge/token', [HypervergeTokenController::class, 'store'])
+    ->middleware(['web', 'throttle:face-login'])
+    ->name('auth.hyperverge.token');
 
 Route::get('dashboard', function () {
     return redirect('/app/contracts');
