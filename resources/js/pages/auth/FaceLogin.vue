@@ -58,7 +58,7 @@ declare global {
     }
 }
 
-const state = ref<State>('initializing');
+const state = ref<State>(props.hypervergeCapture?.enabled === true ? 'ready' : 'initializing');
 const errorMessage = ref('');
 const failureReason = ref('');
 const registrationUrl = ref<string | null>(null);
@@ -68,7 +68,7 @@ const capturedImage = ref<string | null>(null);
 const stream = ref<MediaStream | null>(null);
 const isOffline = ref(!navigator.onLine);
 const cameraInitialized = ref(false);
-const captureMode = ref<CaptureMode>(props.captureProvider === 'hyperverge' && props.hypervergeCapture?.enabled ? 'hyperverge' : 'browser');
+const captureMode = ref<CaptureMode>(props.hypervergeCapture?.enabled ? 'hyperverge' : 'browser');
 const hypervergeState = ref<'idle' | 'loading' | 'complete' | 'error'>('idle');
 const hypervergeMessage = ref('');
 const hypervergeSummary = ref<Record<string, unknown> | null>(null);
@@ -169,27 +169,6 @@ function retryCamera() {
     startCamera();
 }
 
-function selectCaptureMode(mode: CaptureMode) {
-    if (captureMode.value === mode) return;
-
-    captureMode.value = mode;
-    capturedImage.value = null;
-    failureReason.value = '';
-    registrationUrl.value = null;
-    errorMessage.value = '';
-
-    if (mode === 'browser') {
-        hypervergeState.value = 'idle';
-        hypervergeMessage.value = '';
-        state.value = 'initializing';
-        void startCamera();
-        return;
-    }
-
-    stopCamera();
-    state.value = 'ready';
-}
-
 async function launchHypervergeCapture() {
     if (!canUseHyperverge.value || isOffline.value) return;
 
@@ -246,7 +225,7 @@ async function launchHypervergeCapture() {
                 hypervergeMessage.value = 'Image captured. Saras will verify your face.';
             } else {
                 state.value = 'error';
-                errorMessage.value = 'No usable face image was captured. Please try again or use Browser Camera.';
+                errorMessage.value = 'No usable face image was captured. Please try again.';
                 hypervergeMessage.value = errorMessage.value;
             }
 
@@ -446,28 +425,6 @@ onUnmounted(() => {
 
         <div class="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
             LIVE BIOMETRIC
-        </div>
-
-        <div
-            v-if="canUseHyperverge"
-            class="mb-4 grid grid-cols-2 gap-1 rounded-md border border-border bg-muted/40 p-1"
-        >
-            <button
-                type="button"
-                class="rounded-sm px-3 py-2 text-sm font-medium transition"
-                :class="captureMode === 'browser' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-                @click="selectCaptureMode('browser')"
-            >
-                Browser Camera
-            </button>
-            <button
-                type="button"
-                class="rounded-sm px-3 py-2 text-sm font-medium transition"
-                :class="captureMode === 'hyperverge' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-                @click="selectCaptureMode('hyperverge')"
-            >
-                HyperVerge SDK
-            </button>
         </div>
 
         <!-- Camera / Capture View -->

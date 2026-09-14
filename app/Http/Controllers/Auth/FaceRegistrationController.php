@@ -23,7 +23,7 @@ class FaceRegistrationController extends Controller
     {
         return Inertia::render('auth/FaceRegister', [
             'username' => $request->user()?->email ?? $request->user()?->username ?? $request->query('username'),
-            'captureProvider' => config('face_auth.capture_provider', 'browser'),
+            'captureProvider' => 'hyperverge',
             'hypervergeCapture' => [
                 'enabled' => (bool) config('face_auth.hyperverge_capture.enabled'),
                 'workflow' => config('face_auth.hyperverge_capture.workflow', 'enrol'),

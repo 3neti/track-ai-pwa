@@ -11,7 +11,7 @@ test('face login page can be rendered', function () {
     $response->assertInertia(fn ($page) => $page
         ->component('auth/FaceLogin')
         ->has('username')
-        ->where('captureProvider', 'browser')
+        ->where('captureProvider', 'hyperverge')
         ->where('hypervergeCapture.enabled', true)
         ->where('hypervergeCapture.workflow', 'faceAuth')
     );
@@ -50,7 +50,7 @@ test('face registration page can be rendered for authenticated user', function (
     $response->assertInertia(fn ($page) => $page
         ->component('auth/FaceRegister')
         ->where('username', 'lester@hurtado.ph')
-        ->where('captureProvider', 'browser')
+        ->where('captureProvider', 'hyperverge')
         ->where('hypervergeCapture.enabled', true)
     );
 });

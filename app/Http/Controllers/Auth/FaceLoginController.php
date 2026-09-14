@@ -20,7 +20,7 @@ class FaceLoginController extends Controller
 
         return Inertia::render('auth/FaceLogin', [
             'username' => $username,
-            'captureProvider' => config('face_auth.capture_provider', 'browser'),
+            'captureProvider' => 'hyperverge',
             'hypervergeCapture' => [
                 'enabled' => (bool) config('face_auth.hyperverge_capture.enabled'),
                 'workflow' => config('hyperverge.workflows.face_auth', 'faceAuth'),

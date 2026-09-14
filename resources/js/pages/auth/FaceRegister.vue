@@ -51,7 +51,7 @@ type CaptureStep = 'selfie' | 'document';
 type State = 'initializing' | 'ready' | 'captured' | 'submitting' | 'success' | 'error';
 
 const step = ref<CaptureStep>('selfie');
-const state = ref<State>('initializing');
+const state = ref<State>(props.hypervergeCapture?.enabled === true ? 'ready' : 'initializing');
 const errorMessage = ref('');
 const validationErrors = ref<Record<string, string>>({});
 const videoRef = ref<HTMLVideoElement | null>(null);
@@ -420,7 +420,10 @@ function handleOffline() {
 onMounted(() => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    startCamera();
+
+    if (!canTryHyperverge.value) {
+        startCamera();
+    }
 });
 
 onUnmounted(() => {
@@ -443,7 +446,7 @@ onUnmounted(() => {
 
         <div
             v-if="canTryHyperverge"
-            class="mb-4 grid gap-3 rounded-md border border-dashed p-3"
+            class="mb-4 grid gap-3 rounded-md border p-3"
         >
             <Button
                 type="button"
@@ -454,7 +457,7 @@ onUnmounted(() => {
                 @click="launchHypervergeCapture"
             >
                 <Spinner v-if="hypervergeState === 'loading'" />
-                Try HyperVerge Capture
+                Capture with HyperVerge
             </Button>
             <p
                 v-if="hypervergeMessage"
@@ -495,11 +498,11 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <div class="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
+        <div v-if="!canTryHyperverge" class="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
             {{ instructionHeading }}
         </div>
 
-        <div class="relative mx-auto aspect-[4/3] w-full max-w-sm overflow-hidden rounded-lg bg-black">
+        <div v-if="!canTryHyperverge || activeImage" class="relative mx-auto aspect-[4/3] w-full max-w-sm overflow-hidden rounded-lg bg-black">
             <video
                 v-show="state === 'ready' || state === 'initializing'"
                 ref="videoRef"
@@ -557,7 +560,7 @@ onUnmounted(() => {
 
         <div class="mt-6 flex flex-col gap-3">
             <Button
-                v-if="state === 'ready'"
+                v-if="!canTryHyperverge && state === 'ready'"
                 type="button"
                 class="w-full"
                 :disabled="isOffline"
@@ -567,7 +570,7 @@ onUnmounted(() => {
                 Capture {{ step === 'selfie' ? 'Face Selfie' : 'ID Document' }}
             </Button>
 
-            <template v-if="state === 'ready' && step === 'document'">
+            <template v-if="!canTryHyperverge && state === 'ready' && step === 'document'">
                 <input
                     ref="documentFileInputRef"
                     type="file"
@@ -636,7 +639,15 @@ onUnmounted(() => {
 
             <template v-if="state === 'error'">
                 <Button
-                    v-if="!cameraInitialized"
+                    v-if="canTryHyperverge"
+                    type="button"
+                    class="w-full"
+                    @click="launchHypervergeCapture"
+                >
+                    Try HyperVerge Again
+                </Button>
+                <Button
+                    v-else-if="!cameraInitialized"
                     type="button"
                     class="w-full"
                     @click="retryCamera"

@@ -15,7 +15,7 @@ return [
 
     'provider' => env('FACE_AUTH_PROVIDER', 'saras'),
 
-    'capture_provider' => env('FACE_CAPTURE_PROVIDER', 'browser'),
+    'capture_provider' => env('FACE_CAPTURE_PROVIDER', 'hyperverge'),
 
     'saras' => [
         'register_path' => env('SARAS_FACE_REGISTER_PATH', '/users/registerFaceForFaceAuthentication'),
