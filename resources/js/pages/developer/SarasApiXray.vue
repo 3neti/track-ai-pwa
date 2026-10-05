@@ -17,6 +17,8 @@ interface Trace {
     trace_id: string | null;
     operation: string | null;
     method: string;
+    host?: string;
+    url?: string;
     endpoint: string;
     request_body: any;
     response_body: any;
@@ -805,6 +807,7 @@ function labelize(value: string): string {
                                     <th class="text-left px-4 py-3 font-medium">Time</th>
                                     <th class="text-left px-4 py-3 font-medium">Operation</th>
                                     <th class="text-left px-4 py-3 font-medium">Method</th>
+                                    <th class="text-left px-4 py-3 font-medium">Host</th>
                                     <th class="text-left px-4 py-3 font-medium">Endpoint</th>
                                     <th class="text-left px-4 py-3 font-medium">Status</th>
                                     <th class="text-right px-4 py-3 font-medium">Duration</th>
@@ -813,13 +816,13 @@ function labelize(value: string): string {
                             </thead>
                             <tbody>
                                 <tr v-if="isLoading && !traces.length">
-                                    <td colspan="7" class="text-center py-12 text-muted-foreground">
+                                    <td colspan="8" class="text-center py-12 text-muted-foreground">
                                         <Loader2 class="h-6 w-6 animate-spin mx-auto mb-2" />
                                         Loading traces...
                                     </td>
                                 </tr>
                                 <tr v-else-if="!traces.length">
-                                    <td colspan="7" class="text-center py-12 text-muted-foreground">
+                                    <td colspan="8" class="text-center py-12 text-muted-foreground">
                                         No API traces found.
                                     </td>
                                 </tr>
@@ -836,6 +839,7 @@ function labelize(value: string): string {
                                     <td class="px-4 py-3">
                                         <Badge :variant="trace.method === 'POST' ? 'default' : 'secondary'" class="text-xs">{{ trace.method }}</Badge>
                                     </td>
+                                    <td class="px-4 py-3 font-mono text-xs max-w-[220px] truncate">{{ trace.host || '—' }}</td>
                                     <td class="px-4 py-3 font-mono text-xs max-w-[300px] truncate">{{ trace.endpoint }}</td>
                                     <td class="px-4 py-3">
                                         <Badge :variant="statusVariant(trace.status_code)" class="text-xs">{{ statusLabel(trace.status_code) }}</Badge>
@@ -874,8 +878,12 @@ function labelize(value: string): string {
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div class="text-muted-foreground">Method</div>
                         <div class="font-mono">{{ selectedTrace.method }}</div>
+                        <div class="text-muted-foreground">Host</div>
+                        <div class="font-mono text-xs break-all">{{ selectedTrace.host || '—' }}</div>
                         <div class="text-muted-foreground">Endpoint</div>
                         <div class="font-mono text-xs break-all">{{ selectedTrace.endpoint }}</div>
+                        <div class="text-muted-foreground">Full URL</div>
+                        <div class="font-mono text-xs break-all">{{ selectedTrace.url || '—' }}</div>
                         <div class="text-muted-foreground">Duration</div>
                         <div class="font-mono">{{ Math.round(selectedTrace.duration_ms) }}ms</div>
                         <div class="text-muted-foreground">Time</div>

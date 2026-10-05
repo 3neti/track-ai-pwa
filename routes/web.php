@@ -90,7 +90,7 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth'])->prefix('developer')->group(function () {
+Route::prefix('developer')->group(function () {
     Route::get('/saras-api-xray', [SarasApiXrayController::class, 'index'])->name('developer.saras-api-xray');
     Route::get('/api/payload-map', [SarasApiXrayController::class, 'payloadMap'])->name('developer.api.payload-map');
     Route::get('/api/traces', [SarasApiXrayController::class, 'traces'])->name('developer.api.traces');

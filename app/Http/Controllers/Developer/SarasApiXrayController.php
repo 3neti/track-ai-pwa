@@ -57,10 +57,13 @@ class SarasApiXrayController extends Controller
         }
 
         $traces = $query->paginate(25);
+        $isPublic = $request->user() === null;
 
         return response()->json([
             'success' => true,
-            'data' => $traces->items(),
+            'data' => collect($traces->items())
+                ->map(fn (ApiTrace $trace): array => $this->tracePayload($trace, $isPublic))
+                ->all(),
             'meta' => [
                 'current_page' => $traces->currentPage(),
                 'last_page' => $traces->lastPage(),
@@ -85,9 +88,93 @@ class SarasApiXrayController extends Controller
      */
     public function show(ApiTrace $apiTrace): JsonResponse
     {
+        abort_unless($apiTrace->provider === 'saras', 404);
+
         return response()->json([
             'success' => true,
-            'trace' => $apiTrace->load('user:id,name'),
+            'trace' => $this->tracePayload(
+                $apiTrace->load('user:id,name'),
+                request()->user() === null,
+                includeBodies: true,
+            ),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function tracePayload(ApiTrace $trace, bool $isPublic, bool $includeBodies = false): array
+    {
+        $payload = [
+            'id' => $trace->id,
+            'trace_id' => $trace->trace_id,
+            'provider' => $trace->provider,
+            'operation' => $trace->operation,
+            'method' => $trace->method,
+            'host' => $this->sarasHost(),
+            'url' => $this->sarasUrl($trace->endpoint),
+            'endpoint' => $trace->endpoint,
+            'status_code' => $trace->status_code,
+            'duration_ms' => $trace->duration_ms,
+            'error_message' => $trace->error_message,
+            'created_at' => $trace->created_at,
+            'user' => $isPublic ? null : $trace->user,
+        ];
+
+        if (! $isPublic) {
+            return [
+                ...$payload,
+                'request_body' => $trace->request_body,
+                'response_body' => $trace->response_body,
+            ];
+        }
+
+        $redactedBodies = [
+            'request_body' => [
+                'redacted' => true,
+                'message' => 'Request payload is hidden on the public X-Ray view.',
+            ],
+            'response_body' => $this->publicResponseBody($trace),
+        ];
+
+        if ($includeBodies) {
+            return [...$payload, ...$redactedBodies];
+        }
+
+        return [...$payload, ...$redactedBodies];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function publicResponseBody(ApiTrace $trace): array
+    {
+        $response = is_array($trace->response_body) ? $trace->response_body : [];
+
+        return collect([
+            'traceId' => $trace->trace_id ?? ($response['traceId'] ?? null),
+            'message' => $trace->error_message
+                ?? ($response['msg'] ?? null)
+                ?? ($response['message'] ?? null)
+                ?? ($response['error'] ?? null),
+            'status_code' => $trace->status_code,
+        ])
+            ->filter(fn (mixed $value): bool => $value !== null && $value !== '')
+            ->all();
+    }
+
+    private function sarasHost(): string
+    {
+        $host = parse_url((string) config('saras.base_url'), PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : '—';
+    }
+
+    private function sarasUrl(?string $endpoint): string
+    {
+        $baseUrl = rtrim((string) config('saras.base_url'), '/');
+        $path = '/'.ltrim((string) $endpoint, '/');
+
+        return $baseUrl.$path;
     }
 }

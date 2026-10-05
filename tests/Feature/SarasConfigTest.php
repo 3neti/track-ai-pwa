@@ -2,6 +2,7 @@
 
 use App\Contracts\SarasClientInterface;
 use App\Http\Responses\LoginResponse;
+use App\Models\ApiTrace;
 use App\Models\FaceEnrollment;
 use App\Models\User;
 use App\Services\Branding\BrandingResolver;
@@ -76,6 +77,45 @@ test('developer Saras API X-Ray page receives branding support', function () {
             ->where('branding.square_logo', '/branding/square.png')
             ->where('branding.rectangle_logo', '/branding/rectangle.png')
         );
+});
+
+test('public Saras API X-Ray exposes redacted trace summaries', function () {
+    config(['saras.base_url' => 'https://ind-prod.sarasfinance.com/v1']);
+
+    ApiTrace::create([
+        'trace_id' => 'trace-public-xray',
+        'provider' => 'saras',
+        'operation' => 'getProjectsForUser',
+        'method' => 'GET',
+        'endpoint' => '/process/projects/getProjectsForUser',
+        'request_body' => [
+            'authorization' => 'Bearer secret-token',
+            'page' => 1,
+            'perPageCount' => 50,
+        ],
+        'response_body' => [
+            'traceId' => 'trace-public-xray',
+            'msg' => 'Access Denied by IAM Engine.',
+        ],
+        'status_code' => 403,
+        'duration_ms' => 211.4,
+        'error_message' => 'Access Denied by IAM Engine.',
+    ]);
+
+    $this->get('/developer/saras-api-xray')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('developer/SarasApiXray'));
+
+    $this->getJson('/developer/api/traces')
+        ->assertOk()
+        ->assertJsonPath('data.0.operation', 'getProjectsForUser')
+        ->assertJsonPath('data.0.host', 'ind-prod.sarasfinance.com')
+        ->assertJsonPath('data.0.url', 'https://ind-prod.sarasfinance.com/v1/process/projects/getProjectsForUser')
+        ->assertJsonPath('data.0.endpoint', '/process/projects/getProjectsForUser')
+        ->assertJsonPath('data.0.status_code', 403)
+        ->assertJsonPath('data.0.request_body.redacted', true)
+        ->assertJsonPath('data.0.response_body.message', 'Access Denied by IAM Engine.')
+        ->assertJsonMissing(['authorization' => 'Bearer secret-token']);
 });
 
 test('saras context exposes hyperverge face auth readiness', function () {
