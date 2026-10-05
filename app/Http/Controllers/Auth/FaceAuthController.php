@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\FaceLoginRequest;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\FaceAuth\DTO\FaceVerificationResult;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -63,6 +64,7 @@ class FaceAuthController extends Controller
             Auth::login($user, remember: false);
 
             $request->session()->regenerate();
+            $this->storeFaceAuthDiagnostic($request, $result, $transactionId);
             $this->storeCaptureFeedback($request, $captureFeedback, $result->verified, $result->reason);
 
             return response()->json([
@@ -72,6 +74,7 @@ class FaceAuthController extends Controller
             ]);
         }
 
+        $this->storeFaceAuthDiagnostic($request, $result, $transactionId);
         $this->storeCaptureFeedback($request, $captureFeedback, $result->verified, $result->reason);
 
         // Return failure response
@@ -105,6 +108,8 @@ class FaceAuthController extends Controller
             'status' => $details['status'] ?? null,
             'message' => $details['message'] ?? null,
             'error_code' => $details['error_code'] ?? null,
+            'failure_type' => $details['failure_type'] ?? null,
+            'response_type' => $details['response_type'] ?? null,
             'registration_required' => $details['registration_required'] ?? false,
         ]);
     }
@@ -189,6 +194,33 @@ class FaceAuthController extends Controller
                 'verified' => $sarasVerified,
                 'reason' => $sarasReason,
             ],
+        ]);
+    }
+
+    private function storeFaceAuthDiagnostic(
+        FaceLoginRequest $request,
+        FaceVerificationResult $result,
+        string $transactionId,
+    ): void {
+        if (config('face_auth.provider') !== 'saras') {
+            return;
+        }
+
+        $details = $result->details;
+
+        $request->session()->put('saras_face_auth_diagnostic.last', [
+            'provider' => 'saras',
+            'authority' => 'saras_loginWithFace',
+            'verified' => $result->verified,
+            'reason' => $result->reason,
+            'failure_type' => $details['failure_type'] ?? ($result->verified ? 'matched' : $result->reason),
+            'status' => $details['status'] ?? null,
+            'response_type' => $details['response_type'] ?? null,
+            'error_code' => $details['error_code'] ?? null,
+            'message' => $this->shortFeedbackValue($details['message'] ?? null, 240),
+            'transaction_id' => $transactionId,
+            'endpoint' => $details['endpoint'] ?? 'loginWithFace',
+            'recorded_at' => now()->toIso8601String(),
         ]);
     }
 

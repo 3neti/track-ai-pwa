@@ -312,6 +312,16 @@ function continueToFaceRegistration() {
     router.visit(registrationUrl.value || login({ query: { username: props.username } }).url);
 }
 
+function canRetrySarasRequest(): boolean {
+    return [
+        'saras_waf_blocked',
+        'saras_non_json_response',
+        'saras_connection_failed',
+        'saras_api_error',
+        'saras_face_login_failed',
+    ].includes(failureReason.value);
+}
+
 function loadHypervergeSdk(url: string): Promise<void> {
     if (window.HyperKYCModule && window.HyperKycConfig) {
         return Promise.resolve();
@@ -566,9 +576,18 @@ onUnmounted(() => {
                 >
                     Sign and Register Face
                 </Button>
+                <Button
+                    v-else-if="canRetrySarasRequest()"
+                    type="button"
+                    class="w-full"
+                    @click="submit"
+                    :disabled="!capturedImage || isOffline"
+                >
+                    Try Again
+                </Button>
                 <!-- Camera never initialized -->
                 <Button
-                    v-if="captureMode === 'browser' && !cameraInitialized"
+                    v-else-if="captureMode === 'browser' && !cameraInitialized"
                     type="button"
                     class="w-full"
                     @click="retryCamera"

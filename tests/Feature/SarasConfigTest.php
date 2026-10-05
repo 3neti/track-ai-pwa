@@ -123,6 +123,20 @@ test('saras context exposes hyperverge face auth readiness', function () {
                     'reason' => 'verified',
                 ],
             ],
+            'saras_face_auth_diagnostic.last' => [
+                'provider' => 'saras',
+                'authority' => 'saras_loginWithFace',
+                'verified' => false,
+                'reason' => 'saras_waf_blocked',
+                'failure_type' => 'saras_waf_blocked',
+                'status' => 403,
+                'response_type' => 'html',
+                'error_code' => null,
+                'message' => 'Saras could not accept the backend request. Please contact support.',
+                'transaction_id' => 'track-ai-face-faceauth-test',
+                'endpoint' => 'loginWithFace',
+                'recorded_at' => now()->toIso8601String(),
+            ],
         ])
         ->getJson('/api/saras/context')
         ->assertOk()
@@ -134,7 +148,9 @@ test('saras context exposes hyperverge face auth readiness', function () {
         ->assertJsonPath('readiness.hyperverge_face_auth.current_user_enrolled', true)
         ->assertJsonPath('readiness.hyperverge_face_auth.capture_role', 'image_capture_only')
         ->assertJsonPath('readiness.hyperverge_face_auth.capture_feedback.status', 'auto_declined')
-        ->assertJsonPath('readiness.hyperverge_face_auth.capture_feedback.saras_decision.verified', true);
+        ->assertJsonPath('readiness.hyperverge_face_auth.capture_feedback.saras_decision.verified', true)
+        ->assertJsonPath('readiness.hyperverge_face_auth.face_auth_diagnostic.failure_type', 'saras_waf_blocked')
+        ->assertJsonPath('readiness.hyperverge_face_auth.face_auth_diagnostic.response_type', 'html');
 });
 
 test('saved project id overrides the configured Saras project context', function () {

@@ -212,6 +212,7 @@ class SarasStatusController extends Controller
                     ? 'saras_loginWithFace'
                     : config('face_auth.provider'),
                 'capture_feedback' => session('hyperverge_capture_feedback.last'),
+                'face_auth_diagnostic' => session('saras_face_auth_diagnostic.last'),
                 'saras' => [
                     'base_url' => config('saras.base_url'),
                     'status_path' => config('face_auth.saras.status_path'),

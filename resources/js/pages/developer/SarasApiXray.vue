@@ -106,6 +106,20 @@ interface Readiness {
                 reason?: string;
             };
         } | null;
+        face_auth_diagnostic?: {
+            provider?: string;
+            authority?: string;
+            verified?: boolean;
+            reason?: string;
+            failure_type?: string;
+            status?: number | null;
+            response_type?: string | null;
+            error_code?: string | number | null;
+            message?: string | null;
+            transaction_id?: string | null;
+            endpoint?: string | null;
+            recorded_at?: string;
+        } | null;
         saras?: {
             base_url: string;
             status_path: string;
@@ -633,6 +647,66 @@ function labelize(value: string): string {
 
                         <p v-else class="mt-4 text-sm text-muted-foreground">
                             No HyperVerge capture feedback recorded in this session.
+                        </p>
+                    </div>
+
+                    <div class="mt-4 rounded-md border p-4">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-medium">Latest Saras Face Auth Diagnostic</p>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    Saras decides whether the captured image can sign in.
+                                </p>
+                            </div>
+                            <Badge
+                                v-if="readiness.hyperverge_face_auth?.face_auth_diagnostic"
+                                :variant="readiness.hyperverge_face_auth.face_auth_diagnostic.verified ? 'default' : 'secondary'"
+                            >
+                                {{ readiness.hyperverge_face_auth.face_auth_diagnostic.verified ? 'verified' : (readiness.hyperverge_face_auth.face_auth_diagnostic.failure_type || readiness.hyperverge_face_auth.face_auth_diagnostic.reason || 'not verified') }}
+                            </Badge>
+                        </div>
+
+                        <div v-if="readiness.hyperverge_face_auth?.face_auth_diagnostic" class="mt-4 grid gap-3 lg:grid-cols-3">
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Endpoint</p>
+                                <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth.face_auth_diagnostic.endpoint || 'loginWithFace' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">HTTP Status</p>
+                                <p class="mt-1 font-mono text-sm">{{ readiness.hyperverge_face_auth.face_auth_diagnostic.status ?? '—' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Response Type</p>
+                                <Badge class="mt-1" variant="outline">
+                                    {{ readiness.hyperverge_face_auth.face_auth_diagnostic.response_type || '—' }}
+                                </Badge>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Failure Type</p>
+                                <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth.face_auth_diagnostic.failure_type || '—' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Error Code</p>
+                                <p class="mt-1 font-mono text-xs">{{ readiness.hyperverge_face_auth.face_auth_diagnostic.error_code ?? '—' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3">
+                                <p class="text-xs text-muted-foreground">Recorded At</p>
+                                <p class="mt-1 text-xs">
+                                    {{ readiness.hyperverge_face_auth.face_auth_diagnostic.recorded_at ? formatDate(readiness.hyperverge_face_auth.face_auth_diagnostic.recorded_at) : '—' }}
+                                </p>
+                            </div>
+                            <div class="rounded-md border p-3 lg:col-span-3">
+                                <p class="text-xs text-muted-foreground">Message</p>
+                                <p class="mt-1 text-sm">{{ readiness.hyperverge_face_auth.face_auth_diagnostic.message || '—' }}</p>
+                            </div>
+                            <div class="rounded-md border p-3 lg:col-span-3">
+                                <p class="text-xs text-muted-foreground">Transaction ID</p>
+                                <p class="mt-1 break-all font-mono text-xs">{{ readiness.hyperverge_face_auth.face_auth_diagnostic.transaction_id || '—' }}</p>
+                            </div>
+                        </div>
+
+                        <p v-else class="mt-4 text-sm text-muted-foreground">
+                            No Saras face-auth diagnostic recorded in this session.
                         </p>
                     </div>
 

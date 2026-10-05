@@ -320,6 +320,93 @@ test('saras face verification returns registration handoff when face is not regi
     $this->assertGuest();
 });
 
+test('saras face verification reports waf block without exposing html challenge', function () {
+    config(['face_auth.provider' => 'saras']);
+
+    User::factory()->create([
+        'username' => 'lester@hurtado.ph',
+        'email' => 'lester@hurtado.ph',
+    ]);
+
+    Http::fake([
+        '*/users/loginWithFace' => Http::response(
+            '<!doctype html><html><title>Just a moment...</title><body>Cloudflare challenge-platform</body></html>',
+            403,
+            ['Content-Type' => 'text/html'],
+        ),
+    ]);
+
+    $response = $this->postJson('/auth/face/verify', [
+        'username' => 'lester@hurtado.ph',
+        'selfie' => UploadedFile::fake()->image('selfie.jpg', 640, 480),
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'verified' => false,
+            'reason' => 'saras_waf_blocked',
+            'details' => [
+                'message' => 'Saras could not accept the backend request. Please contact support.',
+                'status' => 403,
+                'failure_type' => 'saras_waf_blocked',
+                'response_type' => 'html',
+            ],
+        ])
+        ->assertSessionHas('saras_face_auth_diagnostic.last', function (array $diagnostic): bool {
+            return $diagnostic['failure_type'] === 'saras_waf_blocked'
+                && $diagnostic['status'] === 403
+                && $diagnostic['response_type'] === 'html'
+                && $diagnostic['message'] === 'Saras could not accept the backend request. Please contact support.'
+                && ! str_contains(json_encode($diagnostic, JSON_THROW_ON_ERROR), 'Just a moment');
+        });
+
+    expect($response->json('details.message'))->not->toContain('Just a moment');
+    $this->assertGuest();
+});
+
+test('saras face verification treats biometric mismatch as retryable failure', function () {
+    config(['face_auth.provider' => 'saras']);
+
+    User::factory()->create([
+        'username' => 'lester@hurtado.ph',
+        'email' => 'lester@hurtado.ph',
+    ]);
+
+    Http::fake([
+        '*/users/loginWithFace' => Http::response([
+            'errorCode' => 1510,
+            'msg' => 'Biometric face match failed',
+            'addMsg' => 'Face score below threshold',
+        ], 401),
+    ]);
+
+    $response = $this->postJson('/auth/face/verify', [
+        'username' => 'lester@hurtado.ph',
+        'selfie' => UploadedFile::fake()->image('selfie.jpg', 640, 480),
+    ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'verified' => false,
+            'reason' => 'not_matched',
+            'details' => [
+                'message' => 'Face verification failed. Please try again.',
+                'status' => 401,
+                'error_code' => 1510,
+                'failure_type' => 'saras_face_mismatch',
+                'response_type' => 'json',
+            ],
+        ])
+        ->assertSessionHas('saras_face_auth_diagnostic.last', function (array $diagnostic): bool {
+            return $diagnostic['reason'] === 'not_matched'
+                && $diagnostic['failure_type'] === 'saras_face_mismatch'
+                && $diagnostic['error_code'] === 1510
+                && $diagnostic['message'] === 'Face verification failed. Please try again.';
+        });
+
+    $this->assertGuest();
+});
+
 test('face verification fails for non-matching face', function () {
     config(['face_auth.provider' => 'stub']);
 
@@ -370,6 +457,8 @@ test('face verification returns quality failure details', function () {
 });
 
 test('face verification handles provider errors gracefully', function () {
+    config(['face_auth.provider' => 'stub']);
+
     User::factory()->create([
         'username' => 'fail_error',
     ]);

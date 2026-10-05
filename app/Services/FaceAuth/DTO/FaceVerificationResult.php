@@ -23,13 +23,13 @@ readonly class FaceVerificationResult
         );
     }
 
-    public static function notMatched(?float $confidence = null, array $raw = []): self
+    public static function notMatched(?float $confidence = null, array $raw = [], array $details = []): self
     {
         return new self(
             verified: false,
             confidence: $confidence,
             reason: 'not_matched',
-            details: ['message' => 'Face does not match the enrolled reference.'],
+            details: ['message' => 'Face does not match the enrolled reference.', ...$details],
             raw: $raw,
         );
     }
@@ -51,6 +51,17 @@ readonly class FaceVerificationResult
             verified: false,
             confidence: null,
             reason: 'error',
+            details: ['message' => $message, ...$details],
+            raw: $raw,
+        );
+    }
+
+    public static function failed(string $reason, string $message, array $raw = [], array $details = []): self
+    {
+        return new self(
+            verified: false,
+            confidence: null,
+            reason: $reason,
             details: ['message' => $message, ...$details],
             raw: $raw,
         );
