@@ -78,8 +78,9 @@ test('saras face provider exposes unauthorized api errors', function () {
     );
 
     expect($result->verified)->toBeFalse()
-        ->and($result->reason)->toBe('error')
+        ->and($result->reason)->toBe('saras_api_error')
         ->and($result->details['message'])->toBe('Unauthorized')
+        ->and($result->details['failure_type'])->toBe('saras_api_error')
         ->and($result->details['status'])->toBe(401);
 });
 
@@ -117,7 +118,10 @@ test('saras face provider exposes non json api errors', function () {
     );
 
     expect($result->verified)->toBeFalse()
-        ->and($result->details['message'])->toBe('Unauthorized')
+        ->and($result->reason)->toBe('saras_non_json_response')
+        ->and($result->details['message'])->toBe('Saras could not accept the backend request. Please contact support.')
+        ->and($result->details['failure_type'])->toBe('saras_non_json_response')
+        ->and($result->details['response_type'])->toBe('text')
         ->and($result->details['status'])->toBe(401);
 });
 

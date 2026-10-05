@@ -92,7 +92,7 @@ class SarasAuthenticator
                     'status' => $response->status(),
                 ]);
 
-                return null;
+                $this->throwSarasLoginFailure($email);
             }
 
             $tokenData = $response->json();
@@ -310,6 +310,29 @@ class SarasAuthenticator
         $status = $this->faceRegistrationStatusService->check($email);
 
         return $status['ok'] === true && ($status['face_registration_required'] ?? false) === true;
+    }
+
+    protected function throwSarasLoginFailure(string $email): never
+    {
+        $status = $this->faceRegistrationStatusService->check($email);
+        $authStrategy = strtoupper((string) ($status['auth_strategy'] ?? ''));
+        $faceRegistered = $status['face_registered'] ?? null;
+
+        if ($status['ok'] === true && $authStrategy === 'FACE' && $faceRegistered === false) {
+            throw ValidationException::withMessages([
+                'password' => 'Temporary Saras password was not accepted. Please use the temporary password from Saras support to register your face profile.',
+            ]);
+        }
+
+        if ($status['ok'] === true && $authStrategy === 'FACE') {
+            throw ValidationException::withMessages([
+                Fortify::username() => 'Face login is required for this account. Please use Login with Face.',
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            Fortify::username() => 'Saras did not accept these login details. Please check your email and password.',
+        ]);
     }
 
     /**

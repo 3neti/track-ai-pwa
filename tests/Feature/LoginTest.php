@@ -163,6 +163,66 @@ test('saras login redirects to face registration when face auth profile is not r
     $response->assertSessionHas('saras_face_registration_token', 'temporary-face-registration-token');
 });
 
+test('saras login reports temporary password failure for face registration accounts', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    Http::fake([
+        'https://saras.test/v1/users/userLogin' => Http::response([
+            'errorCode' => 1601,
+            'msg' => 'The username / email provided could not be found.',
+        ], 401),
+        'https://saras.test/v1/users/checkSamlLoginEnabled' => Http::response([
+            'status' => false,
+            'authStrategy' => 'FACE',
+            'faceRegistered' => false,
+        ]),
+    ]);
+
+    $response = $this->from('/login')->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'wrong-temp-password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertRedirect('/login')
+        ->assertSessionHasErrors([
+            'password' => 'Temporary Saras password was not accepted. Please use the temporary password from Saras support to register your face profile.',
+        ]);
+});
+
+test('saras login tells registered face users to use face login when password auth is rejected', function () {
+    config([
+        'saras.mode' => 'live',
+        'saras.base_url' => 'https://saras.test/v1',
+    ]);
+
+    Http::fake([
+        'https://saras.test/v1/users/userLogin' => Http::response([
+            'errorCode' => 1601,
+            'msg' => 'Password login disabled.',
+        ], 401),
+        'https://saras.test/v1/users/checkSamlLoginEnabled' => Http::response([
+            'status' => true,
+            'authStrategy' => 'FACE',
+            'faceRegistered' => true,
+        ]),
+    ]);
+
+    $response = $this->from('/login')->post('/login', [
+        'username' => 'lester@example.test',
+        'password' => 'any-password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertRedirect('/login')
+        ->assertSessionHasErrors([
+            'username' => 'Face login is required for this account. Please use Login with Face.',
+        ]);
+});
+
 test('face registration status endpoint exposes required enrollment state', function () {
     Http::fake([
         '*/users/checkSamlLoginEnabled' => Http::response([
