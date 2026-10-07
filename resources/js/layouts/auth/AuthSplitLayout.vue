@@ -1,19 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import { Link } from '@inertiajs/vue3';
+import AuthBrandLogo from '@/components/AuthBrandLogo.vue';
 import { home } from '@/routes';
-
-const page = usePage();
-
-type Branding = {
-    name?: string;
-    square_logo?: string | null;
-    rectangle_logo?: string | null;
-};
-
-const branding = computed<Branding>(() => (page.props.branding as Branding | undefined) ?? {});
-const displayName = computed(() => branding.value.name || 'Track AI');
 
 defineProps<{
     title?: string;
@@ -33,22 +21,7 @@ defineProps<{
                 :href="home()"
                 class="relative z-20 flex items-center text-lg font-medium"
             >
-                <span class="mr-2 flex size-8 items-center justify-center overflow-hidden rounded-md">
-                    <img
-                        v-if="branding.square_logo"
-                        :src="branding.square_logo"
-                        :alt="`${displayName} logo`"
-                        class="size-full object-cover"
-                    />
-                    <AppLogoIcon v-else class="size-8 fill-current text-white" />
-                </span>
-                <img
-                    v-if="branding.rectangle_logo"
-                    :src="branding.rectangle_logo"
-                    :alt="displayName"
-                    class="h-8 max-w-48 object-contain"
-                />
-                <span v-else>{{ displayName }}</span>
+                <AuthBrandLogo />
             </Link>
         </div>
         <div class="lg:p-8">

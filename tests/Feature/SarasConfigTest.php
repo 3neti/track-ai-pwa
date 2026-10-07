@@ -57,12 +57,25 @@ test('login page exposes configured project id as the default context', function
         );
 });
 
+test('login page receives rotating Saras and Capstone branding', function () {
+    $this->get('/login')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('auth/Login')
+            ->where('auth_branding.interval_ms', 10000)
+            ->where('auth_branding.logos.0.name', 'Saras')
+            ->where('auth_branding.logos.0.rectangle_logo', 'https://publicassets.sarasfinance.com/saras/saras.png')
+            ->where('auth_branding.logos.1.name', 'Capstone')
+            ->where('auth_branding.logos.1.rectangle_logo', 'https://publicassets.sarasfinance.com/partner/capstone/capstone.png')
+        );
+});
+
 test('developer Saras API X-Ray page receives branding support', function () {
     config([
-        'branding.name' => 'DPWH Demo',
-        'branding.short_name' => 'DPWH',
-        'branding.square_logo' => '/branding/square.png',
-        'branding.rectangle_logo' => '/branding/rectangle.png',
+        'branding.authenticated.name' => 'DPWH Demo',
+        'branding.authenticated.short_name' => 'DPWH',
+        'branding.authenticated.square_logo' => '/branding/square.png',
+        'branding.authenticated.rectangle_logo' => '/branding/rectangle.png',
     ]);
 
     $user = User::factory()->create();
@@ -462,6 +475,26 @@ test('branding configuration is shared with inertia pages', function () {
         );
 });
 
+test('authenticated fallback branding uses DPWH by default', function () {
+    config([
+        'saras.mode' => 'stub',
+        'branding.remote.enabled' => true,
+    ]);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get('/')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('branding.name', 'DPWH')
+            ->where('branding.short_name', 'DPWH')
+            ->where('branding.square_logo', 'https://publicassets.sarasfinance.com/client/dpwh/favicon17.png')
+            ->where('branding.rectangle_logo', null)
+            ->where('branding.source', 'config')
+        );
+});
+
 test('branding resolver can pull identity from Saras project metadata', function () {
     config([
         'saras.mode' => 'live',
@@ -700,10 +733,10 @@ test('branding resolver falls back when Saras branding cannot be loaded', functi
     config([
         'saras.mode' => 'live',
         'saras.project_id' => 'dday-project-id',
-        'branding.name' => 'Fallback Brand',
-        'branding.short_name' => 'Fallback',
-        'branding.square_logo' => '/fallback-square.png',
-        'branding.rectangle_logo' => '/fallback-rectangle.png',
+        'branding.authenticated.name' => 'Fallback Brand',
+        'branding.authenticated.short_name' => 'Fallback',
+        'branding.authenticated.square_logo' => '/fallback-square.png',
+        'branding.authenticated.rectangle_logo' => '/fallback-rectangle.png',
         'branding.remote.enabled' => true,
     ]);
 
@@ -730,10 +763,10 @@ test('authenticated inertia pages can share Saras branding', function () {
     config([
         'saras.mode' => 'live',
         'saras.project_id' => 'dday-page-project-id',
-        'branding.name' => 'Fallback Brand',
-        'branding.short_name' => 'Fallback',
-        'branding.square_logo' => '/fallback-square.png',
-        'branding.rectangle_logo' => '/fallback-rectangle.png',
+        'branding.authenticated.name' => 'Fallback Brand',
+        'branding.authenticated.short_name' => 'Fallback',
+        'branding.authenticated.square_logo' => '/fallback-square.png',
+        'branding.authenticated.rectangle_logo' => '/fallback-rectangle.png',
         'branding.remote.enabled' => true,
     ]);
 

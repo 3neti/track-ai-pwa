@@ -55,6 +55,7 @@ declare global {
         HyperKYCModule?: {
             launch: (config: unknown, callback: (result: HypervergeResult) => void) => Promise<void>;
         };
+        trackAiLastHypervergeResult?: HypervergeResult;
     }
 }
 
@@ -217,6 +218,9 @@ async function launchHypervergeCapture() {
         });
 
         await window.HyperKYCModule.launch(config, (result: HypervergeResult) => {
+            window.trackAiLastHypervergeResult = result;
+
+            const summary = summarizeHypervergeResult(result);
             const image = extractLoginImage(result);
 
             if (image) {
@@ -230,7 +234,9 @@ async function launchHypervergeCapture() {
             }
 
             hypervergeState.value = 'complete';
-            hypervergeSummary.value = summarizeHypervergeResult(result);
+            hypervergeSummary.value = summary;
+
+            console.info('[Track AI] HyperVerge callback summary', summary);
         });
     } catch (error) {
         state.value = 'error';
@@ -544,6 +550,34 @@ onUnmounted(() => {
                 :class="hypervergeState === 'error' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'"
             >
                 {{ hypervergeMessage }}
+            </div>
+
+            <div
+                v-if="captureMode === 'hyperverge' && hypervergeSummary"
+                class="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground"
+            >
+                <div class="grid gap-1">
+                    <p>
+                        <span class="font-medium text-foreground">HyperVerge status:</span>
+                        {{ hypervergeSummary.status || 'received' }}
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">Transaction:</span>
+                        <span class="break-all font-mono">{{ hypervergeSummary.transactionId || 'none' }}</span>
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">Detail keys:</span>
+                        {{ (hypervergeSummary.detailKeys as string[] | undefined)?.join(', ') || 'none' }}
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">Image fields:</span>
+                        {{ (hypervergeSummary.imageFieldPaths as string[] | undefined)?.join(', ') || 'none' }}
+                    </p>
+                    <p v-if="hypervergeSummary.errorCode || hypervergeSummary.errorMessage">
+                        <span class="font-medium text-foreground">Error:</span>
+                        {{ hypervergeSummary.errorCode || '—' }} {{ hypervergeSummary.errorMessage || '' }}
+                    </p>
+                </div>
             </div>
 
             <!-- Verify / Retake Buttons -->

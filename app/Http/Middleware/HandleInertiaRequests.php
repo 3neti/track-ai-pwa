@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'branding' => $projectContext?->branding ?? app(BrandingResolver::class)->resolve($request->user()),
+            'auth_branding' => app(BrandingResolver::class)->authBranding(),
             'activeProjectContext' => $projectContext?->toArray(),
             'auth' => [
                 'user' => $request->user(),

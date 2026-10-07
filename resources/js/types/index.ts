@@ -13,6 +13,17 @@ export type Branding = {
     project_id: string | null;
 };
 
+export type AuthBrandingLogo = {
+    name: string;
+    square_logo: string | null;
+    rectangle_logo: string | null;
+};
+
+export type AuthBranding = {
+    interval_ms: number;
+    logos: AuthBrandingLogo[];
+};
+
 export type ActiveProjectContext = {
     project_id: string | null;
     project_name: string | null;
@@ -28,6 +39,7 @@ export type AppPageProps<
     name: string;
     auth: Auth;
     branding: Branding;
+    auth_branding: AuthBranding;
     activeProjectContext: ActiveProjectContext | null;
     sidebarOpen: boolean;
     [key: string]: unknown;
